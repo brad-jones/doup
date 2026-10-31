@@ -1,0 +1,860 @@
+lockfile_version: '1'
+apm_version: 0.35.0
+dependencies:
+- repo_url: github/awesome-copilot
+  name: awesome-copilot-rust
+  host: github.com
+  resolved_commit: 5269f7ea2d6c3a9bfda5ed878b6726cf509121fd
+  resolved_ref: main
+  version: 1.0.0
+  virtual_path: instructions/rust.instructions.md
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .claude/rules/rust.md
+  - .github/instructions/rust.instructions.md
+  deployed_file_hashes:
+    .claude/rules/rust.md: sha256:2829b8587025bb8c8d3e3a581ab3d32bd528e737c8b68eaf62724a379337a25e
+    .github/instructions/rust.instructions.md: sha256:2cf9d7e354250ba199dc1f3b0cbe7c4fff69d78e03a26c6fe1781c022d6092b3
+  content_hash: sha256:0c03536745ba6b699bc9b1a518c73719ce4aef1cc4e9772fd12317157f514392
+- repo_url: github/awesome-copilot
+  name: git-commit
+  host: github.com
+  resolved_commit: 5269f7ea2d6c3a9bfda5ed878b6726cf509121fd
+  resolved_ref: main
+  version: unknown
+  virtual_path: skills/git-commit
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/git-commit
+  - .agents/skills/git-commit/SKILL.md
+  - .claude/skills/git-commit
+  - .claude/skills/git-commit/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/git-commit/SKILL.md: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+    .claude/skills/git-commit/SKILL.md: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+  content_hash: sha256:78b6a33700091345cd449f9e3642ddd611b479b341efc9d6c750f7e04d15216a
+- repo_url: tttpob/bioinfo-skills
+  name: pixi
+  host: github.com
+  resolved_commit: 3eac669e5f7abb0d65e64963cd49ac2ad8938fda
+  resolved_ref: main
+  version: unknown
+  virtual_path: pixi
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/pixi
+  - .agents/skills/pixi/README.md
+  - .agents/skills/pixi/SKILL.md
+  - .agents/skills/pixi/references/official-docs.md
+  - .agents/skills/pixi/references/official/LICENSE
+  - .agents/skills/pixi/references/official/conda-pypi.md
+  - .agents/skills/pixi/references/official/configuration.md
+  - .agents/skills/pixi/references/official/environment.md
+  - .agents/skills/pixi/references/official/first-workspace.md
+  - .agents/skills/pixi/references/official/global-tools.md
+  - .agents/skills/pixi/references/official/llms.txt
+  - .agents/skills/pixi/references/official/lock-file.md
+  - .agents/skills/pixi/references/official/manifest.md
+  - .agents/skills/pixi/references/official/multi-environment.md
+  - .agents/skills/pixi/references/official/pyproject.md
+  - .agents/skills/pixi/references/official/sources.json
+  - .agents/skills/pixi/references/official/tasks.md
+  - .agents/skills/pixi/workflows/dependencies.md
+  - .agents/skills/pixi/workflows/environments.md
+  - .agents/skills/pixi/workflows/global.md
+  - .agents/skills/pixi/workflows/initialize.md
+  - .agents/skills/pixi/workflows/inspect.md
+  - .agents/skills/pixi/workflows/run.md
+  - .claude/skills/pixi
+  - .claude/skills/pixi/README.md
+  - .claude/skills/pixi/SKILL.md
+  - .claude/skills/pixi/references/official-docs.md
+  - .claude/skills/pixi/references/official/LICENSE
+  - .claude/skills/pixi/references/official/conda-pypi.md
+  - .claude/skills/pixi/references/official/configuration.md
+  - .claude/skills/pixi/references/official/environment.md
+  - .claude/skills/pixi/references/official/first-workspace.md
+  - .claude/skills/pixi/references/official/global-tools.md
+  - .claude/skills/pixi/references/official/llms.txt
+  - .claude/skills/pixi/references/official/lock-file.md
+  - .claude/skills/pixi/references/official/manifest.md
+  - .claude/skills/pixi/references/official/multi-environment.md
+  - .claude/skills/pixi/references/official/pyproject.md
+  - .claude/skills/pixi/references/official/sources.json
+  - .claude/skills/pixi/references/official/tasks.md
+  - .claude/skills/pixi/workflows/dependencies.md
+  - .claude/skills/pixi/workflows/environments.md
+  - .claude/skills/pixi/workflows/global.md
+  - .claude/skills/pixi/workflows/initialize.md
+  - .claude/skills/pixi/workflows/inspect.md
+  - .claude/skills/pixi/workflows/run.md
+  deployed_file_hashes:
+    .agents/skills/pixi/README.md: sha256:206b8488b0c67409e8a93070898c22bb0023d60273bc6a0809acf83f88087045
+    .agents/skills/pixi/SKILL.md: sha256:50a5b73ac6d95873eafd582a2ccaabaaa61ee743668b277bdc95d8dcaf426de0
+    .agents/skills/pixi/references/official-docs.md: sha256:adedc9dbfe89a5aa632e961aee85562e795a59c3515c15fc1d48ca84fbe704e4
+    .agents/skills/pixi/references/official/LICENSE: sha256:679d42a76b82a6dc20ffd9048ab45fb2e5557a526113aaedc7419e12f3cfab38
+    .agents/skills/pixi/references/official/conda-pypi.md: sha256:a30189bb4061e98e8434c10fd68af67c653fc3d6726ec07264043e87c71e7de1
+    .agents/skills/pixi/references/official/configuration.md: sha256:d233e46c54597d1ab90e5143020cbd30c3596257042cf24b4ef7c800b6b26329
+    .agents/skills/pixi/references/official/environment.md: sha256:0cd310606001ec7f89268bbaaf0325cd2e91f4645593749b100bbfe745089ffa
+    .agents/skills/pixi/references/official/first-workspace.md: sha256:9f6d61e007c2bf46952e864ac3308072176e58ac2f852a827e1d539891b6c0a3
+    .agents/skills/pixi/references/official/global-tools.md: sha256:ad466962993fb0585e221d4e5067aa96be04958153303a95362044ebaa57af80
+    .agents/skills/pixi/references/official/llms.txt: sha256:b2247b656304fba491c8007d534fed8793110de9ec94f8c62e97642e472bbba0
+    .agents/skills/pixi/references/official/lock-file.md: sha256:e56e645d73309aa52b2551b2ed722857d8dfbfc2a7175eefd98247d4a7bde8f6
+    .agents/skills/pixi/references/official/manifest.md: sha256:542fa28a913eca4b0ebfcd693bd60733d5beae8978672ee3a30149c95bb81210
+    .agents/skills/pixi/references/official/multi-environment.md: sha256:05fab07c2911bb4e5bdb9287ee864e83d97c08a46f88304cfc45e6b3ddf13033
+    .agents/skills/pixi/references/official/pyproject.md: sha256:364ac61a2d50f16810973db873061bb9ee9baf69abc8d0cb956f47f511e61d9b
+    .agents/skills/pixi/references/official/sources.json: sha256:d36d25c00584f410ee2551bff272d837533781948764cc53afb2e1f719a64ebf
+    .agents/skills/pixi/references/official/tasks.md: sha256:13c30a43bded864724d4cba729d5e5fd75cfd3d2e262a339753506cafb30cc8e
+    .agents/skills/pixi/workflows/dependencies.md: sha256:a75fb1bd363b6b5902023b8b7a0207186175b97c398f23a1b9688f1352f4f45c
+    .agents/skills/pixi/workflows/environments.md: sha256:12fa6a690da3513ce667f5370f1d0f0a250ce350f382aa629a00ad130b78646a
+    .agents/skills/pixi/workflows/global.md: sha256:2bd419f7bf4dd5b3c40ddba7a343087723e7032d79f58530ac337cebad5a1713
+    .agents/skills/pixi/workflows/initialize.md: sha256:2d1b1895ccd227af6382366c346edaa8f64d3a85417476ace9ae4613b0e1a83d
+    .agents/skills/pixi/workflows/inspect.md: sha256:7a72d64ac6b6d5bdfef14b05893605ff83343bfd5750d23c21c7a763792fbc28
+    .agents/skills/pixi/workflows/run.md: sha256:d1a7b8e169b8aa84f211db4b1f49b3b8e7e04439351cdbfc38e5ba6aaac468bd
+    .claude/skills/pixi/README.md: sha256:206b8488b0c67409e8a93070898c22bb0023d60273bc6a0809acf83f88087045
+    .claude/skills/pixi/SKILL.md: sha256:50a5b73ac6d95873eafd582a2ccaabaaa61ee743668b277bdc95d8dcaf426de0
+    .claude/skills/pixi/references/official-docs.md: sha256:adedc9dbfe89a5aa632e961aee85562e795a59c3515c15fc1d48ca84fbe704e4
+    .claude/skills/pixi/references/official/LICENSE: sha256:679d42a76b82a6dc20ffd9048ab45fb2e5557a526113aaedc7419e12f3cfab38
+    .claude/skills/pixi/references/official/conda-pypi.md: sha256:a30189bb4061e98e8434c10fd68af67c653fc3d6726ec07264043e87c71e7de1
+    .claude/skills/pixi/references/official/configuration.md: sha256:d233e46c54597d1ab90e5143020cbd30c3596257042cf24b4ef7c800b6b26329
+    .claude/skills/pixi/references/official/environment.md: sha256:0cd310606001ec7f89268bbaaf0325cd2e91f4645593749b100bbfe745089ffa
+    .claude/skills/pixi/references/official/first-workspace.md: sha256:9f6d61e007c2bf46952e864ac3308072176e58ac2f852a827e1d539891b6c0a3
+    .claude/skills/pixi/references/official/global-tools.md: sha256:ad466962993fb0585e221d4e5067aa96be04958153303a95362044ebaa57af80
+    .claude/skills/pixi/references/official/llms.txt: sha256:b2247b656304fba491c8007d534fed8793110de9ec94f8c62e97642e472bbba0
+    .claude/skills/pixi/references/official/lock-file.md: sha256:e56e645d73309aa52b2551b2ed722857d8dfbfc2a7175eefd98247d4a7bde8f6
+    .claude/skills/pixi/references/official/manifest.md: sha256:542fa28a913eca4b0ebfcd693bd60733d5beae8978672ee3a30149c95bb81210
+    .claude/skills/pixi/references/official/multi-environment.md: sha256:05fab07c2911bb4e5bdb9287ee864e83d97c08a46f88304cfc45e6b3ddf13033
+    .claude/skills/pixi/references/official/pyproject.md: sha256:364ac61a2d50f16810973db873061bb9ee9baf69abc8d0cb956f47f511e61d9b
+    .claude/skills/pixi/references/official/sources.json: sha256:d36d25c00584f410ee2551bff272d837533781948764cc53afb2e1f719a64ebf
+    .claude/skills/pixi/references/official/tasks.md: sha256:13c30a43bded864724d4cba729d5e5fd75cfd3d2e262a339753506cafb30cc8e
+    .claude/skills/pixi/workflows/dependencies.md: sha256:a75fb1bd363b6b5902023b8b7a0207186175b97c398f23a1b9688f1352f4f45c
+    .claude/skills/pixi/workflows/environments.md: sha256:12fa6a690da3513ce667f5370f1d0f0a250ce350f382aa629a00ad130b78646a
+    .claude/skills/pixi/workflows/global.md: sha256:2bd419f7bf4dd5b3c40ddba7a343087723e7032d79f58530ac337cebad5a1713
+    .claude/skills/pixi/workflows/initialize.md: sha256:2d1b1895ccd227af6382366c346edaa8f64d3a85417476ace9ae4613b0e1a83d
+    .claude/skills/pixi/workflows/inspect.md: sha256:7a72d64ac6b6d5bdfef14b05893605ff83343bfd5750d23c21c7a763792fbc28
+    .claude/skills/pixi/workflows/run.md: sha256:d1a7b8e169b8aa84f211db4b1f49b3b8e7e04439351cdbfc38e5ba6aaac468bd
+  content_hash: sha256:a9d0f94da09461d28893db4cdb8110fd474f212eacae32fdaec5911ff57a9a58
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/rules/apm.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:c7c0fb73710405cd4cdd9c4cb9f7c1e03139340c811e6fa4bbc958f89e0a9e34
+- kind: project-relative
+  target: claude
+  value: .claude/rules/git.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:eb73cc4e1d13fa37d9369871d63477aa9c142a70742c39e08e70cd7cff302057
+- kind: project-relative
+  target: claude
+  value: .claude/rules/pixi.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:59be54fdc327720993714c5dbd8f1a3d21c26ac59834f135237cd87ff95f0819
+- kind: project-relative
+  target: claude
+  value: .claude/rules/rust.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/instructions/rust.instructions.md
+  active_owner: github/awesome-copilot/instructions/rust.instructions.md
+  content_hash: sha256:2829b8587025bb8c8d3e3a581ab3d32bd528e737c8b68eaf62724a379337a25e
+- kind: project-relative
+  target: claude
+  value: .claude/rules/task.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:7e90c6265db60c4c279a16e4a2302d12a54f2fd98fdaed447f6cde60a4fbc136
+- kind: project-relative
+  target: claude
+  value: .claude/skills/forget
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/forget/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:0bc5c91fb4bde11c296c280ee034baeb010fa3c30239cc90c7d89fa886b86eb9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/git-commit
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/git-commit
+  active_owner: github/awesome-copilot/skills/git-commit
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/git-commit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/git-commit
+  active_owner: github/awesome-copilot/skills/git-commit
+  content_hash: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/README.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:206b8488b0c67409e8a93070898c22bb0023d60273bc6a0809acf83f88087045
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:50a5b73ac6d95873eafd582a2ccaabaaa61ee743668b277bdc95d8dcaf426de0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official-docs.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:adedc9dbfe89a5aa632e961aee85562e795a59c3515c15fc1d48ca84fbe704e4
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:679d42a76b82a6dc20ffd9048ab45fb2e5557a526113aaedc7419e12f3cfab38
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/conda-pypi.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:a30189bb4061e98e8434c10fd68af67c653fc3d6726ec07264043e87c71e7de1
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/configuration.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d233e46c54597d1ab90e5143020cbd30c3596257042cf24b4ef7c800b6b26329
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/environment.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:0cd310606001ec7f89268bbaaf0325cd2e91f4645593749b100bbfe745089ffa
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/first-workspace.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:9f6d61e007c2bf46952e864ac3308072176e58ac2f852a827e1d539891b6c0a3
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/global-tools.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:ad466962993fb0585e221d4e5067aa96be04958153303a95362044ebaa57af80
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/llms.txt
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:b2247b656304fba491c8007d534fed8793110de9ec94f8c62e97642e472bbba0
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/lock-file.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:e56e645d73309aa52b2551b2ed722857d8dfbfc2a7175eefd98247d4a7bde8f6
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/manifest.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:542fa28a913eca4b0ebfcd693bd60733d5beae8978672ee3a30149c95bb81210
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/multi-environment.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:05fab07c2911bb4e5bdb9287ee864e83d97c08a46f88304cfc45e6b3ddf13033
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/pyproject.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:364ac61a2d50f16810973db873061bb9ee9baf69abc8d0cb956f47f511e61d9b
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/sources.json
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d36d25c00584f410ee2551bff272d837533781948764cc53afb2e1f719a64ebf
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/references/official/tasks.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:13c30a43bded864724d4cba729d5e5fd75cfd3d2e262a339753506cafb30cc8e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:a75fb1bd363b6b5902023b8b7a0207186175b97c398f23a1b9688f1352f4f45c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/environments.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:12fa6a690da3513ce667f5370f1d0f0a250ce350f382aa629a00ad130b78646a
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/global.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:2bd419f7bf4dd5b3c40ddba7a343087723e7032d79f58530ac337cebad5a1713
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/initialize.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:2d1b1895ccd227af6382366c346edaa8f64d3a85417476ace9ae4613b0e1a83d
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/inspect.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:7a72d64ac6b6d5bdfef14b05893605ff83343bfd5750d23c21c7a763792fbc28
+- kind: project-relative
+  target: claude
+  value: .claude/skills/pixi/workflows/run.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d1a7b8e169b8aa84f211db4b1f49b3b8e7e04439351cdbfc38e5ba6aaac468bd
+- kind: project-relative
+  target: claude
+  value: .claude/skills/remember
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/remember/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:238a5dcf04d1ff0d42eec31f2908fff012d8a19d7fbf98bff67dcb7cf5bddd90
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/forget
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/forget/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:0bc5c91fb4bde11c296c280ee034baeb010fa3c30239cc90c7d89fa886b86eb9
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/git-commit
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/git-commit
+  active_owner: github/awesome-copilot/skills/git-commit
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/git-commit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/git-commit
+  active_owner: github/awesome-copilot/skills/git-commit
+  content_hash: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/README.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:206b8488b0c67409e8a93070898c22bb0023d60273bc6a0809acf83f88087045
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:50a5b73ac6d95873eafd582a2ccaabaaa61ee743668b277bdc95d8dcaf426de0
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official-docs.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:adedc9dbfe89a5aa632e961aee85562e795a59c3515c15fc1d48ca84fbe704e4
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:679d42a76b82a6dc20ffd9048ab45fb2e5557a526113aaedc7419e12f3cfab38
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/conda-pypi.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:a30189bb4061e98e8434c10fd68af67c653fc3d6726ec07264043e87c71e7de1
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/configuration.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d233e46c54597d1ab90e5143020cbd30c3596257042cf24b4ef7c800b6b26329
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/environment.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:0cd310606001ec7f89268bbaaf0325cd2e91f4645593749b100bbfe745089ffa
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/first-workspace.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:9f6d61e007c2bf46952e864ac3308072176e58ac2f852a827e1d539891b6c0a3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/global-tools.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:ad466962993fb0585e221d4e5067aa96be04958153303a95362044ebaa57af80
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/llms.txt
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:b2247b656304fba491c8007d534fed8793110de9ec94f8c62e97642e472bbba0
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/lock-file.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:e56e645d73309aa52b2551b2ed722857d8dfbfc2a7175eefd98247d4a7bde8f6
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/manifest.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:542fa28a913eca4b0ebfcd693bd60733d5beae8978672ee3a30149c95bb81210
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/multi-environment.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:05fab07c2911bb4e5bdb9287ee864e83d97c08a46f88304cfc45e6b3ddf13033
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/pyproject.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:364ac61a2d50f16810973db873061bb9ee9baf69abc8d0cb956f47f511e61d9b
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/sources.json
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d36d25c00584f410ee2551bff272d837533781948764cc53afb2e1f719a64ebf
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/references/official/tasks.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:13c30a43bded864724d4cba729d5e5fd75cfd3d2e262a339753506cafb30cc8e
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:a75fb1bd363b6b5902023b8b7a0207186175b97c398f23a1b9688f1352f4f45c
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/environments.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:12fa6a690da3513ce667f5370f1d0f0a250ce350f382aa629a00ad130b78646a
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/global.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:2bd419f7bf4dd5b3c40ddba7a343087723e7032d79f58530ac337cebad5a1713
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/initialize.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:2d1b1895ccd227af6382366c346edaa8f64d3a85417476ace9ae4613b0e1a83d
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/inspect.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:7a72d64ac6b6d5bdfef14b05893605ff83343bfd5750d23c21c7a763792fbc28
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/pixi/workflows/run.md
+  runtime: null
+  scope: project
+  owners:
+  - tttpob/bioinfo-skills/pixi
+  active_owner: tttpob/bioinfo-skills/pixi
+  content_hash: sha256:d1a7b8e169b8aa84f211db4b1f49b3b8e7e04439351cdbfc38e5ba6aaac468bd
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/remember
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/remember/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:238a5dcf04d1ff0d42eec31f2908fff012d8a19d7fbf98bff67dcb7cf5bddd90
+- kind: project-relative
+  target: copilot
+  value: .github/hooks/doup-memory.json
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:5b33677d36c78c5a90182dd873a63790befd81f28b8ac783312b87b1378c1bd1
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/apm.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:248cba2eb533768e960dbc31c78f660581f4b5457075aaaa3bcb6786b258fc65
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/git.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:6aa4074dac0f5050e00d185fa230f85ec4f7ddc39ac4de80e3f90b0412685336
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/pixi.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:b2cb7edf9fd7ea252ee0aeea460351fb86fe322105e8961df631d7f080ed1c00
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/rust.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/instructions/rust.instructions.md
+  active_owner: github/awesome-copilot/instructions/rust.instructions.md
+  content_hash: sha256:2cf9d7e354250ba199dc1f3b0cbe7c4fff69d78e03a26c6fe1781c022d6092b3
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/task.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:ae4dee20531beece1153376e682b467496022dc6415a86926e2954134b978b68
+- kind: uri
+  target: mcp
+  value: user-memory
+  runtime: claude
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:ed4e78b63d236023595e83293ba0c992ed17f15dea8f94c6e030ba4e800ecae2
+- kind: uri
+  target: mcp
+  value: workspace-user-memory
+  runtime: claude
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:ac5a81e653f9e2c9634252bbc298aae5bfb1b9d317cb0417554e7ab7c8849242
+- kind: uri
+  target: mcp
+  value: user-memory
+  runtime: copilot
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: uri
+  target: mcp
+  value: workspace-user-memory
+  runtime: copilot
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+mcp_servers:
+- user-memory
+- workspace-user-memory
+mcp_configs:
+  user-memory:
+    name: user-memory
+    transport: stdio
+    env:
+      MEMORY_FILE_PATH: ${USER_MEMORY_FILE_PATH}
+    args:
+    - -y
+    - '@modelcontextprotocol/server-memory@^2.0.1'
+    registry: false
+    command: bunx
+  workspace-user-memory:
+    name: workspace-user-memory
+    transport: stdio
+    env:
+      MEMORY_FILE_PATH: ${PIXI_PROJECT_ROOT}/memory.jsonl
+    args:
+    - -y
+    - '@modelcontextprotocol/server-memory@^2.0.1'
+    registry: false
+    command: bunx
+mcp_target_servers:
+  claude:
+  - user-memory
+  - workspace-user-memory
+  copilot:
+  - user-memory
+  - workspace-user-memory
+local_deployed_files:
+- .agents/skills/forget
+- .agents/skills/forget/SKILL.md
+- .agents/skills/remember
+- .agents/skills/remember/SKILL.md
+- .claude/rules/apm.md
+- .claude/rules/git.md
+- .claude/rules/pixi.md
+- .claude/rules/task.md
+- .claude/skills/forget
+- .claude/skills/forget/SKILL.md
+- .claude/skills/remember
+- .claude/skills/remember/SKILL.md
+- .github/hooks/doup-memory.json
+- .github/instructions/apm.instructions.md
+- .github/instructions/git.instructions.md
+- .github/instructions/pixi.instructions.md
+- .github/instructions/task.instructions.md
+local_deployed_file_hashes:
+  .agents/skills/forget/SKILL.md: sha256:0bc5c91fb4bde11c296c280ee034baeb010fa3c30239cc90c7d89fa886b86eb9
+  .agents/skills/remember/SKILL.md: sha256:238a5dcf04d1ff0d42eec31f2908fff012d8a19d7fbf98bff67dcb7cf5bddd90
+  .claude/rules/apm.md: sha256:c7c0fb73710405cd4cdd9c4cb9f7c1e03139340c811e6fa4bbc958f89e0a9e34
+  .claude/rules/git.md: sha256:eb73cc4e1d13fa37d9369871d63477aa9c142a70742c39e08e70cd7cff302057
+  .claude/rules/pixi.md: sha256:59be54fdc327720993714c5dbd8f1a3d21c26ac59834f135237cd87ff95f0819
+  .claude/rules/task.md: sha256:7e90c6265db60c4c279a16e4a2302d12a54f2fd98fdaed447f6cde60a4fbc136
+  .claude/skills/forget/SKILL.md: sha256:0bc5c91fb4bde11c296c280ee034baeb010fa3c30239cc90c7d89fa886b86eb9
+  .claude/skills/remember/SKILL.md: sha256:238a5dcf04d1ff0d42eec31f2908fff012d8a19d7fbf98bff67dcb7cf5bddd90
+  .github/hooks/doup-memory.json: sha256:5b33677d36c78c5a90182dd873a63790befd81f28b8ac783312b87b1378c1bd1
+  .github/instructions/apm.instructions.md: sha256:248cba2eb533768e960dbc31c78f660581f4b5457075aaaa3bcb6786b258fc65
+  .github/instructions/git.instructions.md: sha256:6aa4074dac0f5050e00d185fa230f85ec4f7ddc39ac4de80e3f90b0412685336
+  .github/instructions/pixi.instructions.md: sha256:b2cb7edf9fd7ea252ee0aeea460351fb86fe322105e8961df631d7f080ed1c00
+  .github/instructions/task.instructions.md: sha256:ae4dee20531beece1153376e682b467496022dc6415a86926e2954134b978b68

@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/evilmartians/lefthook/refs/heads/master/schema.json
+
+pre-commit:
+  scripts:
+    "fix-script-execute-bit.ts":
+      runner: bun
+      stage_fixed: true
+  commands:
+    dprint:
+      run: pixi run dprint fmt --allow-no-files {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  commands:
+    lint:
+      run: pixi run cog verify -f {1}

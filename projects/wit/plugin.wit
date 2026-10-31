@@ -1,0 +1,11 @@
+package calculator:plugin@0.1.0;
+
+interface host-api {
+  host-version: func() -> string;
+}
+
+world plugin {
+  import host-api;
+
+  export operation: func(a: s64, b: s64) -> result<s64>;
+}

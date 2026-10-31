@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+# https://taskfile.dev
+version: 3
+
+dotenv: [".env"]
+set: [pipefail]
+shopt: [globstar]
+
+tasks:
+  init:
+    desc: Setup dev env (anything that pixi can't install and setup for us).
+    status:
+      - '[ "$DIRENV_INIT" -eq "1" ]'
+    cmds:
+      - task: init:git
+      - task: init:lefthook
+      - task: init:apm
+      - task: init:rustup
+
+  init:git:
+    desc: Setup git configuration for the project.
+    sources:
+      - Taskfile.yaml
+    generates:
+      - .git/initialized
+    cmds:
+      - git config pull.rebase true
+      - '{{if not .CI}}git config core.editor "code --wait"{{end}}'
+      - '{{if not .CI}}git config commit.template "$PWD/.gitmsgtpl"{{end}}'
+      - "{{if .CI}}git config --global user.name github-actions[bot]{{end}}"
+      - "{{if .CI}}git config --global user.email github-actions[bot]@users.noreply.github.com{{end}}"
+      - echo "1" > .git/initialized
+
+  init:lefthook:
+    desc: Install git hooks using lefthook for the project.
+    if: '[ -z "$CI" ]'
+    sources:
+      - ./.lefthook/**/*
+      - lefthook.yaml
+    generates:
+      - .git/hooks/**/*
+    cmds:
+      - lefthook install -f
+
+  init:apm:
+    if: '[ -z "$CI" ]'
+    sources:
+      - ./.apm/**/*
+      - apm.lock.yaml
+    cmds:
+      - apm install {{if .APM_TARGET}}--target {{.APM_TARGET}}{{end}}
+      - apm compile --clean {{if .APM_TARGET}}--target {{.APM_TARGET}}{{end}}
+
+  init:rustup:init:
+    desc: Install and configure rustup for the project (run this once, afterwards use rustup to manage the toolchain)
+    status:
+      - '[ -f ".pixi/envs/default/.rustup/settings.toml" ]'
+    cmds:
+      - rustup-init -y --no-modify-path --default-toolchain none
+
+  init:rustup:
+    desc: Installs the Rust toolchain specified in rust-toolchain.toml
+    deps:
+      - init:rustup:init
+    sources:
+      - rust-toolchain.toml
+    cmds:
+      - rustup install --no-self-update
+
+  update:
+    desc: Interactively updates our dependencies to their latest versions.
+    summary: |
+      doup is a tool that we are building to do exactly what this task does but in a more structured way.
+      In the future hopefully we can dog food doup but for now we need to bootstrap this process manually.
+      I mean we could just use renovate or dependabot but we would end up running into the very problem
+      we are trying to solve, at least I know that renovate provides no support for APM & Dprint for example.
+    cmds:
+      - pixi self-update
+      - sync-gha-pixi-version.ts
+      - pixi upgrade
+      - rustup update --no-self-update
+      - dprint config upgrade
+      - apm update --yes
+
+  fmt:
+    desc: Format the code using dprint.
+    cmds:
+      - dprint fmt
+
+  lint:
+    desc: Lint the code using dprint and cargo clippy.
+    cmds:
+      - dprint check
+      - cargo clippy
+
+  build:
+    desc: Build the project, including all WASM plugins and the CLI.
+    cmds:
+      - cargo build -p add --target wasm32-wasip2
+      - cargo build -p subtract --target wasm32-wasip2
+      - cargo build -p multiply --target wasm32-wasip2
+      - cargo build -p divide --target wasm32-wasip2
+      - cargo build -p cli
+
+  run:
+    desc: Run the built CLI, demonstrating the basic WASM plugin architecture.
+    deps:
+      - build
+    cmds:
+      - target/debug/cli operation --op target/wasm32-wasip2/debug/add.wasm -a 2 -b 2
+      - target/debug/cli operation --op target/wasm32-wasip2/debug/subtract.wasm -a 2 -b 2
+      - target/debug/cli operation --op target/wasm32-wasip2/debug/multiply.wasm -a 2 -b 2
+      - target/debug/cli operation --op target/wasm32-wasip2/debug/divide.wasm -a 2 -b 2

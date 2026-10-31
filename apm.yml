@@ -1,0 +1,42 @@
+$schema: https://microsoft.github.io/apm/specs/schemas/manifest-v0.1.schema.json
+name: doup
+version: 0.0.0
+targets:
+  - claude
+  - copilot
+dependencies:
+  apm:
+    - github/awesome-copilot/skills/git-commit#main
+    - github/awesome-copilot/instructions/rust.instructions.md#main
+    - tttpob/bioinfo-skills/pixi#main
+  mcp:
+    # Memory scoped to this workspace for the current user
+    - name: workspace-user-memory
+      registry: false
+      transport: stdio
+      command: bunx
+      args:
+        - -y
+        - "@modelcontextprotocol/server-memory@^2.0.1"
+      env:
+        MEMORY_FILE_PATH: "${PIXI_PROJECT_ROOT}/memory.jsonl"
+
+    # Memory scoped to the current user across all workspaces
+    - name: user-memory
+      registry: false
+      transport: stdio
+      command: bunx
+      args:
+        - -y
+        - "@modelcontextprotocol/server-memory@^2.0.1"
+      env:
+        MEMORY_FILE_PATH: "${USER_MEMORY_FILE_PATH}"
+
+    # HINT: There is a third type of memory.
+    # Memory scoped to the current workspace for all users.
+    # That type of memory should be encoded into the .apm folder :)
+includes: auto
+scripts: {}
+compilation:
+  exclude:
+    - ".pixi/**"

@@ -1,0 +1,37 @@
+{
+  "editor.inlayHints.enabled": "offUnlessPressed",
+  "editor.rulers": [80, 120],
+  "editor.renderWhitespace": "boundary",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "dprint.dprint",
+  "[json]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "[rust]": {
+    "editor.defaultFormatter": "dprint.dprint"
+  },
+  "files.associations": {
+    "*.gitmsgtpl": "git-commit"
+  },
+  "terminal.integrated.automationProfile.linux": {
+    "path": "/bin/bash"
+  },
+  "chat.tools.terminal.terminalProfile.linux": {
+    "path": "/bin/bash",
+    "env": {
+      "DIRENV_LOG_FORMAT": ""
+    }
+  }
+}

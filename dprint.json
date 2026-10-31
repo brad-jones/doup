@@ -1,0 +1,45 @@
+{
+  "lineWidth": 120,
+  "indentWidth": 2,
+  "useTabs": false,
+  "newLineKind": "lf",
+  "json": {
+  },
+  "markdown": {
+    "textWrap": "always"
+  },
+  "toml": {
+  },
+  "yaml": {
+  },
+  "exec": {
+    "cwd": "${configDir}",
+    "commands": [{
+      "command": "rustfmt --edition 2024",
+      "exts": ["rs"],
+      "cacheKeyFiles": [
+        "rustfmt.toml",
+        "rust-toolchain.toml",
+      ],
+    }],
+  },
+  "excludes": [
+    "**/.git",
+    "**/.pixi",
+    "**/.task",
+    "**/apm_modules",
+    "pixi.lock",
+    "bun.lock",
+    "apm.lock.yaml",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "plugins": [
+    "npm:@dprint/json@0.25.2",
+    "npm:@dprint/markdown@0.28.2",
+    "npm:@dprint/toml@0.9.0",
+    "npm:dprint-plugin-yaml@0.6.0",
+    "npm:@dprint/exec@0.8.0/plugin.json@9d6234ea05810c775f388c2a4cce82b9116b69294b65e0e1e9d64f1446283ef3"
+  ]
+}
