@@ -13,9 +13,19 @@ tasks:
       - '[ "$DIRENV_INIT" -eq "1" ]'
     cmds:
       - task: init:git
+      - task: init:bun
       - task: init:lefthook
       - task: init:apm
       - task: init:rustup
+
+  init:bun:
+    desc: Install node_modules using Bun.
+    sources:
+      - package.json
+    generates:
+      - bun.lock
+    cmds:
+      - bun install {{if .CI}}--frozen-lockfile{{end}}
 
   init:git:
     desc: Setup git configuration for the project.
