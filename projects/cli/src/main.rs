@@ -1,43 +1,24 @@
-use clap::{Parser, Subcommand};
+mod commands;
+mod schema;
 
-mod plugin_host;
-use plugin_host::run_plugin;
+use clap::Parser;
+use commands::Commands;
 
-/// A toy WASM host
+/// A dependency updater bot
 #[derive(Parser)]
-#[command(version)]
+#[command(name = "doup", version)]
 struct Cli {
   #[command(subcommand)]
   command: Commands,
 }
 
-#[derive(Subcommand)]
-enum Commands {
-  /// Perform an operation on two numbers
-  Operation {
-    /// The operation to perform
-    /// This refers to a path to a wasm module
-    #[arg(short, long)]
-    op: String,
-
-    /// First number
-    #[arg(short, long)]
-    a: i64,
-
-    /// Second number
-    #[arg(short, long)]
-    b: i64,
-  },
-}
-
 fn main() {
-  match Cli::parse().command {
-    Commands::Operation { op, a, b } => match run_plugin(op, a, b) {
-      Ok(value) => println!("Result: {value}"),
-      Err(err) => {
-        eprintln!("Error: operation failed ({err})");
-        std::process::exit(1);
-      }
-    },
+  if let Err(err) = match Cli::parse().command {
+    Commands::Init(args) => commands::init(args),
+    Commands::Update(args) => commands::update(args),
+    Commands::SelfUpdate(args) => commands::self_update(args),
+  } {
+    eprintln!("Error: {err:#}");
+    std::process::exit(1);
   }
 }

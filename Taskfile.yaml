@@ -105,11 +105,15 @@ tasks:
 
   build:
     desc: Build the project, including all WASM plugins and the CLI.
+    sources:
+      - ./projects/cli/**/*
+    generates:
+      - ./target/debug/doup
     cmds:
-      - cargo build -p add --target wasm32-wasip2
-      - cargo build -p subtract --target wasm32-wasip2
-      - cargo build -p multiply --target wasm32-wasip2
-      - cargo build -p divide --target wasm32-wasip2
+      #- cargo build -p add --target wasm32-wasip2
+      #- cargo build -p subtract --target wasm32-wasip2
+      #- cargo build -p multiply --target wasm32-wasip2
+      #- cargo build -p divide --target wasm32-wasip2
       - cargo build -p cli
 
   run:
@@ -117,7 +121,8 @@ tasks:
     deps:
       - build
     cmds:
-      - target/debug/cli operation --op target/wasm32-wasip2/debug/add.wasm -a 2 -b 2
-      - target/debug/cli operation --op target/wasm32-wasip2/debug/subtract.wasm -a 2 -b 2
-      - target/debug/cli operation --op target/wasm32-wasip2/debug/multiply.wasm -a 2 -b 2
-      - target/debug/cli operation --op target/wasm32-wasip2/debug/divide.wasm -a 2 -b 2
+      - target/debug/doup {{.CLI_ARGS}}
+      #- target/debug/doup operation --op target/wasm32-wasip2/debug/add.wasm -a 2 -b 2
+      #- target/debug/doup operation --op target/wasm32-wasip2/debug/subtract.wasm -a 2 -b 2
+      #- target/debug/doup operation --op target/wasm32-wasip2/debug/multiply.wasm -a 2 -b 2
+      #- target/debug/doup operation --op target/wasm32-wasip2/debug/divide.wasm -a 2 -b 2
