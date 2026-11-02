@@ -4,15 +4,21 @@ Status: **Ready for implementation**. All open questions are resolved; see [Deci
 
 ## Goal
 
-Make `doup update` feature complete. Run it inside a git checkout, for example in a CI job. It should:
+Make `doup update` feature complete. Like Renovate, **doup is responsible for the repositories it updates**: it clones
+each target repo itself, works in that clone, and pushes from it. It does not depend on, read, or modify any checkout
+the user or CI happens to have. It should:
 
-1. Load `doup.yaml` / `doup.json`.
+1. Load the runner config (`doup.yaml` / `doup.json`).
 2. Resolve, download, verify and lock the platform and ecosystem plugins.
-3. Ask each ecosystem plugin which dependencies exist and which ones are out of date.
-4. For each outdated dependency, apply the update in an isolated git worktree, then commit and push a branch.
-5. Ask the platform plugin to create, update or close pull requests so the repo matches the desired state.
+3. Work out the target repositories. By default this is the repo the config file lives in.
+4. For each repository:
+   1. Clone it through the platform plugin.
+   2. Ask each ecosystem plugin which dependencies exist and which ones are out of date.
+   3. For each outdated dependency, apply the update in an isolated git worktree, then commit and push a branch.
+   4. Ask the platform plugin to create, update or close pull requests so the repo matches the desired state.
 
-`--dry-run` stops after step 3 and prints a table.
+`--dry-run` stops after 4.2 and prints a table. `--local <dir>` runs a dry run against a local directory, with no clone
+and no platform calls.
 
 ### In scope
 
@@ -20,6 +26,8 @@ Make `doup update` feature complete. Run it inside a git checkout, for example i
 - Host runtime: wasmtime, WASI p2, wasi:http, logging, timeouts and memory limits.
 - Config discovery, parsing and normalisation. The schema changes are listed below.
 - Plugin resolution from wkg registries and local files, a cache, and `doup.lock`.
+- Repository acquisition: target selection, authenticated cloning through the platform plugin, pluggable clone
+  strategies.
 - Git orchestration: worktrees, commits, force-with-lease pushes, and stale branch cleanup.
 - PR reconciliation: create, update in place, close when no longer needed.
 - Fixture plugins and integration tests.
@@ -31,8 +39,10 @@ Make `doup update` feature complete. Run it inside a git checkout, for example i
 - Grouping, filtering, rate limiting, schedules.
 - Configurable branch, commit and PR templates. Defaults are hardcoded for now.
 - Per-plugin network allow-lists. Network access is unrestricted in v1; an allow-list is noted as future work.
-- Parallel execution. v1 runs sequentially.
+- Parallel execution. v1 runs sequentially (repos one after another, updates one after another).
 - Publishing the `doup:plugin` WIT package to a registry.
+- Per-repository config files (Renovate-style two-tier config), repository autodiscovery, SSH remotes, and signed
+  commits. All are noted under future work.
 
 ---
 
@@ -230,10 +240,19 @@ interface platform {
   use types.{config, plugin-error};
 
   record repository {
-    /// URL of the remote doup pushes to.
-    remote-url: string,
-    /// Branch pull requests target, eg: "main".
-    base-branch: string,
+    /// Platform identifier, eg: "brad-jones/doup".
+    name: string,
+    /// HTTPS clone URL, eg: "https://github.com/brad-jones/doup.git".
+    clone-url: string,
+    /// The repository's default branch, eg: "main".
+    default-branch: string,
+  }
+
+  /// HTTP basic credentials for git over HTTPS. The username format is platform specific
+  /// (eg: GitHub uses "x-access-token", GitLab "oauth2"), which is why the plugin supplies it.
+  record git-credentials {
+    username: string,
+    password: string,
   }
 
   enum pull-request-state { open, closed, merged }
@@ -242,6 +261,7 @@ interface platform {
     /// Platform specific identifier, eg: the PR number on GitHub.
     id: string,
     head-branch: string,
+    base-branch: string,
     title: string,
     body: string,
     state: pull-request-state,
@@ -250,9 +270,26 @@ interface platform {
 
   record pull-request-content {
     head-branch: string,
+    base-branch: string,
     title: string,
     body: string,
   }
+
+  /// How the host identifies a repository it wants resolved.
+  variant repository-ref {
+    /// A platform identifier from config, eg: "brad-jones/doup".
+    name(string),
+    /// A git remote URL (https or ssh form), eg: the `origin` of the repo the config file lives in.
+    remote-url(string),
+  }
+
+  /// Resolves a repository. Returns none if a `remote-url` isn't hosted on this platform.
+  get-repository: func(config: config, ref: repository-ref) -> result<option<repository>, plugin-error>;
+
+  /// Credentials for cloning, fetching and pushing, or none for anonymous access.
+  /// Called before each git network operation, so short-lived tokens (eg: GitHub App installation tokens) can be
+  /// refreshed by the plugin.
+  git-credentials: func(config: config, repo: repository) -> result<option<git-credentials>, plugin-error>;
 
   /// All open PRs whose head branch starts with `branch-prefix`, plus the most recent closed/merged PR per head branch.
   list-pull-requests: func(config: config, repo: repository, branch-prefix: string) -> result<list<pull-request>, plugin-error>;
@@ -275,8 +312,9 @@ world platform-plugin {
 
 Design notes:
 
-- **Git push stays in the host.** It's identical across platforms and uses ambient git credentials, such as those left
-  by a CI checkout (see [Running in CI](#running-in-ci)). The platform plugin only talks to the PR API.
+- **Git operations stay in the host; the platform plugin supplies identity and credentials.** Clone, fetch, commit and
+  push are identical across platforms, so the host runs `git`. Only the platform-specific parts come from the plugin:
+  resolving a repo, its default branch, and credentials (see [Repositories & git](#repositories--git)).
 - **Labels, reviewers and assignees** belong in the platform plugin's own config, not in the contract.
 - **Host bindgen:** there are two `bindgen!` calls, one per world. Use bindgen's `with:` option so the second reuses the
   `types` and `log` modules generated by the first. Otherwise you'd get two incompatible Rust copies of `PluginError`.
@@ -302,7 +340,16 @@ ecosystems:
   - plugin: "file:./target/wasm32-wasip2/debug/my_plugin.wasm"
     config: { foo: bar }
 
-baseBranch: main # optional; see "Base branch resolution" in the Git layer section
+# Optional. Omit it to target the repo this config file lives in (the common case).
+repositories:
+  - "brad-jones/doup" # short form
+  - repository: "brad-jones/other" # long form, for per-repo overrides
+    baseBranch: develop # optional; defaults to the platform's default branch
+
+gitAuthor: "doup <noreply@doup.invalid>" # optional; this is the default
+
+git:
+  cloneStrategy: partial # optional; partial (default) | shallow | full
 ```
 
 `platform` and each `ecosystems` item use the **same** `$defs/plugin` definition: either a string (short form) or a `{
@@ -343,15 +390,19 @@ It also rejects semver range operators. Replace it outright:
 
 ### Discovery
 
-**One doup config per repository, at the repo root (decided).** Branch names (`doup/<ecosystem>/<dep>`) and PR
-reconciliation are repo-wide. Two configs in one repo would therefore produce clashing branch names, and one config's
-reconcile step could close the other's PRs.
+This file is the **runner config**. It describes what doup runs, and against which repositories. It is not read from the
+repositories doup clones.
 
-1. Use `--config <path>` if given. The one-config-per-repo rule still applies.
-2. Otherwise look for `doup.yaml`, `doup.yml` or `doup.json` at the **git root**. If more than one exists, that's an
-   error (ambiguous).
-3. Outside a git repo (only possible for dry runs), look in the current directory instead.
-4. If nothing is found, return an error that suggests `doup init`.
+1. Use `--config <path>` if given.
+2. Otherwise look for `doup.yaml`, `doup.yml` or `doup.json` in the current directory, then its parents up to the git
+   root if it's inside a git repo. If more than one candidate exists in the same directory, that's an error (ambiguous).
+3. If nothing is found, return an error that suggests `doup init`.
+
+`doup.lock` lives next to the config file.
+
+**One runner per target repository.** Branch names (`doup/<ecosystem>/<dep>`) and PR reconciliation are per repo. Two
+runner configs that target the same repository would therefore produce clashing branch names, and one could close the
+other's PRs. Document this in the README.
 
 JSONC and TOML are deferred.
 
@@ -434,68 +485,150 @@ JSONC and TOML are deferred.
 
 ---
 
-## Git layer
+## Repositories & git
+
+### Target selection
+
+1. `repositories` from the config, if set. Each entry is resolved with `get-repository(name(..))`.
+2. Otherwise, **the repo the config file lives in** (the default, aimed at the common single-repo setup). The host runs
+   `git -C <config dir> remote get-url origin` and resolves it with `get-repository(remote-url(..))`.
+3. If the config isn't in a git repo, has no `origin`, or the plugin returns none, fail with an error asking the user to
+   set `repositories`.
+
+Either way the result is a `repository`: canonical name, HTTPS clone URL and default branch. The `origin` URL is never
+cloned directly. It may be an SSH URL, point at a mirror, or carry embedded credentials, and on its own it doesn't give
+the default branch or the API name the PR calls need. The base branch is the entry's `baseBranch` override if set,
+otherwise the platform's default branch.
+
+In CI, `actions/checkout` is only there so doup can read `doup.yaml` / `doup.lock`. doup then clones the repo again into
+its own temp dir, and never reads or modifies that checkout. The double clone is deliberate: doup always works from a
+clone it made itself, with a known strategy, rather than whatever shallow or dirty checkout it was handed.
+
+### Authentication (decided)
+
+**What Renovate does:** its platform module builds an authenticated clone URL with the token embedded. On GitHub that is
+`https://x-access-token:<token>@github.com/owner/repo.git`. So the token lands in the clone's `.git/config` and in
+process arguments, and Renovate redacts it from its logs. For child processes such as package managers, it instead
+injects `url.<authenticated-url>.insteadOf` rules through `GIT_CONFIG_*` environment variables. The username part of the
+credential is platform specific (`x-access-token`, `oauth2`, `x-token-auth`, ...).
+
+**doup uses the same split of responsibilities, with a safer way of handing over the token:**
+
+- **The platform plugin supplies the credentials,** because their format is platform specific. Before each network
+  operation (clone, fetch, push, delete), the host calls `git-credentials(repo)`, so short-lived tokens can be
+  refreshed. The plugin gets its own token through its `env` allow-list, for example `env: [GITHUB_TOKEN]`.
+- **The host passes them to that single git process through environment variables only:**
+  - `GIT_CONFIG_COUNT=1`
+  - `GIT_CONFIG_KEY_0=http.<scheme>://<host>/.extraHeader`, scoped to the clone URL's origin so the header is never sent
+    to any other host
+  - `GIT_CONFIG_VALUE_0=Authorization: Basic <base64(username:password)>`
+- **Never in argv** (visible in process lists), **never in the remote URL or `.git/config`**, and **never logged**.
+  Tracing of git commands records argv only, never env.
+- Set `GIT_TERMINAL_PROMPT=0` on every git command, so a bad or missing token fails fast instead of hanging on a prompt.
+- HTTPS only in v1. `file://` clone URLs (used by the integration tests) get no credentials.
+
+### Clone strategies (decided: configurable)
+
+`git.cloneStrategy` in the config selects how each repository is cloned. Each clone goes into a fresh
+`tempfile::TempDir`, which is deleted when it's dropped (RAII again).
+
+| Strategy            | Clone                                | Fetching existing `doup/*` branches | Trade-off                                                                                |
+| ------------------- | ------------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `partial` (default) | `--filter=blob:none --branch <base>` | normal fetch                        | Full commit history but file contents fetched lazily. Parent commits are always present. |
+| `shallow`           | `--depth=1 --branch <base>`          | `--depth=2`                         | Smallest download. Depth 2 makes sure each doup branch tip's parent is present.          |
+| `full`              | `--branch <base>`                    | normal fetch                        | Simplest; slowest on large repos.                                                        |
+
+All strategies also use `--no-tags`. If a server doesn't support partial clone, git falls back to a full clone by
+itself.
+
+**Rust note on the "strategy pattern":** when the set of strategies is closed and chosen from config, the idiomatic Rust
+form is an `enum` with methods, not a trait object:
+
+```rust
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CloneStrategy {
+  #[default]
+  Partial,
+  Shallow,
+  Full,
+}
+
+impl CloneStrategy {
+  fn clone_args(self) -> &'static [&'static str] {
+    match self {
+      Self::Partial => &["--filter=blob:none"],
+      Self::Shallow => &["--depth=1"],
+      Self::Full => &[],
+    }
+  }
+
+  fn branch_fetch_depth(self) -> Option<u32> {
+    match self {
+      Self::Shallow => Some(2),
+      Self::Partial | Self::Full => None,
+    }
+  }
+}
+```
+
+Why not `Box<dyn CloneStrategy>`?
+
+- **Async trait methods aren't dyn-compatible** without extra boxing (the `async-trait` crate or a hand-written
+  `Pin<Box<dyn Future>>`).
+- **An enum gives exhaustive `match`es**, so when a variant is added the compiler points at every place that needs
+  updating.
+
+Switch to a trait only if plugins or third parties need to add strategies. `--local` is not a clone strategy. It's a
+different _workspace source_, which suits a second small enum: `enum Workspace { Clone(..), Local(PathBuf) }`.
+
+### Git operations
 
 Shell out to the `git` CLI through `tokio::process::Command` rather than using `git2` or `gix`:
 
-- It uses the user's or CI's existing credentials and config.
-- It has full worktree and push support.
+- It has full support for partial clones, worktrees and pushing.
+- It respects system-level git config such as proxies and CA bundles.
 - It is easy to debug.
 
-Keep it a thin wrapper in `git.rs`. Operations needed:
+Keep it a thin wrapper in `git.rs`. Every network command gets the credential env vars from above. Operations needed:
 
-- `rev-parse --show-toplevel`, `rev-parse --is-shallow-repository`
-- base branch resolution (below)
-- `fetch origin <base>`
-- `fetch --prune [--depth=2 if shallow] origin '+refs/heads/doup/*:refs/remotes/origin/doup/*'`. This fetches the
-  existing doup branches so they can be compared. In a shallow clone (the CI default), `--depth=2` makes sure each
-  branch tip's parent commit is present, so `<ref>^` resolves.
-- `for-each-ref refs/remotes/origin/doup/` (list remote doup branches, for orphan pruning)
-- `rev-parse origin/<base>` (pin the base SHA)
+- `-C <config dir> remote get-url origin` (default target only)
+- `clone <strategy args> --no-tags --branch <base> <clone-url> <tempdir>`
+- `fetch --prune [--depth=2 for shallow] origin '+refs/heads/doup/*:refs/remotes/origin/doup/*'`
+- `rev-parse HEAD` (pin the base SHA)
+- `for-each-ref refs/remotes/origin/doup/` (list doup branches, for orphan pruning)
 - `worktree add --detach <tmp> <base-sha>` / `worktree remove --force`
-- `status --porcelain`, `add -A`, `commit -m`
+- `status --porcelain`, `add -A`
+- `-c user.name=<name> -c user.email=<email> commit --no-verify -m <msg>`
 - `rev-parse <ref>^{tree}`, `rev-parse <ref>^`
-- `push --force-with-lease=<branch>:<sha> origin HEAD:refs/heads/<branch>`
+- `push --no-verify --force-with-lease=<branch>:<sha> origin HEAD:refs/heads/<branch>`
 - `push origin --delete <branch>`
 
-Commits use git's configured identity. If none is configured, fail early with a clear error.
-
-### Base branch resolution
-
-Use the first of these that succeeds:
-
-1. `baseBranch` from the config.
-2. `git symbolic-ref --short refs/remotes/origin/HEAD`. This is often unset in fresh CI checkouts.
-3. `git ls-remote --symref origin HEAD`, which asks the remote directly. Use this rather than `git remote show origin`,
-   whose output is meant for humans, is locale-dependent and is harder to parse.
-4. Otherwise, an error telling the user to set `baseBranch`.
-
-Dry runs don't need a base branch.
+**Commit identity (decided):** `gitAuthor` from the config, defaulting to `doup <noreply@doup.invalid>`. It's passed
+with `-c` on each commit, because fresh CI runners have no git identity configured. Signed commits are future work.
 
 ### Running in CI
 
-doup **never handles git credentials itself**. `git fetch` and `git push` use whatever the environment has already
-configured. The platform plugin gets its API token separately, through its `env` allow-list.
-
-- **GitHub Actions:** `actions/checkout` saves its token in the local git config (`persist-credentials: true` is the
-  default), so pushing works with no extra setup. The job needs `contents: write` and `pull-requests: write`.
-- **Caveat:** pushes and PRs made with the default `GITHUB_TOKEN` do **not** trigger other workflows, so CI won't run on
-  doup's PRs. Use a fine-grained personal access token or a GitHub App installation token instead. Pass it to
-  `actions/checkout`'s `token:` input (for git) and expose it to doup as an env var (for the platform plugin).
-- **Shallow checkouts** (`fetch-depth: 1`) are supported; see the fetch step above.
-- **Git identity:** set `user.name` / `user.email` in the job. This repo's `task init:git` already does this in CI.
-
 ```yaml
-- uses: actions/checkout@v4
-  with:
-    token: ${{ secrets.DOUP_TOKEN }}
-- run: doup update --locked
-  env:
-    GITHUB_TOKEN: ${{ secrets.DOUP_TOKEN }} # forwarded to the platform plugin via `env: [GITHUB_TOKEN]`
+jobs:
+  doup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # only used to read doup.yaml; doup's own token does the writing
+    steps:
+      - uses: actions/checkout@v4
+      # Future: an official action that installs doup.
+      - run: doup update --locked
+        env:
+          GITHUB_TOKEN: ${{ secrets.DOUP_TOKEN }} # forwarded to the platform plugin via `env: [GITHUB_TOKEN]`
 ```
 
-Future: a platform plugin could provide git credentials (for example, via a credential helper), so CI systems other than
-GitHub need no manual setup.
+- **`DOUP_TOKEN`** should be a fine-grained personal access token or a GitHub App token with `contents: write` and
+  `pull-requests: write` on the target repos. The platform plugin uses it for both the API and the git credentials, so
+  doup pushes and opens PRs as that identity, and CI runs on doup's PRs as normal.
+- Passing the workflow's own `secrets.GITHUB_TOKEN` also works, but GitHub doesn't trigger other workflows for pushes or
+  PRs made with it, so CI won't run on doup's PRs.
+- No git identity or credential setup is needed in the job. `actions/checkout`'s persisted credentials are never used.
 
 ---
 
@@ -504,44 +637,52 @@ GitHub need no manual setup.
 ```mermaid
 flowchart TD
   A[Load config + lock] --> B[Resolve/fetch/verify/compile plugins]
-  B --> C[Preflight: resolve base, fetch base + doup/* branches, pin base SHA, discovery worktree]
+  B --> T[Select target repositories]
+  T --> C[Per repo: get-repository, credentials, clone, fetch doup/* branches, pin base SHA]
   C --> D[Discover deps per ecosystem]
   D --> E[next-version per dep]
-  E -->|--dry-run| R[Print table, exit]
+  E -->|--dry-run| R[Add to dry-run table]
   E --> F[list-pull-requests prefix doup/]
   F --> G[reconcile: pure fn -> actions]
   G --> H[Per update: worktree, apply, commit, compare, push]
   H --> I[Create / update PR with release notes]
   G --> J[Close stale PRs + prune orphan doup/* branches]
-  I --> K[Summary + exit code]
-  J --> K
+  I --> N[Next repository]
+  J --> N
+  R --> N
+  N -->|more repos| C
+  N --> K[Summary + exit code]
 ```
+
+With `--local <dir>`, steps T and C are skipped and `<dir>` is used directly. It implies `--dry-run`.
 
 ### Phase details
 
-1. **Preflight (non-dry-run only; decided, Q4)**
-   - Resolve the base branch (see Base branch resolution).
-   - `git fetch origin <base>`, then resolve `origin/<base>` to a commit SHA once. Every worktree in this run is built
-     from that pinned SHA, so discovery and updates always see the same code even if the base moves mid-run.
-   - Fetch the existing `doup/*` branches (with `--depth=2` in shallow clones).
-   - Create a detached **discovery worktree** at the pinned SHA, held by a `WorktreeGuard`.
-   - The user's checkout is never read or modified. Doup behaves the same on any branch, with or without uncommitted
-     changes.
-   - **Dry runs skip all of this.** There's no fetch, no worktree, no base branch, and no platform calls. A dry run
-     reads the current checkout, so it works with no `origin` remote and even outside a git repo. The platform plugin is
-     still resolved, which validates config and lock, but it is never called.
-2. **Discovery**
-   - Call `list-dependencies` on each ecosystem, with the discovery worktree (or the current checkout for dry runs)
-     preopened read-only.
+1. **Target selection.** See [Target selection](#target-selection).
+2. **Acquire (per repository; decided).**
+   - Call `get-repository` and resolve the base branch.
+   - Clone with the configured strategy into a temp dir, using credentials from `git-credentials`. The clone's own
+     checkout, at the base branch, is the **discovery tree**. No separate discovery worktree is needed.
+   - Fetch the existing `doup/*` branches.
+   - Pin the base SHA (`rev-parse HEAD`). Every update worktree in this repo is built from it, so discovery and updates
+     always see the same code.
+   - **Dry runs do all of this too.** A dry run and a real run therefore see exactly the same code; only the writes are
+     skipped.
+   - **`--local <dir>` skips this phase.** `<dir>` becomes the discovery tree, so you can try out uncommitted manifest
+     changes or a plugin you're developing. No clone, no git and no platform calls are made, and it works outside a git
+     repo. The platform plugin is still resolved, which validates config and lock, but it is never called.
+3. **Discovery**
+   - Call `list-dependencies` on each ecosystem, with the discovery tree preopened read-only. Read-only also guarantees
+     no plugin can modify the clone's checkout that worktrees are built from.
    - Record each ecosystem's outcome as `Ok(deps)` or `Err(e)`.
-3. **Next versions**
+4. **Next versions**
    - Call `next-version` for each dependency.
    - The result for each one is: up to date, `PlannedUpdate { ecosystem, dependency, to }`, or an error.
-4. **Dry run**
-   - Print a table: ecosystem, dependency, current version(s), next version.
+5. **Dry run**
+   - Add this repo's rows to the table: repository, ecosystem, dependency, current version(s), next version.
    - Errors are listed underneath.
-   - Exit.
-5. **Reconcile** with `fn reconcile(discovery, existing_prs, remote_branches) -> Vec<Action>`. The possible actions are:
+   - Move on to the next repository.
+6. **Reconcile** with `fn reconcile(discovery, existing_prs, remote_branches) -> Vec<Action>`. The possible actions are:
    - `Upsert { update, existing_pr: Option<Pr> }`
    - `Close { pr, reason }`: only for branches belonging to ecosystems whose discovery **succeeded**, where the
      dependency was confirmed up to date or no longer exists. **Never close PRs for an ecosystem that errored.**
@@ -560,7 +701,7 @@ flowchart TD
        declined "foo → X", not a particular diff.
      - This works even after the branch has been pruned, because the platform still lists the closed PR with its head
        branch name and body marker.
-6. **Upsert**
+7. **Upsert**
    1. `WorktreeGuard::new(<pinned base SHA>)`.
    2. `apply-update` with the worktree preopened read-write.
    3. If there are no changes, warn and skip.
@@ -570,12 +711,14 @@ flowchart TD
    6. Call `release-notes`. Failure here is a warning, not an error.
    7. Render the title and body, then `create-pull-request` or `update-pull-request`. Only call update if the title or
       body actually changed.
-7. **Close:** `close-pull-request` with an explanatory comment, then delete the remote branch. **Prune:** delete orphan
+8. **Close:** `close-pull-request` with an explanatory comment, then delete the remote branch. **Prune:** delete orphan
    branches (`push origin --delete`).
-8. **Summary:** counts of created, updated, unchanged, closed and failed. Exit with status 1 if anything failed.
+9. **Summary:** per repository, counts of created, updated, unchanged, closed and failed. Exit with status 1 if anything
+   failed in any repository.
 
-**Error policy:** a failure for one dependency or ecosystem is collected and the run continues. Only config,
-plugin-loading and preflight failures abort the run.
+**Error policy:** a failure for one dependency or ecosystem is collected and the run continues. A failure for a whole
+repository (lookup, credentials, clone) is recorded and doup moves on to the next repository. Only config and
+plugin-loading failures abort the entire run.
 
 ### Defaults (hardcoded for now)
 
@@ -624,7 +767,8 @@ projects/
         runtime.rs       # Engine, HostState, linker setup, limits, log import
         ecosystem.rs     # bindgen + EcosystemPlugin wrapper
         platform.rs      # bindgen + PlatformPlugin wrapper
-      git.rs
+      repos.rs           # target selection, CloneStrategy, Workspace (clone | local), TempDir lifetime
+      git.rs             # thin git CLI wrapper, credential env injection, WorktreeGuard
       pipeline/
         mod.rs           # run(): orchestrates phases
         reconcile.rs     # pure decision logic
@@ -648,6 +792,8 @@ pub struct UpdateOptions {
   pub config_path: Option<PathBuf>,
   pub dry_run: bool,
   pub locked: bool,
+  /// `--local <dir>`: dry run against this directory; no clone, no platform calls.
+  pub local: Option<PathBuf>,
 }
 
 /// Structured outcome. The CLI decides how to print it and which exit code to use.
@@ -666,7 +812,9 @@ The `doup` library uses typed errors built with `thiserror` and does **not** dep
   - `LockfileError`: read/write/parse, would change under `--locked`.
   - `FetchError`: registry, digest mismatch, re-pointed tag.
   - `InvokeError`: instantiate, trap, timeout, or a `PluginError` the plugin returned.
-  - `GitError`: the command, its exit status and its stderr.
+  - `GitError`: the command, its exit status and its stderr. Credentials must never appear in it; they're passed via env
+    and env is never captured.
+  - `RepoError`: no default target (no `origin`, or not on this platform), repository lookup failed.
 - **Name the host's invocation error `InvokeError`, not `PluginError`.** bindgen already generates a `PluginError` type
   from the WIT, and reusing the name inside `plugins/` would be confusing.
 - **A top-level `doup::Error`** in `error.rs` wraps the module errors with `#[from]`. `?` then converts automatically,
@@ -678,9 +826,9 @@ The `doup` library uses typed errors built with `thiserror` and does **not** dep
   source's message. For example: `#[error("failed to load plugin {name}")]`, with the cause in `#[source]`.
 - **No catch-all variants**, such as `Other(#[from] anyhow::Error)` or `Other(String)`. They undo the point of typed
   errors.
-- **Per-item failures** in `UpdateReport` keep the typed error: `Failure { ecosystem: String, dependency:
-  Option<String>, stage: Stage, error: doup::Error }`. The CLI can then match on it, for example to show a timeout
-  differently from a plugin-reported error.
+- **Per-item failures** in `UpdateReport` keep the typed error: `Failure { repository: Option<String>, ecosystem:
+  Option<String>, dependency: Option<String>, stage: Stage, error: doup::Error }`. The CLI can then match on it, for
+  example to show a timeout differently from a plugin-reported error.
 
 A sketch of the shape:
 
@@ -698,6 +846,8 @@ pub enum Error {
   Invoke(#[from] InvokeError),
   #[error(transparent)]
   Git(#[from] GitError),
+  #[error(transparent)]
+  Repo(#[from] RepoError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -723,8 +873,8 @@ Rules of thumb:
   later, from other front-ends.
 - **Errors:** see [Errors](#errors-decided-thiserror-from-the-start). Typed `thiserror` errors in `doup`; `anyhow` only
   in `cli`.
-- **Per-item failures belong in `UpdateReport`, not in `Err`.** `Err` is reserved for fatal failures: config, plugin
-  loading and preflight.
+- **Per-item failures belong in `UpdateReport`, not in `Err`.** That includes a whole repository failing. `Err` is
+  reserved for fatal failures: config and plugin loading.
 - **Name clash:** the `cli` package's binary is called `doup`, and so is the library crate. Building is fine, but `cargo
   doc` warns about an output filename collision. Set `doc = false` on the `[[bin]]` target to avoid it.
 - **Shared versions:** move common dependency versions (`tokio`, `anyhow`, `serde`, `wasmtime*`, `wit-bindgen`) into
@@ -751,21 +901,26 @@ Rules of thumb:
   - branch sanitisation
   - PR rendering
   - **`reconcile`** (most of the edge cases live here)
+  - target selection, `CloneStrategy` arguments, and credential env construction (header scoped to the right host, never
+    in argv)
 - **Fixture plugins** (in `projects/plugins/`, replacing the calculator plugins):
   - `fixture-ecosystem` reads `/workspace/**/fixture-deps.json` (`{"name": "version"}`), gets latest versions and
     release notes from a mock registry URL in its config, and rewrites the JSON in `apply-update`. This exercises
     preopens and wasi:http.
-  - `fixture-platform` is a tiny REST client against a `baseUrl` from its config.
+  - `fixture-platform` is a tiny REST client against a `baseUrl` from its config. Its `get-repository` returns a
+    `file://` clone URL to the test's bare repo, and `git-credentials` returns none.
 - **Integration tests** (`projects/doup/tests/`):
-  - Create a temp bare "origin" repo and a clone.
+  - Create a temp bare "origin" repo, plus a separate working clone the test uses to set up and modify the base branch.
   - Start a `wiremock` server.
-  - Run the pipeline in-process.
+  - Run the pipeline in-process. doup clones the bare repo itself.
   - Assert on the HTTP calls made and on the remote branches.
   - Cover: first run creates PRs, a re-run is a no-op, a newer version updates in place, a base branch move triggers a
     re-push, an up-to-date dependency closes its PR, an erroring ecosystem doesn't close anything, a PR the user closed
-    stays closed until a newer version appears, running from a feature branch with local edits still discovers from
-    `origin/<base>`, an orphan `doup/*` branch with no PR is pruned, a shallow (`--depth 1`) clone works, `origin/HEAD`
-    unset falls back to `ls-remote`, and a dry run works with no remote configured.
+    stays closed until a newer version appears, an orphan `doup/*` branch with no PR is pruned, each clone strategy
+    (`partial`, `shallow`, `full`) produces identical results, the default target is derived from the config repo's
+    `origin`, a failing repository doesn't stop the next one, and `--local` works with no git or platform at all.
+  - Credential injection isn't exercised end to end here, because the bare repo is reached over `file://`. It's covered
+    by the unit tests on the constructed `Command`.
 - **Taskfile:**
   - `build:fixtures` runs `cargo build -p fixture-* --target wasm32-wasip2`.
   - `test` depends on it.
@@ -792,10 +947,11 @@ Each milestone should be independently mergeable and leave `cargo test` green.
 
 ### M2: Config
 
-- [ ] Schema changes: entry shape, ref patterns, `baseBranch`.
+- [ ] Schema changes: entry shape, ref patterns, `repositories` (short/long form with `baseBranch`), `gitAuthor`,
+      `git.cloneStrategy`.
 - [ ] Swap `serde_yaml` for `serde-saphyr` (note 12). Add config discovery, the `--config` flag, YAML/JSON loading, and
       normalisation into domain types.
-- [ ] `cli`: switch to `#[tokio::main]`, install `tracing-subscriber`, add `-v` and `--config` flags, and map
+- [ ] `cli`: switch to `#[tokio::main]`, install `tracing-subscriber`, add `-v`, `--config` and `--local` flags, and map
       `UpdateArgs` to `doup::UpdateOptions`.
 
 ### M3: Host runtime (`file:` plugins only)
@@ -805,9 +961,10 @@ Each milestone should be independently mergeable and leave `cargo test` green.
 - [ ] `EcosystemPlugin` / `PlatformPlugin` wrappers; error mapping from `PluginError` and traps.
 - [ ] Integration test: load the fixture plugins from `file:` refs and call each export.
 
-### M4: Discovery & dry run
+### M4: Discovery & dry run (`--local` first)
 
-- [ ] Discovery and next-version phases with per-dependency error collection.
+- [ ] Discovery and next-version phases with per-dependency error collection, driven by `--local <dir>`. This needs no
+      git or platform plugin yet.
 - [ ] Dry-run table output.
 - [ ] Fill in `fixture-ecosystem`'s real behaviour.
 
@@ -817,11 +974,14 @@ Each milestone should be independently mergeable and leave `cargo test` green.
       re-fetch on a corrupt cache entry.
 - [ ] `doup.lock` read/write, plus the `--locked` flag.
 
-### M6: Git & updates
+### M6: Repositories, git & updates
 
-- [ ] `git.rs` wrapper, `WorktreeGuard`, base branch resolution, preflight (fetch base + `doup/*` branches, with shallow
-      handling; pin base SHA; discovery worktree).
-- [ ] Apply → commit → tree compare → force-with-lease push.
+- [ ] Platform plugin `get-repository` / `git-credentials` wrappers, plus target selection.
+- [ ] `git.rs` wrapper with credential env injection and `GIT_TERMINAL_PROMPT=0`. `CloneStrategy` enum, per-repo
+      `TempDir`, `doup/*` fetch, base SHA pinning, `WorktreeGuard`.
+- [ ] Non-local dry runs: clone, then discover.
+- [ ] Apply → commit (with `gitAuthor`) → tree compare → force-with-lease push.
+- [ ] Per-repository error isolation.
 
 ### M7: Platform reconciliation
 
@@ -833,7 +993,8 @@ Each milestone should be independently mergeable and leave `cargo test` green.
 
 - [ ] Summary output and exit codes; review error messages.
 - [ ] Document the plugin author guide (the WIT contract, the `/workspace` convention, config as JSON).
-- [ ] Document "Running in CI" in the README (credentials, token caveat, workflow example).
+- [ ] Document "Running in CI" in the README (token requirements, the `GITHUB_TOKEN` caveat, workflow example, one
+      runner per target repo).
 
 ---
 
@@ -851,6 +1012,14 @@ Each milestone should be independently mergeable and leave `cargo test` green.
 - Hosting `/.well-known/wasm-pkg/registry.json` on a doup domain, so the registry can move without a doup release.
 - Publishing the WIT package for third-party plugin authors.
 - JSONC and TOML config.
+- **Two-tier config** (Renovate-style): the runner config keeps the platform, repositories and env grants, and an
+  optional `doup.yaml` inside each target repo supplies its ecosystems. **Security constraint:** repo-level config must
+  never be able to grant `env` to a plugin. Otherwise a repo could hand the runner's token to a plugin of its choosing.
+- Repository autodiscovery (a `list-repositories` platform function plus filters).
+- A `--repository` CLI flag to override the target list for one-off runs.
+- A persistent workdir (`--workdir`) that is reused between runs, fetching instead of re-cloning.
+- SSH remotes, signed commits, and a platform `identity()` function so commits can be attributed to the token's user.
+- An official GitHub Action that installs and runs doup.
 
 ---
 
@@ -861,8 +1030,7 @@ Each milestone should be independently mergeable and leave `cargo test` green.
 - **Q2: registry.** A built-in `doup` → `ghcr.io/brad-jones/` mapping that the user's wkg config can override.
 - **Q3: user-closed PRs.** Skip until a newer version is available. The target version is detected through the PR body's
   metadata marker.
-- **Q4: preflight.** Always discover from a detached worktree at the pinned `origin/<base>` SHA. Dry runs read the
-  current checkout instead.
+- **Q4: preflight.** _Superseded by G1._ (Originally: discover from a worktree of the user's checkout.)
 - **Q5: lockfile format.** TOML.
 - **YAML parser.** `serde-saphyr` with default features, and `strict_booleans: true` when reading (note 12).
 - **Plugin cache.** wkg's `CachingClient` + `FileCache::global_cache()` (shared with the `wkg` CLI). doup adds digest
@@ -878,7 +1046,7 @@ Each milestone should be independently mergeable and leave `cargo test` green.
   left alone. Plugins wanting independent tracks report them as separate dependencies.
 - **R2: declined PR, then the base changes.** The skip still applies. It's keyed on `(ecosystem, dependency, to)`, not
   on the diff.
-- **R3: multiple configs.** One doup config per repo, at the git root.
+- **R3: multiple configs.** _Superseded by G2:_ one runner per target repository.
 - **R4: orphan branches.** Prune `doup/*` branches with no open PR, but only for ecosystems whose discovery succeeded
   and that aren't being upserted this run.
 - **R5: release notes.** The plugin returns per-version notes for the range (current, to], newest first. With mixed
@@ -886,8 +1054,21 @@ Each milestone should be independently mergeable and leave `cargo test` green.
   entries, 50k characters), but always says explicitly what it left out and links to it.
 - **R6: toolchain.** `wasm32-wasip2` is already provided via `rust-toolchain.toml`; no pixi changes are needed.
 - **R7: `file:` refs.** They're never locked and are ignored by `--locked`, which logs a warning when they're present.
-- **R8: dry run.** It needs no remote, no base branch and no platform calls, and works outside a git repo.
-- **R9: base branch.** Resolved from config, then `origin/HEAD`, then `ls-remote --symref origin HEAD`; otherwise an
-  error.
-- **R10: credentials.** doup uses ambient git credentials, and CI must supply a non-`GITHUB_TOKEN` token for PRs to
-  trigger workflows. See Running in CI.
+- **R8: dry run.** _Superseded by G1 / G4:_ dry runs clone like real runs; `--local <dir>` covers the no-git case.
+- **R9: base branch.** _Superseded by G1:_ the per-repo `baseBranch` override, else the platform's default branch.
+- **R10: credentials.** _Superseded by G3._
+
+### Git model
+
+- **G1: doup owns the clone (Renovate model).** doup clones each target repository into its own temp dir and never uses
+  an existing checkout. Dry runs clone too, so they see the same code as real runs.
+- **G2: runner config.** A single central config (platform, ecosystems, optional `repositories`). It defaults to the
+  repo the config lives in, resolved from its `origin` via `get-repository(remote-url(..))`. Two-tier per-repo config is
+  future work.
+- **G3: authentication.** The platform plugin supplies credentials through `git-credentials`, called before each network
+  operation. The host injects them as a host-scoped `http.extraHeader` via `GIT_CONFIG_*` env vars, never in argv, URLs,
+  `.git/config` or logs.
+- **G4: local mode.** `--local <dir>` is a dry run against a directory, with no clone and no platform calls.
+- **G5: clone strategy.** Configurable via `git.cloneStrategy`: `partial` (default), `shallow` or `full`. It's modelled
+  as a Rust enum, not a trait object.
+- **G6: commit identity.** `gitAuthor` from config, defaulting to `doup <noreply@doup.invalid>`. No WIT change.
