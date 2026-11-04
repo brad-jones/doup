@@ -76,10 +76,6 @@ tasks:
       - rust-toolchain.toml
     cmds:
       - rustup install --no-self-update
-      - cargo install cargo-zigbuild@0.24.0
-      - cargo install cargo-xwin@0.23.1
-      - cargo xwin cache xwin
-      - cargo xwin cache windows-msvc-sysroot
 
   update:
     desc: Interactively updates our dependencies to their latest versions.
@@ -108,13 +104,38 @@ tasks:
       - cargo clippy
 
   build:cli:
-    desc: Builds the CLI project.
+    desc: Builds the doup CLI project for a given target
+    deps:
+      - init
+    requires:
+      vars:
+        - TARGET
+    cmds:
+      - rustup target add {{.TARGET}}
+      - cargo build -p cli --release --target {{.TARGET}}
+      - ./target/{{.TARGET}}/release/doup{{if eq OS "windows"}}.exe{{end}} --help
+
+  build:cross:
+    desc: Cross compiles the CLI project using zigbuild
     sources:
       - ./projects/cli/**/*
     generates:
       - ./target/*/release/doup
       - ./target/*/release/doup.exe
     cmds:
+      - rustup target add x86_64-unknown-linux-gnu
+      - rustup target add x86_64-unknown-linux-musl
+      - rustup target add x86_64-apple-darwin
+      - rustup target add x86_64-pc-windows-msvc
+      - rustup target add aarch64-unknown-linux-gnu
+      - rustup target add aarch64-unknown-linux-musl
+      - rustup target add aarch64-apple-darwin
+      - rustup target add aarch64-pc-windows-msvc
+      - rustup component add llvm-tools
+      - cargo install cargo-zigbuild@0.24.0
+      - cargo install cargo-xwin@0.23.1
+      - cargo xwin cache xwin
+      - cargo xwin cache windows-msvc-sysroot
       - cargo zigbuild -p cli --release --target x86_64-unknown-linux-gnu
       - cargo zigbuild -p cli --release --target x86_64-unknown-linux-musl
       - cargo zigbuild -p cli --release --target x86_64-apple-darwin

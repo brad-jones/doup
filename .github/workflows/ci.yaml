@@ -1,0 +1,44 @@
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest, exeSuffix: "" }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, exeSuffix: "" }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-26.04-arm, exeSuffix: "" }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-26.04-arm, exeSuffix: "" }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, exeSuffix: ".exe" }
+          - { target: aarch64-pc-windows-msvc, os: windows-11-arm, exeSuffix: ".exe" }
+          - { target: x86_64-apple-darwin, os: macos-15-intel, exeSuffix: "" }
+          - { target: aarch64-apple-darwin, os: macos-latest, exeSuffix: "" }
+    steps:
+      - name: ⬇️ Git Checkout
+        uses: actions/checkout@v7
+
+      - name: ✨ Install pixi
+        uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          pixi-version: v0.84.0
+          activate-environment: true
+
+      - name: 🏗️ Build CLI
+        run: task build:cli
+        env:
+          TARGET: ${{ matrix.target }}
+
+      - name: ⬆️ Upload CLI Binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: ./target/${{ matrix.target }}/release/doup${{ matrix.exeSuffix }}
+          retention-days: 1
+          archive: false
