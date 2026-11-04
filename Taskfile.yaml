@@ -105,15 +105,11 @@ tasks:
 
   build:cli:
     desc: Builds the doup CLI project for a given target
-    deps:
-      - init
     requires:
       vars:
         - TARGET
     cmds:
-      - rustup target add {{.TARGET}}
       - cargo build -p cli --release --target {{.TARGET}}
-      - ./target/{{.TARGET}}/release/doup{{if eq OS "windows"}}.exe{{end}} --help
 
   build:cross:
     desc: Cross compiles the CLI project using zigbuild
