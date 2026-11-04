@@ -30,6 +30,10 @@ jobs:
           pixi-version: v0.84.0
           activate-environment: true
 
+      - name: 🧰 Install musl-tools
+        if: endsWith(matrix.target, '-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       - name: 🏗️ Build CLI
         run: task build:cli
         env:
