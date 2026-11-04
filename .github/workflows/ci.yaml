@@ -35,6 +35,8 @@ jobs:
         with:
           toolchain: stable
           target: ${{ matrix.target }}
+          cache-key: ${{ matrix.target }}
+          cache-all-crates: true
 
       - name: 🧰 Install musl-tools
         if: endsWith(matrix.target, '-musl')
