@@ -45,4 +45,3 @@ jobs:
           name: ${{ matrix.target }}
           path: ./target/${{ matrix.target }}/release/doup${{ matrix.exeSuffix }}
           retention-days: 1
-          archive: false
