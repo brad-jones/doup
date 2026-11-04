@@ -10,6 +10,8 @@ lefthook = ">=2.2.2,<3"
 cocogitto = ">=7.0.0,<8"
 apm = ">=0.35.0,<0.36"
 bun = ">=1.4.4,<2"
+clang = ">=23.1.4,<24"
+zig = ">=0.15.2,<0.18"
 
 [target.unix.activation.env]
 PATH = "$PIXI_PROJECT_ROOT/scripts:$PATH"

@@ -5,6 +5,6 @@ use clap::Args;
 #[derive(Args)]
 pub struct SelfUpdateArgs {}
 
-pub fn self_update(args: SelfUpdateArgs) -> Result<()> {
+pub async fn self_update(_args: SelfUpdateArgs) -> Result<()> {
   todo!()
 }

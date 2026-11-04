@@ -5,6 +5,6 @@ use clap::Args;
 #[derive(Args)]
 pub struct InitArgs {}
 
-pub fn init(args: InitArgs) -> Result<()> {
+pub async fn init(_args: InitArgs) -> Result<()> {
   todo!()
 }
