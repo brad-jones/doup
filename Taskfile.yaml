@@ -121,8 +121,5 @@ tasks:
     desc: Builds the doup CLI project for a given target
     deps:
       - init:rustup
-    requires:
-      vars:
-        - TARGET
     cmds:
-      - cargo build -p cli --release --target {{.TARGET}}
+      - cargo build -p cli --release {{if .TARGET}}--target {{.TARGET}}{{end}}
