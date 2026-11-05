@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: namespace-profile-8x16
+    runs-on: namespace-profile-32x64
     steps:
       - name: ⬇️ Git Checkout
         uses: actions/checkout@v7
@@ -49,7 +49,7 @@ jobs:
 
   update:
     needs: build
-    runs-on: namespace-profile-8x16
+    runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Download Binary
         uses: actions/download-artifact@v8
