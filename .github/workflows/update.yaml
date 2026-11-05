@@ -1,0 +1,55 @@
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Git Checkout
+        uses: actions/checkout@v7
+
+      - name: ✨ Install pixi
+        uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          pixi-version: v0.84.0
+          activate-environment: true
+
+      - name: 💾 Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            target
+          key: cargo-x86_64-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: 👮 Lint Code Base
+        run: task lint
+
+      - name: 🧪 Run Tests
+        run: task test
+
+      - name: 🏗️ Build CLI
+        run: task build:cli
+        env:
+          TARGET: x86_64-unknown-linux-gnu
+
+      - name: 🧪 Smoke Test Binary
+        run: ./target/x86_64-unknown-linux-gnu/release/doup --help
+
+      - name: ⬆️ Upload Binary
+        uses: actions/upload-artifact@v7
+        with:
+          path: ./target/x86_64-unknown-linux-gnu/release/doup
+
+  update:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Download Binary
+        uses: actions/download-artifact@v8
+
+      - run: ./target/x86_64-unknown-linux-gnu/release/doup --help
