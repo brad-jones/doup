@@ -76,6 +76,8 @@ tasks:
       - rust-toolchain.toml
     cmds:
       - rustup install --no-self-update
+      - if: '[ -n "$TARGET" ]'
+        cmd: rustup target add {{.TARGET}}
 
   update:
     desc: Interactively updates our dependencies to their latest versions.
@@ -105,6 +107,8 @@ tasks:
 
   build:cli:
     desc: Builds the doup CLI project for a given target
+    deps:
+      - init:rustup
     requires:
       vars:
         - TARGET

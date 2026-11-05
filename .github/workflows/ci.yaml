@@ -30,32 +30,18 @@ jobs:
           pixi-version: v0.84.0
           activate-environment: true
 
-      - run: task init:rustup
-      - run: rustup target add ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "pixi-rust"
-          key: ${{ matrix.target }}
-          cache-all-crates: true
-          #cache-directories: |
-          #  "${CONDA_PREFIX}/.rustup"
-          #  "${CONDA_PREFIX}/.cargo"
-
-      #- name: 🦀 Install Rust
-      #  uses: actions-rust-lang/setup-rust-toolchain@v2
-      #  with:
-      #    toolchain: stable
-      #    target: ${{ matrix.target }}
-      #    cache-key: ${{ matrix.target }}
-      #    cache-all-crates: true
-
       - name: 🧰 Install musl-tools
         if: endsWith(matrix.target, '-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      #- name: 🏗️ Build CLI
-      #  run: cargo build -p cli --release --target ${{ matrix.target }}
+      - name: 💾 Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: 🏗️ Build CLI
         run: task build:cli
@@ -65,7 +51,7 @@ jobs:
       - name: 🧪 Smoke Test Binary
         run: ./target/${{ matrix.target }}/release/doup${{ matrix.exeSuffix }} --help
 
-      - name: ⬆️ Upload CLI Binary
+      - name: ⬆️ Upload Binary
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
