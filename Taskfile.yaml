@@ -90,6 +90,7 @@ tasks:
       - pixi self-update
       - sync-gha-pixi-version.ts
       - pixi upgrade
+      # Does not bump the nightly pinned in rust-toolchain.toml; change that date by hand.
       - rustup update --no-self-update
       - dprint config upgrade
       - apm update --yes

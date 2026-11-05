@@ -1,5 +1,5 @@
 [toolchain]
 profile = "minimal"
-channel = "stable"
+channel = "nightly-2026-11-04"
 targets = ["wasm32-wasip2"]
 components = ["rust-analyzer", "rustfmt", "clippy"]
