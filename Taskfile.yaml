@@ -103,10 +103,19 @@ tasks:
     desc: Lint our code base to ensure we maintain decent quality.
     deps:
       - init:rustup
+    env:
+      CARGO_BUILD_WARNINGS: deny
     cmds:
       - cog check
       - dprint check
       - cargo clippy
+
+  test:
+    desc: Test our code base to ensure it works as we intend.
+    deps:
+      - init:rustup
+    cmds:
+      - cargo test
 
   build:cli:
     desc: Builds the doup CLI project for a given target
