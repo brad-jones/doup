@@ -16,6 +16,7 @@ struct Cli {
 async fn main() {
   if let Err(err) = match Cli::parse().command {
     Commands::Init(args) => commands::init(args).await,
+    Commands::Add(args) => commands::add(args).await,
     Commands::Update(args) => commands::update(args).await,
     Commands::SelfUpdate(args) => commands::self_update(args).await,
   } {
