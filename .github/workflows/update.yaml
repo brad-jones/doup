@@ -17,14 +17,16 @@ jobs:
           pixi-version: v0.84.0
           activate-environment: true
 
-      - name: 💾 Cache Cargo
+      - name: 💾 Rust Cache
         uses: actions/cache@v6
         with:
           path: |
-            ${{ env.CARGO_HOME }}/registry
-            ${{ env.CARGO_HOME }}/git
+            ${{ env.RUSTUP_HOME }}
+            ${{ env.CARGO_HOME }}
             target
-          key: cargo-x86_64-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          key: rust-x86_64-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            rust-x86_64-unknown-linux-gnu-
 
       - name: 👮 Lint Code Base
         run: task lint
