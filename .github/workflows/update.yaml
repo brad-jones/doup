@@ -51,5 +51,5 @@ jobs:
     steps:
       - name: ⬇️ Download Binary
         uses: actions/download-artifact@v8
-
-      - run: ls -hal .
+      - run: chmod +x ./doup && sudo mv ./doup /usr/bin/doup
+      - run: doup --help
