@@ -52,4 +52,4 @@ jobs:
       - name: ⬇️ Download Binary
         uses: actions/download-artifact@v8
 
-      - run: ./target/x86_64-unknown-linux-gnu/release/doup --help
+      - run: ls -hal .
