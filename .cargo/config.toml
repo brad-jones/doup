@@ -1,3 +1,0 @@
-[build]
-# Parallel rustc front-end; nightly only (https://blog.rust-lang.org/2023/11/09/parallel-rustc/).
-rustflags = ["-Z", "threads=0"]
