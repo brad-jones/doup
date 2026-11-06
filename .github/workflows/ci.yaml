@@ -1,12 +1,16 @@
+name: Continuous Integration
+
 on:
   workflow_dispatch:
-  #push:
-  #  branches:
-  #    - master
+  push:
+    branches:
+      - master
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: avrea-ubuntu-26.04-4-vcpu
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: ⬇️ Git Checkout
         uses: actions/checkout@v7
@@ -17,14 +21,10 @@ jobs:
           pixi-version: v0.84.0
           activate-environment: true
 
-      - name: 💾 Cache Cargo
-        uses: actions/cache@v6
+      - name: 💾 Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
         with:
-          path: |
-            ${{ env.CARGO_HOME }}/registry
-            ${{ env.CARGO_HOME }}/git
-            target
-          key: cargo-x86_64-unknown-linux-gnu-${{ hashFiles('**/Cargo.lock') }}
+          version: "v0.19.0"
 
       - name: 👮 Lint Code Base
         run: task lint
@@ -40,14 +40,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest, exeSuffix: "" }
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, exeSuffix: "" }
-          - { target: aarch64-unknown-linux-gnu, os: ubuntu-26.04-arm, exeSuffix: "" }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-26.04-arm, exeSuffix: "" }
-          - { target: x86_64-pc-windows-msvc, os: windows-latest, exeSuffix: ".exe" }
+          - { target: x86_64-unknown-linux-gnu, os: avrea-ubuntu-26.04-4-vcpu, exeSuffix: "" }
+          - { target: x86_64-unknown-linux-musl, os: avrea-ubuntu-26.04-4-vcpu, exeSuffix: "" }
+          - { target: aarch64-unknown-linux-gnu, os: avrea-ubuntu-26.04-arm-4-vcpu, exeSuffix: "" }
+          - { target: aarch64-unknown-linux-musl, os: avrea-ubuntu-26.04-arm-4-vcpu, exeSuffix: "" }
+          - { target: x86_64-pc-windows-msvc, os: avrea-windows-2025-4-vcpu, exeSuffix: ".exe" }
           - { target: aarch64-pc-windows-msvc, os: windows-11-arm, exeSuffix: ".exe" }
           - { target: x86_64-apple-darwin, os: macos-15-intel, exeSuffix: "" }
-          - { target: aarch64-apple-darwin, os: macos-latest, exeSuffix: "" }
+          - { target: aarch64-apple-darwin, os: avrea-macos-26-8-vcpu, exeSuffix: "" }
     steps:
       - name: ⬇️ Git Checkout
         uses: actions/checkout@v7
@@ -62,18 +62,32 @@ jobs:
         if: endsWith(matrix.target, '-musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: 💾 Cache Cargo
+      - name: 💾 Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+        with:
+          version: "v0.19.0"
+
+      # On Github hosted runners we avoid the built-in GHA caching offered by
+      # sccache as it runs into rate limits. Instead we configure sscache to
+      # work against a local dir and then actions/cache to cache that dir.
+      # see: https://github.com/Mozilla-Actions/sccache-action/issues/50
+      - name: 📁 Configure local sccache dir
+        if: ${{ !startsWith(matrix.os, 'avrea-') }}
+        shell: bash
+        run: echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
+
+      - name: 💾 Cache sccache
+        if: ${{ !startsWith(matrix.os, 'avrea-') }}
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ env.CARGO_HOME }}/registry
-            ${{ env.CARGO_HOME }}/git
-            target
-          key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          path: ${{ github.workspace }}/.sccache
+          key: sccache-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: sccache-${{ matrix.target }}-
 
       - name: 🏗️ Build CLI
         run: task build:cli
         env:
+          RUSTC_WRAPPER: sccache
           TARGET: ${{ matrix.target }}
 
       - name: 🧪 Smoke Test Binary
