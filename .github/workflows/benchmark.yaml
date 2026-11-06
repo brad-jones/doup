@@ -1,3 +1,5 @@
+name: Benchmark Runners
+
 on:
   workflow_dispatch:
   push:
@@ -42,10 +44,6 @@ jobs:
 
       - name: 🧪 Smoke Test Binary
         run: ./target/x86_64-unknown-linux-gnu/release/doup --help
-
-      - name: 📊 sccache Stats
-        if: always()
-        run: sccache --show-stats
 
   build_namespace-4x16:
     runs-on: namespace-profile-4x16
