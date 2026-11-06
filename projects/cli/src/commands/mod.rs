@@ -6,6 +6,9 @@ pub use init::init;
 mod add;
 pub use add::add;
 
+mod remove;
+pub use remove::remove;
+
 mod update;
 pub use update::update;
 
@@ -16,6 +19,7 @@ pub use self_update::self_update;
 pub enum Commands {
   Init(init::InitArgs),
   Add(add::AddArgs),
+  Remove(remove::RemoveArgs),
   Update(update::UpdateArgs),
   SelfUpdate(self_update::SelfUpdateArgs),
 }
