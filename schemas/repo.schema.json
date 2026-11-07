@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/brad-jones/doup/refs/heads/master/doup.schema.json",
-  "title": "DoupConfig",
-  "description": "Configuration for the doup dependency updater bot.",
+  "$id": "https://raw.githubusercontent.com/brad-jones/doup/refs/heads/master/schemas/repo.schema.json",
+  "title": "DoupRepoConfig",
+  "description": "Configuration found at the root of a git repo that is to be updated by the doup dependency updater bot.",
   "type": "object",
   "required": ["platform", "ecosystems"],
   "$defs": {

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/brad-jones/doup/refs/heads/master/schemas/bot.schema.json",
+  "title": "DoupBotConfig",
+  "description": "Configuration to bootstrap the doup dependency updater bot.",
+  "type": "object",
+  "properties": {
+    "repos": {
+      "description": "A list of git repositories to update.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["origin"],
+        "properties": {
+          "origin": {
+            "description": "The git origin URL (https or ssh accepted). If no authentication details are given, doup assumes git is already configured correctly.",
+            "type": "string"
+          },
+          "user": {
+            "description": "The username to use with a HTTPS origin",
+            "type": "string"
+          },
+          "pass": {
+            "description": "The password to use with a HTTPS origin",
+            "type": "string"
+          },
+          "key": {
+            "description": "The private key (either the key bytes it's self or a path to a key file) to use with an SSH origin. IMPORTANT: Must not be protected by a passphrase.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

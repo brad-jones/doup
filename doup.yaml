@@ -1,4 +1,4 @@
-$schema: ./doup.schema.json
+$schema: ./schemas/repo.schema.json
 
 platform: "doup:github"
 ecosystems:

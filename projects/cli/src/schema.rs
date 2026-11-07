@@ -1,1 +1,1 @@
-typify::import_types!(schema = "../../doup.schema.json");
+typify::import_types!(schema = "../../schemas/repo.schema.json");
