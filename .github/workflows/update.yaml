@@ -1,0 +1,65 @@
+name: Update Dependencies
+
+on:
+  workflow_dispatch:
+
+  # Eventually this will run on a schedule
+  # schedule:
+  #   - cron: 0 0 * * *
+
+  # For now this workflow is acting as our ultimate end to end test so just run on every push
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: avrea-ubuntu-26.04-4-vcpu
+    steps:
+      - name: ⬇️ Git Checkout
+        uses: actions/checkout@v7
+
+      - name: ✨ Install pixi
+        uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          pixi-version: v0.84.1
+          activate-environment: true
+
+      - name: 💾 Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+        with:
+          version: "v0.19.0"
+
+      - name: 🏗️ Build CLI
+        run: task build:cli
+        env:
+          RUSTC_WRAPPER: sccache
+          TARGET: x86_64-unknown-linux-gnu
+
+      - name: 🧪 Smoke Test Binary
+        run: ./target/x86_64-unknown-linux-gnu/release/doup --help
+
+      - name: ⬆️ Upload Binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: x86_64-unknown-linux-gnu
+          path: ./target/x86_64-unknown-linux-gnu/release/doup
+          retention-days: 1
+
+  update:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # This is temporary until we actually publish the binary from the main ci workflow.
+      # The plan is to build an accompanying github action that would download doup and then execute it in one step.
+      # The action would set the "DOUP_REPO_0_" env vars by default, such that normal usage could be a single "use" line.
+      - name: ⬇️ Download Binary
+        uses: actions/download-artifact@v8
+      - run: chmod +x ./doup && sudo mv ./doup /usr/bin/doup
+
+      - name: 🚀 Update Dependencies with Doup
+        run: doup update
+        env:
+          DOUP_REPO_0_ORIGIN: https://github.com/${{ github.repository }}.git
+          DOUP_REPO_0_USER: x-access-token
+          DOUP_REPO_0_PASS: ${{ github.token }}
