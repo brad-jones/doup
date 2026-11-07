@@ -4,7 +4,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: awesome-copilot-rust
   host: github.com
-  resolved_commit: 5269f7ea2d6c3a9bfda5ed878b6726cf509121fd
+  resolved_commit: 797337f33f73e35d08d82f840e21c4b8c4932d88
   resolved_ref: main
   version: 1.0.0
   virtual_path: instructions/rust.instructions.md
@@ -20,7 +20,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: git-commit
   host: github.com
-  resolved_commit: 5269f7ea2d6c3a9bfda5ed878b6726cf509121fd
+  resolved_commit: 797337f33f73e35d08d82f840e21c4b8c4932d88
   resolved_ref: main
   version: unknown
   virtual_path: skills/git-commit
@@ -32,9 +32,9 @@ dependencies:
   - .claude/skills/git-commit
   - .claude/skills/git-commit/SKILL.md
   deployed_file_hashes:
-    .agents/skills/git-commit/SKILL.md: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
-    .claude/skills/git-commit/SKILL.md: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
-  content_hash: sha256:78b6a33700091345cd449f9e3642ddd611b479b341efc9d6c750f7e04d15216a
+    .agents/skills/git-commit/SKILL.md: sha256:a95bb7e996516a1c73df745b0598ba650d7161eb1da559712e8fabb5dacb7c5c
+    .claude/skills/git-commit/SKILL.md: sha256:a95bb7e996516a1c73df745b0598ba650d7161eb1da559712e8fabb5dacb7c5c
+  content_hash: sha256:8f5a47c99951ec09853abf3231c76f48caac5d6b84ea912dd4997e6996885c0b
 - repo_url: tttpob/bioinfo-skills
   name: pixi
   host: github.com
@@ -218,7 +218,7 @@ deployments:
   owners:
   - github/awesome-copilot/skills/git-commit
   active_owner: github/awesome-copilot/skills/git-commit
-  content_hash: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+  content_hash: sha256:a95bb7e996516a1c73df745b0598ba650d7161eb1da559712e8fabb5dacb7c5c
 - kind: project-relative
   target: claude
   value: .claude/skills/pixi
@@ -479,7 +479,7 @@ deployments:
   owners:
   - github/awesome-copilot/skills/git-commit
   active_owner: github/awesome-copilot/skills/git-commit
-  content_hash: sha256:2ba71a0d5ba0add9f8414567d2f54906def78ea843e3c05f3791e485a1e82e3b
+  content_hash: sha256:a95bb7e996516a1c73df745b0598ba650d7161eb1da559712e8fabb5dacb7c5c
 - kind: project-relative
   target: copilot
   value: .agents/skills/pixi

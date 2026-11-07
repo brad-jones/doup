@@ -135,7 +135,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/linux-64/cocogitto-7.0.0-h81b34b9_2.conda
       - conda: https://prefix.dev/brads-forge/linux-64/dprint-0.64.3-h81b34b9_3.conda
       - conda: https://prefix.dev/brads-forge/linux-64/lefthook-2.2.2-h81b34b9_2.conda
-      - conda: https://prefix.dev/brads-forge/linux-64/rustup-1.29.2-gnu_h5dd57f1_5.conda
+      - conda: https://prefix.dev/brads-forge/linux-64/rustup-1.29.3-gnu_h5dd57f1_5.conda
       - conda: https://prefix.dev/brads-forge/linux-64/task-3.54.0-h81b34b9_2.conda
       - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
       linux-aarch64:
@@ -237,7 +237,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/linux-aarch64/cocogitto-7.0.0-he672143_2.conda
       - conda: https://prefix.dev/brads-forge/linux-aarch64/dprint-0.64.3-he672143_3.conda
       - conda: https://prefix.dev/brads-forge/linux-aarch64/lefthook-2.2.2-he672143_2.conda
-      - conda: https://prefix.dev/brads-forge/linux-aarch64/rustup-1.29.2-gnu_h52e8667_5.conda
+      - conda: https://prefix.dev/brads-forge/linux-aarch64/rustup-1.29.3-gnu_h52e8667_5.conda
       - conda: https://prefix.dev/brads-forge/linux-aarch64/task-3.54.0-he672143_2.conda
       - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
       osx-64:
@@ -339,7 +339,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/osx-64/cocogitto-7.0.0-he0f4bc8_2.conda
       - conda: https://prefix.dev/brads-forge/osx-64/dprint-0.64.3-he0f4bc8_3.conda
       - conda: https://prefix.dev/brads-forge/osx-64/lefthook-2.2.2-he0f4bc8_2.conda
-      - conda: https://prefix.dev/brads-forge/osx-64/rustup-1.29.2-he0f4bc8_5.conda
+      - conda: https://prefix.dev/brads-forge/osx-64/rustup-1.29.3-he0f4bc8_5.conda
       - conda: https://prefix.dev/brads-forge/osx-64/task-3.54.0-he0f4bc8_2.conda
       osx-arm64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -437,7 +437,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/osx-arm64/cocogitto-7.0.0-he8ea13f_2.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/dprint-0.64.3-he8ea13f_3.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/lefthook-2.2.2-he8ea13f_2.conda
-      - conda: https://prefix.dev/brads-forge/osx-arm64/rustup-1.29.2-he8ea13f_5.conda
+      - conda: https://prefix.dev/brads-forge/osx-arm64/rustup-1.29.3-he8ea13f_5.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/task-3.54.0-he8ea13f_2.conda
       win-64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
@@ -540,7 +540,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/win-64/cocogitto-7.0.0-h3c70cbc_2.conda
       - conda: https://prefix.dev/brads-forge/win-64/dprint-0.64.3-h3c70cbc_3.conda
       - conda: https://prefix.dev/brads-forge/win-64/lefthook-2.2.2-h3c70cbc_2.conda
-      - conda: https://prefix.dev/brads-forge/win-64/rustup-1.29.2-h3c70cbc_5.conda
+      - conda: https://prefix.dev/brads-forge/win-64/rustup-1.29.3-h3c70cbc_5.conda
       - conda: https://prefix.dev/brads-forge/win-64/task-3.54.0-h3c70cbc_2.conda
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -3641,15 +3641,15 @@ packages:
   run_exports: {}
   size: 5268048
   timestamp: 1791889075637
-- conda: https://prefix.dev/brads-forge/linux-64/rustup-1.29.2-gnu_h5dd57f1_5.conda
-  sha256: 68ea1378fc2b4c82fac7b5903e223938d0595f87058c25f62ed8c3eebccdde07
-  md5: 81890246608f44ae37228c6ac7d0a86d
+- conda: https://prefix.dev/brads-forge/linux-64/rustup-1.29.3-gnu_h5dd57f1_5.conda
+  sha256: 30317b48575451d12d247624641b55192c25a0034fcf21bb32871eef077913d0
+  md5: ce49b67cd72a90ec13b889032be4a7e0
   depends:
   - __glibc >=2.17
   license: MIT
   run_exports: {}
-  size: 6689003
-  timestamp: 1792813887803
+  size: 6759355
+  timestamp: 1793752709392
 - conda: https://prefix.dev/brads-forge/linux-64/task-3.54.0-h81b34b9_2.conda
   sha256: aef82fc20fd8f60bb4ffd3361d1314ce8112fe0b11a04184fe953bbc630a064f
   md5: df141b445a99df3ce32929dd4033417c
@@ -3685,15 +3685,15 @@ packages:
   run_exports: {}
   size: 4700868
   timestamp: 1791889083889
-- conda: https://prefix.dev/brads-forge/linux-aarch64/rustup-1.29.2-gnu_h52e8667_5.conda
-  sha256: 02bb53e1f9f0dadf9c440dfc14401747525743310893a526a7d9d9e1eb87fbbb
-  md5: b46246f183d57ffe6a0065e736fe0705
+- conda: https://prefix.dev/brads-forge/linux-aarch64/rustup-1.29.3-gnu_h52e8667_5.conda
+  sha256: e1a6add9994f62b15c6302bfab40a8a9d5ed0f49f7ffb95e7e8884b7e4b9df72
+  md5: 6ecf882c033a568989dc7ec553f5183e
   depends:
   - __glibc >=2.17
   license: MIT
   run_exports: {}
-  size: 7207397
-  timestamp: 1792813904981
+  size: 7265516
+  timestamp: 1793752722504
 - conda: https://prefix.dev/brads-forge/linux-aarch64/task-3.54.0-he672143_2.conda
   sha256: b586ca197598c4cf9fa45f58fe4c2eff8a4df942d3d5c40d254c00f40201dc3b
   md5: e47f92c9d1dcf64678d047e515c87516
@@ -3756,13 +3756,13 @@ packages:
   run_exports: {}
   size: 5387222
   timestamp: 1791889162690
-- conda: https://prefix.dev/brads-forge/osx-64/rustup-1.29.2-he0f4bc8_5.conda
-  sha256: e76d9c896cc4d79868bb0d9ac9f972f22efbcec8554a99a6e59e33c42142d109
-  md5: d6a7ea233a9c590d1f5ab58a164e2a06
+- conda: https://prefix.dev/brads-forge/osx-64/rustup-1.29.3-he0f4bc8_5.conda
+  sha256: 385802484c40081d70ea74277222b95090d31887151acb74f2ca0daa30bfdb6e
+  md5: 206f7691d3be2f510e01bb4163732178
   license: MIT
   run_exports: {}
-  size: 4328373
-  timestamp: 1792813934773
+  size: 4361374
+  timestamp: 1793752750208
 - conda: https://prefix.dev/brads-forge/osx-64/task-3.54.0-he0f4bc8_2.conda
   sha256: c9ce6f0ec8d485ab140c4f49fc527060269abf007b9d5967798baff728c77752
   md5: 50190f6dca133aec96d1b0df4021a893
@@ -3798,13 +3798,13 @@ packages:
   run_exports: {}
   size: 4930213
   timestamp: 1791889064087
-- conda: https://prefix.dev/brads-forge/osx-arm64/rustup-1.29.2-he8ea13f_5.conda
-  sha256: e569bc87316c6a50eaeb2a9e2cb368338c9fc299d3417dbfea6acad01521f2a7
-  md5: 5b82abe2e63fec32f3a4ba11c15bdce3
+- conda: https://prefix.dev/brads-forge/osx-arm64/rustup-1.29.3-he8ea13f_5.conda
+  sha256: d7cd57db41ac1a0c0a3a4031a3d1fc49ddcb59a7b7babfc8398120c4f2053557
+  md5: 573d7b845c255d07c759ed82641e128f
   license: MIT
   run_exports: {}
-  size: 4113107
-  timestamp: 1792813927891
+  size: 4145223
+  timestamp: 1793752725057
 - conda: https://prefix.dev/brads-forge/osx-arm64/task-3.54.0-he8ea13f_2.conda
   sha256: db55792decc7d328825049bfb00d700986f6d526ab35a56cd00d0a92d4ba31ee
   md5: 1c09aeda13e9a9afa2a0b98e1423a5c1
@@ -3840,13 +3840,13 @@ packages:
   run_exports: {}
   size: 5435588
   timestamp: 1791889077559
-- conda: https://prefix.dev/brads-forge/win-64/rustup-1.29.2-h3c70cbc_5.conda
-  sha256: 038e439b9bd621b7136c8a375e1add2c68b2378739dd7aa5ea86dd0dc9813421
-  md5: 7043ae7e81fb60e619b95085367e4779
+- conda: https://prefix.dev/brads-forge/win-64/rustup-1.29.3-h3c70cbc_5.conda
+  sha256: 1fd953ba5a35965000f8b2a4adf8ae47268521d90afebbc56b1a4117e160a38f
+  md5: b1d56d77e76e573ca96dd1acce6a2155
   license: MIT
   run_exports: {}
-  size: 4744580
-  timestamp: 1792813947795
+  size: 4780329
+  timestamp: 1793752778169
 - conda: https://prefix.dev/brads-forge/win-64/task-3.54.0-h3c70cbc_2.conda
   sha256: b5f81359f9225a9684d9517579ddbfc3a4eb458b33e57af2d755e25d508d9560
   md5: 974e480cd2414e28b907dad416961a79

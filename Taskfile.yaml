@@ -93,6 +93,7 @@ tasks:
       - rustup update --no-self-update
       - dprint config upgrade
       - apm update --yes
+      - bunx -y actions-up --style preserve --yes
 
   fmt:
     desc: Format the code to ensure everything looks consistently the same and easy to read.
