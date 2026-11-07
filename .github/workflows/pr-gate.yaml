@@ -1,0 +1,22 @@
+name: Pull Request Gate
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  pr-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: 🦥 Wait for all checks
+        uses: lendable/sloth@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: pr-gate
+          allow-empty: true
+          ignored: |
+            copilot-pull-request-reviewer

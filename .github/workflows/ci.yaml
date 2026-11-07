@@ -2,9 +2,10 @@ name: Continuous Integration
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
+  # Disable for now, until we really need it, don't want to waste avrea build minutes
+  #push:
+  #  branches:
+  #    - master
 
 jobs:
   check:
