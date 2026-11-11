@@ -60,6 +60,6 @@ jobs:
       - name: 🚀 Update Dependencies with Doup
         run: doup update
         env:
-          DOUPBOT_REPO_0_ORIGIN: https://github.com/${{ github.repository }}.git
-          DOUPBOT_REPO_0_USER: x-access-token
-          DOUPBOT_REPO_0_PASS: ${{ github.token }}
+          DOUPBOT_REPOS_0_ORIGIN: https://github.com/${{ github.repository }}.git
+          DOUPBOT_REPOS_0_USER: x-access-token
+          DOUPBOT_REPOS_0_PASS: ${{ github.token }}
