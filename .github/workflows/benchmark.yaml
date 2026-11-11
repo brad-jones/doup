@@ -16,7 +16,7 @@ jobs:
       - name: ✨ Install pixi
         uses: prefix-dev/setup-pixi@v0.11.3
         with:
-          pixi-version: v0.84.1
+          pixi-version: v0.84.2
           activate-environment: true
 
       - name: Install sccache
@@ -51,7 +51,7 @@ jobs:
       - name: ✨ Install pixi
         uses: prefix-dev/setup-pixi@v0.11.3
         with:
-          pixi-version: v0.84.1
+          pixi-version: v0.84.2
           activate-environment: true
 
       - name: Install sccache
@@ -79,7 +79,7 @@ jobs:
       - name: ✨ Install pixi
         uses: prefix-dev/setup-pixi@v0.11.3
         with:
-          pixi-version: v0.84.1
+          pixi-version: v0.84.2
           activate-environment: true
 
       - name: Install sccache
