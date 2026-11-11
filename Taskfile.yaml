@@ -118,6 +118,13 @@ tasks:
     cmds:
       - cargo test
 
+  run:cli:
+    desc: Runs the cli using `cargo run`.
+    deps:
+      - init:rustup
+    cmds:
+      - cargo run -p cli -- {{.CLI_ARGS}}
+
   build:cli:
     desc: Builds the doup CLI project for a given target
     deps:

@@ -1,5 +1,5 @@
 mod commands;
-mod schema;
+mod config;
 
 use clap::Parser;
 use commands::Commands;

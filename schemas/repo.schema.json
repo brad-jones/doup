@@ -1,26 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/brad-jones/doup/refs/heads/master/schemas/repo.schema.json",
-  "title": "DoupRepoConfig",
-  "description": "Configuration found at the root of a git repo that is to be updated by the doup dependency updater bot.",
+  "title": "DoupRepoConfigFile",
+  "description": "Configuration found at the root of a git repo that is to be updated by the doup dependency updater bot. (doup.{json,yaml})",
   "type": "object",
   "required": ["platform", "ecosystems"],
   "$defs": {
-    "pluginRef": {
-      "description": "A plugin package reference in wkg format: namespace:package@version.",
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*(@[0-9A-Za-z.+-]+)?$"
-    },
-    "pluginWithConfig": {
-      "description": "A single-key object: the plugin reference mapped to its plugin specific configuration.",
-      "type": "object",
-      "minProperties": 1,
-      "maxProperties": 1,
-      "propertyNames": { "$ref": "#/$defs/pluginRef" },
-      "additionalProperties": { "type": ["object", "null"] }
-    },
     "plugin": {
-      "oneOf": [{ "$ref": "#/$defs/pluginRef" }, { "$ref": "#/$defs/pluginWithConfig" }]
+      "description": "A plugin to run, with optional plugin specific configuration.",
+      "type": "object",
+      "required": ["use"],
+      "additionalProperties": false,
+      "properties": {
+        "use": {
+          "description": "A plugin package reference in wkg format: namespace:package@version.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*(@\\S+)?$"
+        },
+        "with": {
+          "description": "An untyped property bag passed to the plugin, which is free to validate it as it wishes.",
+          "type": "object"
+        }
+      }
     }
   },
   "properties": {

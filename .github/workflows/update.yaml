@@ -22,7 +22,7 @@ jobs:
       - name: ✨ Install pixi
         uses: prefix-dev/setup-pixi@v0.11.3
         with:
-          pixi-version: v0.84.1
+          pixi-version: v0.84.2
           activate-environment: true
 
       - name: 💾 Install sccache
@@ -52,7 +52,7 @@ jobs:
     steps:
       # This is temporary until we actually publish the binary from the main ci workflow.
       # The plan is to build an accompanying github action that would download doup and then execute it in one step.
-      # The action would set the "DOUP_REPO_0_" env vars by default, such that normal usage could be a single "use" line.
+      # The action would set the "DOUPBOT_REPO_0_" env vars by default, such that normal usage could be a single "use" line.
       - name: ⬇️ Download Binary
         uses: actions/download-artifact@v8
       - run: chmod +x ./doup && sudo mv ./doup /usr/bin/doup
@@ -60,6 +60,6 @@ jobs:
       - name: 🚀 Update Dependencies with Doup
         run: doup update
         env:
-          DOUP_REPO_0_ORIGIN: https://github.com/${{ github.repository }}.git
-          DOUP_REPO_0_USER: x-access-token
-          DOUP_REPO_0_PASS: ${{ github.token }}
+          DOUPBOT_REPO_0_ORIGIN: https://github.com/${{ github.repository }}.git
+          DOUPBOT_REPO_0_USER: x-access-token
+          DOUPBOT_REPO_0_PASS: ${{ github.token }}
