@@ -61,5 +61,5 @@ jobs:
         run: doup update
         env:
           DOUPBOT_REPOS_0_ORIGIN: https://github.com/${{ github.repository }}.git
-          DOUPBOT_REPOS_0_USER: x-access-token
-          DOUPBOT_REPOS_0_PASS: ${{ github.token }}
+          DOUPBOT_REPOS_0_AUTH_USER: x-access-token
+          DOUPBOT_REPOS_0_AUTH_PASS: ${{ github.token }}
