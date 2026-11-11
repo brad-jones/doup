@@ -4,7 +4,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: awesome-copilot-rust
   host: github.com
-  resolved_commit: 797337f33f73e35d08d82f840e21c4b8c4932d88
+  resolved_commit: eaaffd5d020b756a2777a4b1b161d2bdc126d9a0
   resolved_ref: main
   version: 1.0.0
   virtual_path: instructions/rust.instructions.md
@@ -20,7 +20,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: git-commit
   host: github.com
-  resolved_commit: 797337f33f73e35d08d82f840e21c4b8c4932d88
+  resolved_commit: eaaffd5d020b756a2777a4b1b161d2bdc126d9a0
   resolved_ref: main
   version: unknown
   virtual_path: skills/git-commit
