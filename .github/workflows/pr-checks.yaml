@@ -47,5 +47,5 @@ jobs:
         with:
           version: "v0.19.0"
 
-      - name: 🧪 Run Tests
-        run: task test
+      - name: 🧪 Run Unit Tests
+        run: task test:unit

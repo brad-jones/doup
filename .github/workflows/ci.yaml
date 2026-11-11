@@ -30,8 +30,8 @@ jobs:
       - name: 👮 Lint Code Base
         run: task lint
 
-      - name: 🧪 Run Tests
-        run: task test
+      - name: 🧪 Run Unit Tests
+        run: task test:unit
 
   build:
     needs: check
@@ -84,6 +84,14 @@ jobs:
           path: ${{ github.workspace }}/.sccache
           key: sccache-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: sccache-${{ matrix.target }}-
+
+      - name: 🧪 Run Integration Tests
+        run: task test:integration
+        env:
+          RUSTC_WRAPPER: sccache
+          TARGET: ${{ matrix.target }}
+          DOUP_TEST_SSH_URL: ${{ vars.DOUP_TEST_SSH_URL }}
+          DOUP_TEST_SSH_KEY: ${{ secrets.DOUP_TEST_SSH_KEY }}
 
       - name: 🏗️ Build CLI
         run: task build:cli

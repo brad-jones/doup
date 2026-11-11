@@ -113,10 +113,24 @@ tasks:
 
   test:
     desc: Test our code base to ensure it works as we intend.
+    cmds:
+      - task: test:unit
+      - task: test:integration
+
+  test:unit:
+    desc: Runs the in-crate unit tests (and doc tests).
     deps:
       - init:rustup
     cmds:
-      - cargo test
+      - cargo test --workspace --lib --bins
+      - cargo test --workspace --doc
+
+  test:integration:
+    desc: Runs the integration tests under each crate's tests/ dir, for a given target.
+    deps:
+      - init:rustup
+    cmds:
+      - cargo test --workspace --test '*' {{if .TARGET}}--target {{.TARGET}}{{end}}
 
   run:cli:
     desc: Runs the cli using `cargo run`.
