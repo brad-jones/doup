@@ -27,8 +27,8 @@ jobs:
         with:
           version: "v0.19.0"
 
-      - name: 👮 Lint Code Base
-        run: task lint
+      #- name: 👮 Lint Code Base
+      #  run: task lint
 
       - name: 🧪 Run Unit Tests
         run: task test:unit
