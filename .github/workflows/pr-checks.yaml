@@ -28,7 +28,7 @@ jobs:
       - name: 👮 Lint Code Base
         run: task lint
 
-  test:
+  test-unit:
     runs-on: avrea-ubuntu-26.04-4-vcpu
     env:
       RUSTC_WRAPPER: sccache
@@ -49,3 +49,62 @@ jobs:
 
       - name: 🧪 Run Unit Tests
         run: task test:unit
+
+  test-integration:
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTC_WRAPPER: sccache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: avrea-ubuntu-26.04-4-vcpu }
+          - { target: x86_64-unknown-linux-musl, os: avrea-ubuntu-26.04-4-vcpu }
+          - { target: aarch64-unknown-linux-gnu, os: avrea-ubuntu-26.04-arm-4-vcpu }
+          - { target: aarch64-unknown-linux-musl, os: avrea-ubuntu-26.04-arm-4-vcpu }
+          - { target: x86_64-pc-windows-msvc, os: avrea-windows-2025-4-vcpu }
+          - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: aarch64-apple-darwin, os: avrea-macos-26-8-vcpu }
+    steps:
+      - name: ⬇️ Git Checkout
+        uses: actions/checkout@v7
+
+      - name: ✨ Install pixi
+        uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          pixi-version: v0.84.2
+          activate-environment: true
+
+      - name: 🧰 Install musl-tools
+        if: endsWith(matrix.target, '-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: 💾 Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+        with:
+          version: "v0.19.0"
+
+      # On Github hosted runners we avoid the built-in GHA caching offered by
+      # sccache as it runs into rate limits. Instead we configure sscache to
+      # work against a local dir and then actions/cache to cache that dir.
+      # see: https://github.com/Mozilla-Actions/sccache-action/issues/50
+      - name: 📁 Configure local sccache dir
+        if: ${{ !startsWith(matrix.os, 'avrea-') }}
+        shell: bash
+        run: echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
+
+      - name: 💾 Cache sccache
+        if: ${{ !startsWith(matrix.os, 'avrea-') }}
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.sccache
+          key: sccache-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: sccache-${{ matrix.target }}-
+
+      - name: 🧪 Run Integration Tests
+        run: task test:integration
+        env:
+          TARGET: ${{ matrix.target }}
+          DOUP_TEST_SSH_URL: ${{ vars.DOUP_TEST_SSH_URL }}
+          DOUP_TEST_SSH_KEY: ${{ secrets.DOUP_TEST_SSH_KEY }}
