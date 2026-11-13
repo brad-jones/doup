@@ -22,6 +22,8 @@ use tokio::task::AbortHandle;
 pub(crate) struct SshAgent {
   socket: PathBuf,
   public_key: PathBuf,
+  #[cfg(windows)]
+  ssh_config: PathBuf,
   listener: AbortHandle,
   _dir: TempDir,
 }
@@ -45,9 +47,19 @@ impl SshAgent {
     let public_key = dir.path().join("id.pub");
     std::fs::write(&public_key, &session.public_openssh).map_err(GitError::SshAgent)?;
     let (socket, listener) = serve(dir.path(), session).map_err(GitError::SshAgent)?;
+    #[cfg(windows)]
+    let ssh_config = dir.path().join("ssh_config");
+    #[cfg(windows)]
+    {
+      // ssh reads `\\` in its config as one escaped backslash, which would break the `\\.\pipe\` prefix.
+      let pipe = socket.display().to_string().replace('\\', r"\\");
+      std::fs::write(&ssh_config, format!("IdentityAgent {pipe}\n")).map_err(GitError::SshAgent)?;
+    }
     Ok(Self {
       socket,
       public_key,
+      #[cfg(windows)]
+      ssh_config,
       listener,
       _dir: dir,
     })
@@ -55,16 +67,30 @@ impl SshAgent {
 
   /// A `GIT_SSH_COMMAND` that only offers this agent's key and never prompts.
   ///
-  /// `-i` takes the public key so ssh asks the agent for it; the socket is inlined because grit
-  /// does not pass its environment on to ssh.
+  /// `-i` takes the public key so ssh asks the agent for it; the agent location is inlined
+  /// because grit does not pass its environment on to ssh.
   pub(crate) fn ssh_command(&self) -> Result<String, GitError> {
+    let (env, agent_option) = self.agent_location()?;
     Ok(format!(
-      "SSH_AUTH_SOCK={} {} -o IdentityAgent=SSH_AUTH_SOCK -o IdentitiesOnly=yes -i {} \
+      "{env}{} {agent_option} -o IdentitiesOnly=yes -i {} \
        -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
-      quote(&self.socket)?,
       quote(&ssh_program()?)?,
       quote(&self.public_key)?,
     ))
+  }
+
+  /// The env assignment (with trailing space) and ssh option that point ssh at the agent.
+  #[cfg(unix)]
+  fn agent_location(&self) -> Result<(String, String), GitError> {
+    let env = format!("SSH_AUTH_SOCK={} ", quote(&self.socket)?);
+    Ok((env, "-o IdentityAgent=SSH_AUTH_SOCK".into()))
+  }
+
+  /// The MSYS shell that runs the command rewrites a `\\.\pipe\x` value in the environment, so
+  /// the pipe is named in an ssh config file instead.
+  #[cfg(windows)]
+  fn agent_location(&self) -> Result<(String, String), GitError> {
+    Ok((String::new(), format!("-F {}", quote(&self.ssh_config)?)))
   }
 }
 
@@ -330,7 +356,7 @@ mod tests {
     #[cfg(unix)]
     assert_eq!(names, ["agent.sock", "id.pub"]);
     #[cfg(windows)]
-    assert_eq!(names, ["id.pub"]);
+    assert_eq!(names, ["id.pub", "ssh_config"]);
     assert_eq!(
       PublicKey::from_openssh(&std::fs::read_to_string(&agent.public_key).unwrap()).unwrap(),
       public_key(&key)
@@ -344,15 +370,22 @@ mod tests {
   async fn ssh_command_only_offers_the_agent_key() {
     let agent = SshAgent::new(&generate_ssh_key("ed25519", "")).unwrap();
     let command = agent.ssh_command().unwrap();
-    let socket = format!("SSH_AUTH_SOCK={}", agent.socket.to_str().unwrap());
     let program = ssh_program().unwrap();
-    assert_eq!(
-      shlex::split(&command).unwrap(),
+    #[cfg(unix)]
+    let mut expected = vec![
+      format!("SSH_AUTH_SOCK={}", agent.socket.to_str().unwrap()),
+      program.to_str().unwrap().into(),
+      "-o".into(),
+      "IdentityAgent=SSH_AUTH_SOCK".into(),
+    ];
+    #[cfg(windows)]
+    let mut expected = vec![
+      program.to_str().unwrap().into(),
+      "-F".into(),
+      agent.ssh_config.to_str().unwrap().into(),
+    ];
+    expected.extend(
       [
-        socket.as_str(),
-        program.to_str().unwrap(),
-        "-o",
-        "IdentityAgent=SSH_AUTH_SOCK",
         "-o",
         "IdentitiesOnly=yes",
         "-i",
@@ -362,7 +395,9 @@ mod tests {
         "-o",
         "StrictHostKeyChecking=accept-new",
       ]
+      .map(String::from),
     );
+    assert_eq!(shlex::split(&command).unwrap(), expected);
   }
 
   /// Real OpenSSH tooling can sign with the agent's key given only the public key.
