@@ -10,6 +10,7 @@ async fn clones_a_public_https_repository(backend: impl GitBackend) {
   let options = CloneOptions::new("https://github.com/octocat/Hello-World.git", &dest)
     .with_depth(NonZeroU32::new(1).unwrap());
   Git::new(backend).clone_repo(options).await.unwrap();
+  assert!(dest.join(".git").is_dir());
   assert!(dest.join("README").exists());
 }
 
@@ -30,6 +31,7 @@ async fn clones_over_ssh_with_an_in_memory_key(backend: impl GitBackend) {
     .with_auth(Auth::Ssh { key });
   Git::new(backend).clone_repo(options).await.unwrap();
   assert!(dest.join(".git").is_dir());
+  assert!(dest.join("README.md").exists());
 }
 
 #[tokio::test]

@@ -62,7 +62,8 @@ Notes from building this crate against `grit-lib` 0.5.x:
   <key>.pub -o BatchMode=yes -o StrictHostKeyChecking=accept-new`, so only this key is ever offered.
   - On Windows the agent is a randomly named pipe and the command runs Windows' own OpenSSH
     (`%SystemRoot%\System32\OpenSSH\ssh.exe`), because the MSYS ssh bundled with Git for Windows cannot reach named
-    pipes.
+    pipes. The pipe is named in a small `ssh_config` beside the public key and passed with `-F`, as the MSYS shell that
+    runs `GIT_SSH_COMMAND` mangles a `\\.\pipe\...` path given via the environment or arguments.
   - Ed25519, ECDSA and RSA (`rsa-sha2-256`/`rsa-sha2-512`, not SHA-1) keys are supported.
 
 Without `Auth`, the user's existing Git and SSH setup is used.
