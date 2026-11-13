@@ -1,10 +1,10 @@
 lockfile_version: '1'
-apm_version: 0.35.0
+apm_version: 0.35.1
 dependencies:
 - repo_url: github/awesome-copilot
   name: awesome-copilot-rust
   host: github.com
-  resolved_commit: 30a0d7465b14b05e05949d6588b99f7af0c537b4
+  resolved_commit: 222eba62d518c27317e917c92e3ec1a7e6729455
   resolved_ref: main
   version: 1.0.0
   virtual_path: instructions/rust.instructions.md
@@ -20,7 +20,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: git-commit
   host: github.com
-  resolved_commit: 30a0d7465b14b05e05949d6588b99f7af0c537b4
+  resolved_commit: 222eba62d518c27317e917c92e3ec1a7e6729455
   resolved_ref: main
   version: unknown
   virtual_path: skills/git-commit

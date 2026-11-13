@@ -137,7 +137,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/linux-64/lefthook-2.2.2-h81b34b9_2.conda
       - conda: https://prefix.dev/brads-forge/linux-64/rustup-1.29.3-gnu_h5dd57f1_5.conda
       - conda: https://prefix.dev/brads-forge/linux-64/task-3.54.0-h81b34b9_2.conda
-      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
+      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
       linux-aarch64:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/aiohttp-3.14.5-py314ha6eade7_0.conda
@@ -239,7 +239,7 @@ environments:
       - conda: https://prefix.dev/brads-forge/linux-aarch64/lefthook-2.2.2-he672143_2.conda
       - conda: https://prefix.dev/brads-forge/linux-aarch64/rustup-1.29.3-gnu_h52e8667_5.conda
       - conda: https://prefix.dev/brads-forge/linux-aarch64/task-3.54.0-he672143_2.conda
-      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
+      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
       osx-64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -334,7 +334,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-0.2.5-had63097_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yarl-1.25.1-py314h0df259e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
-      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
+      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
       - conda: https://prefix.dev/brads-forge/osx-64/bun-1.4.4-he0f4bc8_4.conda
       - conda: https://prefix.dev/brads-forge/osx-64/cocogitto-7.0.0-he0f4bc8_2.conda
       - conda: https://prefix.dev/brads-forge/osx-64/dprint-0.64.3-he0f4bc8_3.conda
@@ -432,7 +432,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-0.2.5-h74c22ad_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yarl-1.25.1-py314haf53d71_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
-      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
+      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/bun-1.4.4-he8ea13f_4.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/cocogitto-7.0.0-he8ea13f_2.conda
       - conda: https://prefix.dev/brads-forge/osx-arm64/dprint-0.64.3-he8ea13f_3.conda
@@ -535,7 +535,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/yarl-1.25.1-py314h2359020_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_7.conda
-      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
+      - conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
       - conda: https://prefix.dev/brads-forge/win-64/bun-1.4.4-h3c70cbc_4.conda
       - conda: https://prefix.dev/brads-forge/win-64/cocogitto-7.0.0-h3c70cbc_2.conda
       - conda: https://prefix.dev/brads-forge/win-64/dprint-0.64.3-h3c70cbc_3.conda
@@ -3701,9 +3701,9 @@ packages:
   run_exports: {}
   size: 12660085
   timestamp: 1790894044902
-- conda: https://prefix.dev/brads-forge/noarch/apm-0.35.0-pyh39481bf_2.conda
-  sha256: a44c630f42080d6e5564ad741338a0ce69aef05f111a0f86fc24b552c7076ca5
-  md5: 5a1730ca540e34a12bc2d0b7f9d77f5c
+- conda: https://prefix.dev/brads-forge/noarch/apm-0.35.1-pyh39481bf_2.conda
+  sha256: 2bf57e76ec479432f498292478891ad2361b24afb14a11abb9442ba39277a001
+  md5: d4faba1cd9da753faa3c858f5e87424f
   depends:
   - python >=3.11
   - click >=8.0.0
@@ -3726,8 +3726,8 @@ packages:
   - python
   license: MIT
   run_exports: {}
-  size: 1461628
-  timestamp: 1792715813532
+  size: 1485578
+  timestamp: 1794455360238
 - conda: https://prefix.dev/brads-forge/osx-64/bun-1.4.4-he0f4bc8_4.conda
   sha256: d9d3b4ea302cbbb9a5e05af31e163437d4f0d3a9024d99c8598560f456a7475c
   md5: 2a7f97f0f55098e9ba455ac96ff0342f

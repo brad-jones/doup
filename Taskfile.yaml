@@ -56,7 +56,7 @@ tasks:
     if: '[ -z "$CI" ]'
     sources:
       - ./.apm/**/*
-      - apm.lock.yaml
+      - apm.yml
     cmds:
       - apm install {{if .APM_TARGET}}--target {{.APM_TARGET}}{{end}}
       - apm compile --clean {{if .APM_TARGET}}--target {{.APM_TARGET}}{{end}}
@@ -91,6 +91,7 @@ tasks:
       - sync-gha-pixi-version.ts
       - pixi upgrade
       - rustup update --no-self-update
+      - sync-rust-toolchain.ts
       - dprint config upgrade
       - apm update --yes
       - bunx -y actions-up --style preserve --yes
