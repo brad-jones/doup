@@ -33,5 +33,7 @@
     "env": {
       "DIRENV_LOG_FORMAT": ""
     }
-  }
+  },
+  // Extension sends a string default but the rustup rust-analyzer expects a bool; drop once the toolchain catches up.
+  "rust-analyzer.inlayHints.implicitDrops.enable": false
 }
