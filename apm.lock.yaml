@@ -760,6 +760,24 @@ deployments:
   active_owner: .
   content_hash: sha256:ae4dee20531beece1153376e682b467496022dc6415a86926e2954134b978b68
 - kind: uri
+  target: lsp
+  value: rust-analyzer
+  runtime: claude
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: uri
+  target: lsp
+  value: rust-analyzer
+  runtime: copilot
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: null
+- kind: uri
   target: mcp
   value: user-memory
   runtime: claude
@@ -826,6 +844,21 @@ mcp_target_servers:
   copilot:
   - user-memory
   - workspace-user-memory
+lsp_servers:
+- rust-analyzer
+lsp_configs:
+  rust-analyzer:
+    name: rust-analyzer
+    command: rust-analyzer
+    extensionToLanguage:
+      .rs: rust
+lsp_target_servers:
+  claude:
+  - rust-analyzer
+  copilot:
+  - rust-analyzer
+lsp_config_provenance:
+  rust-analyzer: project:.
 local_deployed_files:
 - .agents/skills/forget
 - .agents/skills/forget/SKILL.md

@@ -9,6 +9,11 @@ dependencies:
     - github/awesome-copilot/skills/git-commit#main
     - github/awesome-copilot/instructions/rust.instructions.md#main
     - tttpob/bioinfo-skills/pixi#main
+  lsp:
+    - name: rust-analyzer
+      command: rust-analyzer
+      extensionToLanguage:
+        ".rs": rust
   mcp:
     # Memory scoped to this workspace for the current user
     - name: workspace-user-memory
