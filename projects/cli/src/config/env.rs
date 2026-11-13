@@ -6,8 +6,8 @@
 //!   APP_LIST_1_NAME=x -> {"list":[null,{"name":"x"}]}
 //!   APP_A__KEY_PATH=x -> {"a":{"key_path":"x"}}
 //!
-//! Names are split on `_`, unless the name contains `__`, then it is split on `__` only so that
-//! keys may themselves contain `_`.
+//! Names are split on `_`, unless the name contains `__` (or `__` directly follows the prefix,
+//! eg: `APP__GIT_BACKEND`), then it is split on `__` only so that keys may themselves contain `_`.
 //!
 //! Limitations:
 //! - Values are always strings; this is fine while the schemas only use strings.
@@ -94,7 +94,12 @@ pub fn merge(base: &mut Value, over: Value) {
 }
 
 fn parse_path(s: &str) -> Vec<Seg> {
-  let sep = if s.contains("__") { "__" } else { "_" };
+  // `s` is what follows `<prefix>_`, so `PREFIX__KEY` arrives as `_KEY`.
+  let sep = if s.contains("__") || s.starts_with('_') {
+    "__"
+  } else {
+    "_"
+  };
   s.trim_start_matches('_')
     .split(sep)
     .filter(|p| !p.is_empty())
@@ -208,6 +213,12 @@ mod tests {
           "other": [{"name": "x"}]
       })
     );
+  }
+
+  #[test]
+  fn double_underscore_after_prefix_allows_a_top_level_key_with_underscores() {
+    let v = run(&[("APP__GIT_BACKEND", "grit"), ("APP_PLAIN", "x")], "APP");
+    assert_eq!(v, json!({"git_backend": "grit", "plain": "x"}));
   }
 
   #[test]
