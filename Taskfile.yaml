@@ -95,6 +95,15 @@ tasks:
       - apm update --yes
       - bunx -y actions-up --style preserve --yes
 
+  avr:cost:
+    desc: Lists the current invoice, which shows an estimated total amount owing.
+    summary: |
+      We run our GHA builds & other sandboxes at Avrea.
+
+      see: <https://avrea.com/>
+    cmds:
+      - avr billing invoices list -L 1
+
   fmt:
     desc: Format the code to ensure everything looks consistently the same and easy to read.
     cmds:
