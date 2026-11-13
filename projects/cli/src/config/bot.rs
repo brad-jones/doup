@@ -18,6 +18,10 @@ pub struct DoupBotConfigFile {
   #[serde(rename = "$schema", default, skip_serializing_if = "Option::is_none")]
   schema_uri: Option<String>,
 
+  /// The git implementation used to clone every repo. Applies globally.
+  #[serde(default, skip_serializing_if = "is_default")]
+  pub git_backend: GitBackendKind,
+
   /// The git repositories that the bot will update.
   #[serde(default)]
   pub repos: Vec<DoupBotRepo>,
@@ -62,6 +66,22 @@ impl ConfigFile for DoupBotConfigFile {
     }
     Ok(())
   }
+}
+
+/// Which git implementation to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitBackendKind {
+  /// Shells out to the `git` executable.
+  #[default]
+  GitCli,
+
+  /// Uses the pure Rust `grit-lib` implementation.
+  Grit,
+}
+
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+  *value == T::default()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -306,6 +326,32 @@ repos:
     assert_eq!(
       DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(),
       config
+    );
+  }
+
+  #[test]
+  fn git_backend_defaults_to_git_cli_and_round_trips() {
+    let json = config_json(json!({ "origin": "https://github.com/a/b.git" }));
+    let config = DoupBotConfigFile::from_json(&json).unwrap();
+    assert_eq!(config.git_backend, GitBackendKind::GitCli);
+    assert!(!config.to_json().unwrap().contains("git_backend"));
+
+    let json =
+      json!({ "git_backend": "grit", "repos": [{ "origin": "https://github.com/a/b.git" }] });
+    let config = DoupBotConfigFile::from_json(&json.to_string()).unwrap();
+    assert_eq!(config.git_backend, GitBackendKind::Grit);
+    assert_eq!(
+      DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(),
+      config
+    );
+  }
+
+  #[test]
+  fn schema_rejects_unknown_git_backend() {
+    let repo = json!({ "origin": "https://github.com/a/b.git" });
+    assert!(
+      DoupBotConfigFileSchema::validate(&json!({ "git_backend": "libgit2", "repos": [repo] }))
+        .is_err()
     );
   }
 

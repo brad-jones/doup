@@ -50,6 +50,11 @@
     }
   },
   "properties": {
+    "git_backend": {
+      "description": "The git implementation used to clone every repo. Applies to all repos.",
+      "enum": ["git_cli", "grit"],
+      "default": "git_cli"
+    },
     "repos": {
       "description": "A list of git repositories to update.",
       "type": "array",
