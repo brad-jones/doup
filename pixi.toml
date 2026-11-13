@@ -10,11 +10,6 @@ lefthook = ">=2.2.2,<3"
 cocogitto = ">=7.0.0,<8"
 apm = ">=0.35.0,<0.36"
 bun = ">=1.4.4,<2"
-devbox = ">=0.0.213,<0.0.214"
-nsc = ">=0.0.595,<0.0.596"
-
-[target.linux.dependencies]
-avr = ">=0.8.0,<0.9"
 
 [target.unix.activation.env]
 PATH = "$PIXI_PROJECT_ROOT/scripts:$PATH"
