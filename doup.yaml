@@ -1,40 +1,7 @@
 $schema: ./schemas/repo.schema.json
 
-platform: "doup:github"
+platform:
+  use: "doup:github@^1.0.0"
+
 ecosystems:
-  - "doup:doup"
-
-# The doup config file
-# NB: This one is written using YAML but we would also accept JSON/JSONC, possibly TOML too.
-
-# For implementation
-# see: https://github.com/rust-cli/config-rs
-# also: https://github.com/SergioBenitez/Figment
-# and: https://github.com/oxidecomputer/typify
-# and: https://github.com/goddtriffin/json-schema-rs
-# and: https://github.com/Stranger6667/jsonschema
-
-# This is the list of plugins that the doup cli will ultimately loop through when the update sub command is run.
-# ie: This represents the various ecosystems (npm, cargo, go modules, etc) that doup will update for you.
-#
-# If we were to contrast this plugin type with that of https://docs.renovatebot.com/modules/ then this is like a merging of Datasource, Manager & Versioning
-# I'm not sure if this will scale well in the long run but for now I'd like to keep things simple and not introduce too many concepts too early.
-# Down the track we may consider copying the renovate model if it's warranted.
-#ecosystems:
-# A simple entry that requires no further config would just be a string that adheres to the standard as set out by wkg
-# see: https://component-model.bytecodealliance.org/composing-and-distributing/distributing.html
-#- "namespace:package@version"
-
-# Alternatively we would also allow ecosystem plugins to accept additional configuration like this.
-#- "namespace:package@version":
-#    foo: bar
-
-# Platform is another plugin type (think github, gitlab, bitbucket, etc)
-# Either a simple string value referring to a wkg oci image with a platform plugin in it
-#platform: "namespace:package@version"
-
-# Or as an object key with additional config like this.
-# In any case there is only a single platform that can be configured.
-# platform:
-#   namespace:package@version:
-#     foo: bar
+  - use: "doup:doup@^1.0.0"
