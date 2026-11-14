@@ -52,7 +52,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       continue;
     }
 
-    let repo_config = DoupRepoConfigFile::load(None)?.merged;
+    let repo_config = DoupRepoConfigFile::load(Some(destination))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
   }
 
