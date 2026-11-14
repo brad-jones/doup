@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Args;
-use git::{Auth, CloneOptions, Git, GitCli, Grit};
+use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use tempfile::TempDir;
 
 use crate::config::{
@@ -18,12 +18,16 @@ pub struct UpdateArgs {
 
 pub async fn update(_args: UpdateArgs) -> Result<()> {
   let config = DoupBotConfigFile::load(None)?.merged;
+  let git = match config.git_backend {
+    GitBackendKind::GitCli => Git::new(GitCli),
+    GitBackendKind::Grit => Git::new(Grit),
+  };
   let mut failed = 0;
 
   for repo in &config.repos {
-    println!("Repo: {}", repo.origin);
+    println!("Cloning: {}", repo.origin);
 
-    if let Err(err) = update_repo(config.git_backend, repo).await {
+    if let Err(err) = update_repo(&git, repo).await {
       eprintln!("Failed to update {}: {err:#}", repo.origin);
       failed += 1;
     }
@@ -35,7 +39,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
   Ok(())
 }
 
-async fn update_repo(backend: GitBackendKind, repo: &DoupBotRepo) -> Result<()> {
+async fn update_repo(git: &Git, repo: &DoupBotRepo) -> Result<()> {
   // The temp dir is deleted when `dir` is dropped at the end of this function.
   let dir = TempDir::new().context("failed to create a temp dir")?;
   let destination = dir.path().join("repo");
@@ -44,19 +48,10 @@ async fn update_repo(backend: GitBackendKind, repo: &DoupBotRepo) -> Result<()> 
   if let Some(auth) = &repo.auth {
     options = options.with_auth(to_git_auth(auth)?);
   }
-  clone_repo(backend, options).await?;
+  git.clone_repo(&options).await.context("clone failed")?;
   println!("Cloned to {}", destination.display());
 
   Ok(())
-}
-
-/// `GitBackend` returns `impl Future` so it can't be a `dyn` trait object; dispatch with a match.
-async fn clone_repo(backend: GitBackendKind, options: CloneOptions) -> Result<()> {
-  match backend {
-    GitBackendKind::GitCli => Git::new(GitCli).clone_repo(options).await,
-    GitBackendKind::Grit => Git::new(Grit).clone_repo(options).await,
-  }
-  .context("clone failed")
 }
 
 fn to_git_auth(auth: &DoupBotRepoAuth) -> Result<Auth> {

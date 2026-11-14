@@ -8,14 +8,19 @@ name = "doup"
 path = "src/main.rs"
 
 [dependencies]
+ambassador = "0.5.1"
 anyhow = "1.0.104"
+async-trait = "0.1.92"
 clap = { version = "4.6.7", features = ["derive"] }
+delegation = "0.5.0"
+enum_dispatch = "0.3.13"
 git = { path = "../git" }
 jsonschema = { version = "0.61.0", features = ["macros"] }
 regress = "0.12.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "2.1.0"
 serde_json = "1.0.154"
+spire_enum = "1.2.0"
 ssh-key = "0.6.7"
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["full"] }

@@ -5,10 +5,10 @@ itself.
 
 ## Usage
 
-Pick a backend when building a `Git`, then call operations on it:
+Pick a backend when building a `Git`, then call operations on it (they live on the `GitBackend` trait):
 
 ```rust
-use git::{Auth, CloneOptions, Git, GitCli, Grit};
+use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use std::num::NonZeroU32;
 
 let git = Git::new(GitCli); // or Git::new(Grit)
@@ -18,7 +18,7 @@ let options = CloneOptions::new("https://github.com/owner/repo.git", "repo")
   .with_depth(NonZeroU32::new(1).unwrap())
   .with_auth(Auth::Https { user: "x-access-token".into(), pass: token });
 
-git.clone_repo(options).await?;
+git.clone_repo(&options).await?;
 ```
 
 Every operation is async (built on `tokio`) and fails with a typed `GitError`.
@@ -30,8 +30,9 @@ Every operation is async (built on `tokio`) and fails with a typed `GitError`.
 | `GitCli` | Runs the real `git` executable via `tokio::process`.                              | `git` (+ `ssh` if SSH) |
 | `Grit`   | Runs [grit](https://grit-scm.com) in-process via `grit-lib`, on `spawn_blocking`. | `ssh` if SSH           |
 
-`Git` validates options before delegating, so both backends reject bad input the same way. Both must pass the same
-contract tests (see `backend_contract_tests!` in `src/test_support.rs`).
+`Git` is an enum with one variant per backend, dispatched with [spire_enum](https://crates.io/crates/spire_enum). It
+validates options before delegating, so both backends reject bad input the same way. Both must pass the same contract
+tests (see `backend_contract_tests!` in `src/test_support.rs`). A new backend is a new `Git` variant.
 
 ### Working with grit
 
@@ -72,7 +73,8 @@ Without `Auth`, the user's existing Git and SSH setup is used.
 
 Only add operations doup actually needs:
 
-1. Add a method to the `GitBackend` trait and a validating wrapper on `Git`.
+1. Add a method to the `GitBackend` trait, and to `Git`'s `#[delegate_impl]` block: either body-less (`;`) to forward
+   as-is, or with a body that validates and then forwards via `delegate_git! { ... }`.
 2. Implement it for both `GitCli` and `Grit`, mapping failures to `GitError`.
 3. Add contract tests to `backend_contract_tests!` so both backends are held to the same behaviour.
 

@@ -1,11 +1,11 @@
 //! Every Git operation doup needs, behind a [`GitBackend`] that can be swapped out.
 //!
 //! ```no_run
-//! use git::{CloneOptions, Git, GitCli};
+//! use git::{CloneOptions, Git, GitBackend, GitCli};
 //!
 //! # async fn run() -> Result<(), git::GitError> {
 //! let git = Git::new(GitCli);
-//! git.clone_repo(CloneOptions::new("https://github.com/a/b.git", "b")).await?;
+//! git.clone_repo(&CloneOptions::new("https://github.com/a/b.git", "b")).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -30,28 +30,29 @@ pub use grit::Grit;
 pub use options::CloneOptions;
 
 use remote_url::{RemoteUrl, redact};
+use spire_enum::prelude::{delegate_impl, delegated_enum};
 use std::io::ErrorKind;
 use std::path::Path;
 
 /// The entrypoint for Git operations, delegating to the backend it was built with.
-#[derive(Debug, Clone, Default)]
-pub struct Git<B> {
-  backend: B,
+#[delegated_enum(impl_conversions)]
+#[derive(Debug, Clone)]
+pub enum Git {
+  Cli(GitCli),
+  Grit(Grit),
 }
 
-impl<B: GitBackend> Git<B> {
-  pub fn new(backend: B) -> Self {
-    Self { backend }
+impl Git {
+  pub fn new(backend: impl Into<Self>) -> Self {
+    backend.into()
   }
+}
 
-  /// Clones a repository as described by `options`.
-  ///
-  /// # Errors
-  ///
-  /// Returns a [`GitError`] when `options` are invalid or the clone fails.
-  pub async fn clone_repo(&self, options: CloneOptions) -> Result<(), GitError> {
-    validate(&options).await?;
-    self.backend.clone_repo(&options).await
+#[delegate_impl]
+impl GitBackend for Git {
+  async fn clone_repo(&self, options: &CloneOptions) -> Result<(), GitError> {
+    validate(options).await?;
+    delegate_git! { self.clone_repo(options).await }
   }
 }
 
@@ -97,26 +98,7 @@ async fn ensure_empty_destination(path: &Path) -> Result<(), GitError> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::sync::Mutex;
   use tempfile::TempDir;
-
-  /// Records what reaches the backend so validation can be tested without Git.
-  #[derive(Default)]
-  struct Recorder(Mutex<Vec<CloneOptions>>);
-
-  impl GitBackend for Recorder {
-    async fn clone_repo(&self, options: &CloneOptions) -> Result<(), GitError> {
-      self.0.lock().unwrap().push(options.clone());
-      Ok(())
-    }
-  }
-
-  async fn clone_with(options: CloneOptions) -> (Result<(), GitError>, usize) {
-    let git = Git::new(Recorder::default());
-    let result = git.clone_repo(options).await;
-    let calls = git.backend.0.lock().unwrap().len();
-    (result, calls)
-  }
 
   fn https() -> Auth {
     Auth::Https {
@@ -130,30 +112,35 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn delegates_valid_options_to_the_backend() {
+  async fn git_validates_before_delegating() {
+    let options = CloneOptions::new("git@github.com:a/b.git", "/tmp/never").with_auth(https());
+    let result = Git::new(GitCli).clone_repo(&options).await;
+    assert!(matches!(result, Err(GitError::AuthMismatch { .. })));
+  }
+
+  #[tokio::test]
+  async fn accepts_valid_options() {
     let dir = TempDir::new().unwrap();
     let options = CloneOptions::new("https://github.com/a/b.git", dir.path().join("b"))
       .with_branch("main")
       .with_auth(https());
-    let (result, calls) = clone_with(options).await;
-    result.unwrap();
-    assert_eq!(calls, 1);
+    validate(&options).await.unwrap();
   }
 
   #[tokio::test]
   async fn accepts_an_existing_empty_destination() {
     let dir = TempDir::new().unwrap();
-    let (result, _) = clone_with(CloneOptions::new("git@github.com:a/b.git", dir.path())).await;
-    result.unwrap();
+    validate(&CloneOptions::new("git@github.com:a/b.git", dir.path()))
+      .await
+      .unwrap();
   }
 
   #[tokio::test]
   async fn rejects_a_non_empty_destination() {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("file"), "x").unwrap();
-    let (result, calls) = clone_with(CloneOptions::new("git@github.com:a/b.git", dir.path())).await;
+    let result = validate(&CloneOptions::new("git@github.com:a/b.git", dir.path())).await;
     assert!(matches!(result, Err(GitError::DestinationNotEmpty { .. })));
-    assert_eq!(calls, 0);
   }
 
   #[tokio::test]
@@ -161,15 +148,14 @@ mod tests {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("file");
     std::fs::write(&file, "x").unwrap();
-    let (result, _) = clone_with(CloneOptions::new("git@github.com:a/b.git", file)).await;
+    let result = validate(&CloneOptions::new("git@github.com:a/b.git", file)).await;
     assert!(matches!(result, Err(GitError::DestinationNotEmpty { .. })));
   }
 
   #[tokio::test]
   async fn rejects_invalid_urls() {
-    let (result, calls) = clone_with(CloneOptions::new("", "/tmp/never")).await;
+    let result = validate(&CloneOptions::new("", "/tmp/never")).await;
     assert!(matches!(result, Err(GitError::InvalidUrl { .. })));
-    assert_eq!(calls, 0);
   }
 
   #[tokio::test]
@@ -180,19 +166,18 @@ mod tests {
       ("https://github.com/a/b.git", ssh()),
       ("/srv/repo.git", ssh()),
     ] {
-      let (result, calls) = clone_with(CloneOptions::new(url, "/tmp/never").with_auth(auth)).await;
+      let result = validate(&CloneOptions::new(url, "/tmp/never").with_auth(auth)).await;
       assert!(
         matches!(result, Err(GitError::AuthMismatch { .. })),
         "{url}"
       );
-      assert_eq!(calls, 0);
     }
   }
 
   #[tokio::test]
   async fn rejects_an_empty_branch() {
     let options = CloneOptions::new("git@github.com:a/b.git", "/tmp/never").with_branch(" ");
-    let (result, _) = clone_with(options).await;
+    let result = validate(&options).await;
     assert!(matches!(result, Err(GitError::EmptyBranch)));
   }
 }

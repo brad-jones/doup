@@ -105,11 +105,11 @@ macro_rules! backend_contract_tests {
   ($backend:expr) => {
     mod contract {
       use crate::test_support::{Fixture, commit_count, file_url, head_branch};
-      use crate::{CloneOptions, Git, GitError};
+      use crate::{CloneOptions, Git, GitBackend, GitError};
       use std::num::NonZeroU32;
 
       async fn clone(options: CloneOptions) -> Result<(), GitError> {
-        Git::new($backend).clone_repo(options).await
+        Git::new($backend).clone_repo(&options).await
       }
 
       #[tokio::test]
