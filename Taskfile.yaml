@@ -146,3 +146,11 @@ tasks:
       - init:rustup
     cmds:
       - cargo build -p cli --release {{if .TARGET}}--target {{.TARGET}}{{end}}
+
+  build:plugins:
+    desc: Builds the doup WASM plugins
+    deps:
+      - init:rustup
+    cmds:
+      - cargo build -p doup-ecosystem-plugin-doup --release --target wasm32-wasip2
+      - cargo build -p doup-platform-plugin-github --release --target wasm32-wasip2

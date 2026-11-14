@@ -1,7 +1,7 @@
 $schema: ./schemas/repo.schema.json
 
 platform:
-  use: "doup:github@^1.0.0"
+  use: ./target/wasm32-wasip2/release/doup_platform_plugin_github.wasm
 
 ecosystems:
-  - use: "doup:doup@^1.0.0"
+  - use: ./target/wasm32-wasip2/release/doup_ecosystem_plugin_doup.wasm

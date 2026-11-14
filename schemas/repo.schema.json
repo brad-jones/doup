@@ -13,9 +13,12 @@
       "additionalProperties": false,
       "properties": {
         "use": {
-          "description": "A plugin package reference in wkg format: namespace:package@version.",
+          "description": "Either a plugin package reference in wkg format (namespace:package@version) or a path to an explicit wasm module (eg: ./plugin.wasm).",
           "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*(@\\S+)?$"
+          "anyOf": [
+            { "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*(@\\S+)?$" },
+            { "pattern": "^\\S.*\\.wasm$" }
+          ]
         },
         "with": {
           "description": "An untyped property bag passed to the plugin, which is free to validate it as it wishes.",

@@ -34,7 +34,8 @@ pub struct DoupRepoConfigFile {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DoupRepoPlugin {
-  /// A plugin package reference in wkg format: namespace:package@version.
+  /// Either a plugin package reference in wkg format (namespace:package@version) or a path to an
+  /// explicit wasm module (eg: ./plugin.wasm).
   #[serde(rename = "use")]
   pub plugin: String,
 
@@ -136,6 +137,14 @@ ecosystems:
     ] {
       let instance = json!({ "platform": platform, "ecosystems": [{ "use": "doup:doup" }] });
       assert!(SCHEMA::validate(&instance).is_err(), "{instance}");
+    }
+  }
+
+  #[test]
+  fn schema_accepts_wasm_paths() {
+    for plugin in ["./a.wasm", "../b/c.wasm", "/abs/d.wasm", "target/e.wasm"] {
+      let instance = json!({ "platform": { "use": plugin }, "ecosystems": [{ "use": plugin }] });
+      assert!(SCHEMA::validate(&instance).is_ok(), "{instance}");
     }
   }
 

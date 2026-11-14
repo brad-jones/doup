@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "add"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen 0.63.0",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -913,7 +906,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "divide"
+name = "doup-ecosystem-plugin-doup"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.63.0",
+]
+
+[[package]]
+name = "doup-platform-plugin-github"
 version = "0.1.0"
 dependencies = [
  "wit-bindgen 0.63.0",
@@ -2151,13 +2151,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "multiply"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
@@ -3473,13 +3466,6 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
-
-[[package]]
-name = "subtract"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen 0.63.0",
-]
 
 [[package]]
 name = "syn"
