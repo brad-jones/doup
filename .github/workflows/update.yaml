@@ -64,5 +64,5 @@ jobs:
           DOUP_BOT_REPOS_0_ORIGIN: https://github.com/${{ github.repository }}.git
           DOUP_BOT_REPOS_0_AUTH_USER: x-access-token
           DOUP_BOT_REPOS_0_AUTH_PASS: ${{ github.token }}
-          DOUP_REPO_PLATFORM: doup:github@1.2.3
+          DOUP_REPO_PLATFORM_PLUGIN: doup:github@1.2.3
           DOUP_REPO_PLATFORM_WITH_FOO: bar
