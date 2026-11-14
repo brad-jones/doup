@@ -34,7 +34,7 @@ pub struct DoupBotConfigFile {
 impl ConfigFile for DoupBotConfigFile {
   const DEFAULT_NAMES: &'static [&'static str] = &["doupbot.json", "doupbot.yaml", "doupbot.yml"];
 
-  const ENV_PREFIX: &'static str = "DOUPBOT";
+  const ENV_PREFIX: &'static str = "DOUP_BOT";
 
   const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> =
     DoupBotConfigFileSchema::validate;
@@ -416,7 +416,7 @@ repos:
 
   #[test]
   fn env_overrides_file_values() {
-    let (_dir, loaded) = load_with(&[("DOUPBOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
     assert_eq!(loaded.merged.repos[0].origin, "https://github.com/c/d.git");
     assert_eq!(
       loaded.file.unwrap().repos[0].origin,
@@ -426,7 +426,7 @@ repos:
 
   #[test]
   fn env_can_add_array_items() {
-    let (_dir, loaded) = load_with(&[("DOUPBOT_REPOS_1_ORIGIN", "https://github.com/c/d.git")]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_1_ORIGIN", "https://github.com/c/d.git")]);
     assert_eq!(loaded.merged.repos.len(), 2);
     assert_eq!(loaded.file.unwrap().repos.len(), 1);
   }
@@ -434,8 +434,8 @@ repos:
   #[test]
   fn env_can_supply_partial_overrides() {
     let (_dir, loaded) = load_with(&[
-      ("DOUPBOT_REPOS_0_AUTH_USER", "u"),
-      ("DOUPBOT_REPOS_0_AUTH_PASS", "p"),
+      ("DOUP_BOT_REPOS_0_AUTH_USER", "u"),
+      ("DOUP_BOT_REPOS_0_AUTH_PASS", "p"),
     ]);
     assert_eq!(
       loaded.merged.repos[0].auth,
@@ -458,7 +458,7 @@ repos:
       .unwrap();
     let env = vars_to_value(
       [(
-        "DOUPBOT_REPOS__0__AUTH__KEY_PATH".to_string(),
+        "DOUP_BOT_REPOS__0__AUTH__KEY_PATH".to_string(),
         key_file.path().to_string_lossy().into_owned(),
       )],
       DoupBotConfigFile::ENV_PREFIX,
@@ -485,7 +485,7 @@ repos:
       ))
       .unwrap();
     let env = vars_to_value(
-      [("DOUPBOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())],
+      [("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())],
       DoupBotConfigFile::ENV_PREFIX,
     );
     assert!(load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).is_err());
@@ -493,7 +493,7 @@ repos:
 
   #[test]
   fn env_overrides_are_not_saved_to_the_file() {
-    let (dir, loaded) = load_with(&[("DOUPBOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
+    let (dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
     assert!(loaded.merged.save().is_err());
 
     loaded.file.unwrap().save().unwrap();
@@ -507,7 +507,7 @@ repos:
     let dir = TempDir::new().unwrap();
     let env = vars_to_value(
       [(
-        "DOUPBOT_REPOS_0_ORIGIN".to_string(),
+        "DOUP_BOT_REPOS_0_ORIGIN".to_string(),
         "https://github.com/c/d.git".to_string(),
       )],
       DoupBotConfigFile::ENV_PREFIX,

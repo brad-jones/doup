@@ -12,8 +12,10 @@
 //! Limitations:
 //! - Values are always strings; this is fine while the schemas only use strings.
 //! - Names are lowercased, so fields containing capitals can't be targeted.
-//! - Any var sharing the prefix (eg: `DOUP_LOG`) becomes a key. Unknown keys are ignored as
+//! - Any var sharing the prefix (eg: `DOUP_BOT_LOG`) becomes a key. Unknown keys are ignored as
 //!   neither the schemas nor serde reject them.
+//! - The prefix (and scope) are matched literally, so must be written with single underscores,
+//!   eg: `DOUP_REPO_0__ECOSYSTEMS__0__USE`, not `DOUP__REPO__0__ECOSYSTEMS__0__USE`.
 
 use serde_json::{Map, Value};
 
@@ -27,13 +29,40 @@ enum Seg {
   Index(usize),
 }
 
-/// Reads the process environment, keeping vars that start with `<prefix>_`.
+/// Reads the process environment, see [`layered_vars_to_value`].
 /// Vars that are not valid unicode are skipped.
-pub fn env_value(prefix: &str) -> Value {
-  vars_to_value(
+pub fn env_value(prefix: &str, scope: Option<&str>) -> Value {
+  layered_vars_to_value(
     std::env::vars_os().filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
     prefix,
+    scope,
   )
+}
+
+/// Builds a value from vars starting with `<prefix>_`, then, if given, merges vars starting
+/// with `<scope>_` over the top, eg: prefix `DOUP_REPO` with scope `DOUP_REPO_0`.
+///
+/// Vars whose path starts with an index (eg: `DOUP_REPO_0_X`) are left out of the prefix layer,
+/// as configs are objects; this frees `<prefix>_<n>` up for use as a scope.
+pub fn layered_vars_to_value<I>(vars: I, prefix: &str, scope: Option<&str>) -> Value
+where
+  I: IntoIterator<Item = (String, String)>,
+{
+  let vars: Vec<_> = vars.into_iter().collect();
+  let needle = needle(prefix);
+  let base = vars.iter().filter(|(k, _)| {
+    !k.strip_prefix(&needle)
+      .is_some_and(|rest| matches!(parse_path(rest).first(), Some(Seg::Index(_))))
+  });
+  let mut value = vars_to_value(base.cloned(), prefix);
+  if let Some(scope) = scope {
+    merge(&mut value, vars_to_value(vars, scope));
+  }
+  value
+}
+
+fn needle(prefix: &str) -> String {
+  format!("{}_", prefix.trim_end_matches('_'))
 }
 
 /// Same as [`env_value`] but takes any iterator of (name, value) pairs.
@@ -41,7 +70,7 @@ pub fn vars_to_value<I>(vars: I, prefix: &str) -> Value
 where
   I: IntoIterator<Item = (String, String)>,
 {
-  let needle = format!("{}_", prefix.trim_end_matches('_'));
+  let needle = needle(prefix);
 
   // Sort so output is deterministic (env order is arbitrary).
   let mut matched: Vec<(String, String)> = vars
@@ -230,6 +259,49 @@ mod tests {
   #[test]
   fn no_matches_gives_empty_object() {
     assert_eq!(run(&[("A", "1")], "NOPE"), json!({}));
+  }
+
+  fn run_layered(pairs: &[(&str, &str)], prefix: &str, scope: Option<&str>) -> Value {
+    let vars = pairs.iter().map(|(k, v)| (k.to_string(), v.to_string()));
+    layered_vars_to_value(vars, prefix, scope)
+  }
+
+  #[test]
+  fn layered_without_scope_skips_indexed_vars() {
+    let v = run_layered(
+      &[("APP_X", "1"), ("APP_0_X", "2"), ("APP__0__Y", "3")],
+      "APP",
+      None,
+    );
+    assert_eq!(v, json!({"x": "1"}));
+  }
+
+  #[test]
+  fn layered_with_only_scoped_vars_is_an_object() {
+    let v = run_layered(&[("APP_0_X", "1")], "APP", Some("APP_1"));
+    assert_eq!(v, json!({}));
+  }
+
+  #[test]
+  fn layered_scope_wins_over_prefix() {
+    let v = run_layered(
+      &[("APP_X", "1"), ("APP_Y", "y"), ("APP_0_X", "2")],
+      "APP",
+      Some("APP_0"),
+    );
+    assert_eq!(v, json!({"x": "2", "y": "y"}));
+  }
+
+  #[test]
+  fn layered_scope_ignores_other_scopes() {
+    let v = run_layered(&[("APP_X", "1"), ("APP_10_X", "2")], "APP", Some("APP_1"));
+    assert_eq!(v, json!({"x": "1"}));
+  }
+
+  #[test]
+  fn layered_scope_supports_double_underscore() {
+    let v = run_layered(&[("APP_0__LIST__0__SOME_KEY", "v")], "APP", Some("APP_0"));
+    assert_eq!(v, json!({"list": [{"some_key": "v"}]}));
   }
 
   #[test]

@@ -18,7 +18,7 @@ pub struct UpdateArgs {
 }
 
 pub async fn update(_args: UpdateArgs) -> Result<()> {
-  let config = DoupBotConfigFile::load(None)?.merged;
+  let config = DoupBotConfigFile::load(None, None)?.merged;
 
   let git = match config.git_backend {
     GitBackendKind::GitCli => Git::new(GitCli),
@@ -27,7 +27,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
 
   let mut failed = 0;
 
-  for repo in &config.repos {
+  for (index, repo) in config.repos.iter().enumerate() {
     let dir = TempDir::new()?;
     let destination = dir.path();
     let mut options = CloneOptions::new(&repo.origin, destination);
@@ -52,7 +52,8 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       continue;
     }
 
-    let repo_config = DoupRepoConfigFile::load(Some(destination))?.merged;
+    let env_prefix = DoupRepoConfigFile::repo_env_prefix(index);
+    let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
   }
 

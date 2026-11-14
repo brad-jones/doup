@@ -44,10 +44,17 @@ pub struct DoupRepoPlugin {
   pub with: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+impl DoupRepoConfigFile {
+  /// The env prefix scoping overrides to the bot's repo at `index`, eg: `DOUP_REPO_0`.
+  pub fn repo_env_prefix(index: usize) -> String {
+    format!("{}_{index}", Self::ENV_PREFIX)
+  }
+}
+
 impl ConfigFile for DoupRepoConfigFile {
   const DEFAULT_NAMES: &'static [&'static str] = &["doup.json", "doup.yaml", "doup.yml"];
 
-  const ENV_PREFIX: &'static str = "DOUP";
+  const ENV_PREFIX: &'static str = "DOUP_REPO";
 
   const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = SCHEMA::validate;
 
@@ -63,7 +70,7 @@ impl ConfigFile for DoupRepoConfigFile {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::config::env::vars_to_value;
+  use crate::config::env::{layered_vars_to_value, vars_to_value};
   use crate::config::file::load_with_env;
   use assert_fs::{TempDir, prelude::*};
   use serde_json::json;
@@ -132,9 +139,10 @@ ecosystems:
     }
   }
 
-  /// Writes a config file, then loads it with the given env vars applied.
+  /// Writes a config file, then loads it with the given env vars applied under an optional scope.
   fn load_with(
     vars: &[(&str, &str)],
+    scope: Option<&str>,
   ) -> (TempDir, crate::config::file::Loaded<DoupRepoConfigFile>) {
     let dir = TempDir::new().unwrap();
     dir
@@ -147,20 +155,95 @@ ecosystems:
         .to_string(),
       )
       .unwrap();
-    let env = vars_to_value(
+    let env = layered_vars_to_value(
       vars.iter().map(|(k, v)| (k.to_string(), v.to_string())),
       DoupRepoConfigFile::ENV_PREFIX,
+      scope,
     );
     let loaded = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap();
     (dir, loaded)
   }
 
   #[test]
+  fn repo_env_prefix_includes_the_index() {
+    assert_eq!(DoupRepoConfigFile::repo_env_prefix(3), "DOUP_REPO_3");
+  }
+
+  #[test]
+  fn repo_scoped_env_overrides_global_env() {
+    let scope = DoupRepoConfigFile::repo_env_prefix(0);
+    let (_dir, loaded) = load_with(
+      &[
+        ("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"),
+        ("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3"),
+        ("DOUP_REPO_0__ECOSYSTEMS__0__WITH__SOME_KEY", "baz"),
+      ],
+      Some(&scope),
+    );
+    assert_eq!(loaded.merged.platform.plugin, "doup:bitbucket@^3");
+    assert_eq!(
+      loaded.merged.ecosystems[0].with,
+      json!({"some_key": "baz"}).as_object().cloned()
+    );
+  }
+
+  #[test]
+  fn other_repos_scoped_env_does_not_apply() {
+    let scope = DoupRepoConfigFile::repo_env_prefix(1);
+    let (_dir, loaded) = load_with(
+      &[
+        ("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"),
+        ("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3"),
+      ],
+      Some(&scope),
+    );
+    assert_eq!(loaded.merged.platform.plugin, "doup:gitlab@^2");
+  }
+
+  #[test]
+  fn other_repos_scoped_env_alone_leaves_the_file_intact() {
+    let scope = DoupRepoConfigFile::repo_env_prefix(1);
+    let (_dir, loaded) = load_with(
+      &[("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3")],
+      Some(&scope),
+    );
+    let file = loaded.file.unwrap();
+    assert_eq!(loaded.merged.platform, file.platform);
+    assert_eq!(loaded.merged.ecosystems, file.ecosystems);
+  }
+
+  #[test]
+  fn loads_from_scoped_env_alone_when_no_file_exists() {
+    let dir = TempDir::new().unwrap();
+    let env = layered_vars_to_value(
+      [
+        (
+          "DOUP_REPO_0_PLATFORM_USE".to_string(),
+          "doup:github@^1".to_string(),
+        ),
+        (
+          "DOUP_REPO_0_ECOSYSTEMS_0_USE".to_string(),
+          "doup:npm@1.2.3".to_string(),
+        ),
+      ],
+      DoupRepoConfigFile::ENV_PREFIX,
+      Some(&DoupRepoConfigFile::repo_env_prefix(0)),
+    );
+    let loaded = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap();
+    assert!(loaded.file.is_none());
+    assert_eq!(loaded.merged.platform.plugin, "doup:github@^1");
+    assert_eq!(loaded.merged.ecosystems[0].plugin, "doup:npm@1.2.3");
+  }
+
+  #[test]
   fn env_overrides_plugin_use() {
-    let (_dir, loaded) = load_with(&[
-      ("DOUP_PLATFORM_USE", "doup:gitlab@^2"),
-      ("DOUP_ECOSYSTEMS_0_USE", "doup:npm@1.2.3"),
-    ]);
+    let (_dir, loaded) = load_with(
+      &[
+        ("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"),
+        ("DOUP_REPO_ECOSYSTEMS_0_USE", "doup:npm@1.2.3"),
+      ],
+      None,
+    );
     assert_eq!(loaded.merged.platform.plugin, "doup:gitlab@^2");
     assert_eq!(loaded.merged.ecosystems[0].plugin, "doup:npm@1.2.3");
     assert_eq!(loaded.file.unwrap().platform.plugin, "doup:github@^1");
@@ -168,10 +251,13 @@ ecosystems:
 
   #[test]
   fn env_supplies_plugin_with() {
-    let (_dir, loaded) = load_with(&[
-      ("DOUP_PLATFORM_WITH_FOO", "bar"),
-      ("DOUP_ECOSYSTEMS__0__WITH__SOME_KEY", "baz"),
-    ]);
+    let (_dir, loaded) = load_with(
+      &[
+        ("DOUP_REPO_PLATFORM_WITH_FOO", "bar"),
+        ("DOUP_REPO_ECOSYSTEMS__0__WITH__SOME_KEY", "baz"),
+      ],
+      None,
+    );
     assert_eq!(
       loaded.merged.platform.with,
       json!({"foo": "bar"}).as_object().cloned()
@@ -189,11 +275,11 @@ ecosystems:
     let env = vars_to_value(
       [
         (
-          "DOUP_PLATFORM_USE".to_string(),
+          "DOUP_REPO_PLATFORM_USE".to_string(),
           "doup:github@^1".to_string(),
         ),
         (
-          "DOUP_ECOSYSTEMS_0_USE".to_string(),
+          "DOUP_REPO_ECOSYSTEMS_0_USE".to_string(),
           "doup:npm@1.2.3".to_string(),
         ),
       ],

@@ -49,7 +49,8 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   const DEFAULT_NAMES: &'static [&'static str];
 
   /// Env vars named `<ENV_PREFIX>_<PATH>` are read by `from_env` and `load`, eg: `DOUP_FOO_0_BAR=x`.
-  /// Must be non-empty and unique among configs (`<ENV_PREFIX>_` must not prefix another's).
+  /// Must be non-empty and unique among configs (`<ENV_PREFIX>_` must not prefix another's),
+  /// except for scopes passed to `load`/`from_env`, which deliberately extend it (eg: `DOUP_REPO_0`).
   const ENV_PREFIX: &'static str;
 
   // Used by `save` to save a loaded file back to the same place it came from.
@@ -87,13 +88,16 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   ///
   /// If no config file is found, the merged result is built from the env alone.
   ///
+  /// `env_prefix` optionally names a further env prefix layered over `ENV_PREFIX`,
+  /// eg: `DOUP_REPO_0` so that `DOUP_REPO_0_PLATFORM_USE` beats `DOUP_REPO_PLATFORM_USE`.
+  ///
   /// The merged result must still satisfy the schema as a whole, so an override that produces an
   /// invalid combination (eg: adding a `pass` to a repo whose file entry uses a `key`) is an error.
   ///
   /// Most of the time if you are just reading config, you will want the `merged` instance.
   /// If you want to persist any changes to the config, use the returned `file` instance.
-  fn load(start_dir: Option<&Path>) -> Result<Loaded<Self>> {
-    load_with_env(start_dir, env::env_value(Self::ENV_PREFIX))
+  fn load(start_dir: Option<&Path>, env_prefix: Option<&str>) -> Result<Loaded<Self>> {
+    load_with_env(start_dir, env::env_value(Self::ENV_PREFIX, env_prefix))
   }
 
   /// Saves the config back to the file it was loaded from.
@@ -160,7 +164,8 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
 
   /// Hydrates a new instance of the config file from the process environment alone.
   /// Env values are always strings and keys are lowercased, see [`env::env_value`].
-  fn from_env() -> Result<Self> {
-    Self::validated(env::env_value(Self::ENV_PREFIX))
+  /// `env_prefix` is layered over `ENV_PREFIX` as per `load`.
+  fn from_env(env_prefix: Option<&str>) -> Result<Self> {
+    Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix))
   }
 }
