@@ -1,6 +1,6 @@
 wit_bindgen::generate!({
     world: "platform",
-    path: "../../../wit",
+    path: "../../wit",
 });
 
 use doup::plugin::host_api;

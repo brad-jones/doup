@@ -71,8 +71,8 @@ impl ConfigFile for DoupRepoConfigFile {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::config::env::{layered_vars_to_value, vars_to_value};
-  use crate::config::file::load_with_env;
+  use crate::env::{layered_vars_to_value, vars_to_value};
+  use crate::file::load_with_env;
   use assert_fs::{TempDir, prelude::*};
   use serde_json::json;
 
@@ -152,7 +152,7 @@ ecosystems:
   fn load_with(
     vars: &[(&str, &str)],
     scope: Option<&str>,
-  ) -> (TempDir, crate::config::file::Loaded<DoupRepoConfigFile>) {
+  ) -> (TempDir, crate::file::Loaded<DoupRepoConfigFile>) {
     let dir = TempDir::new().unwrap();
     dir
       .child("doup.json")

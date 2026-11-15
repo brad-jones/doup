@@ -1,6 +1,4 @@
 mod commands;
-mod config;
-mod plugin_host;
 
 use clap::Parser;
 use commands::Commands;

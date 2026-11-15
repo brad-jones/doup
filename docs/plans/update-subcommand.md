@@ -102,8 +102,8 @@ commit to async now than to retrofit it later.
 
 ### 7. Wasmtime object lifetimes
 
-[plugin_host.rs](../../projects/cli/src/plugin_host.rs) currently builds everything per call. That's fine for the toy,
-but wasteful for real use:
+[plugin_host.rs](../../projects/plugins/host/src/loader.rs) currently builds everything per call. That's fine for the
+toy, but wasteful for real use:
 
 | Object             | Cost            | Lifetime                                                                                                                   |
 | ------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -159,7 +159,8 @@ The `serde_yaml` crate was archived by its author in 2024. Replace it with
 
 ## WIT contracts
 
-Replace `projects/wit/plugin.wit` with a `doup:plugin@0.1.0` package split across files in `projects/wit/`.
+Replace `projects/plugins/wit/plugin.wit` with a `doup:plugin@0.1.0` package split across files in
+`projects/plugins/wit/`.
 
 Worlds do **not** need to declare WASI imports. The host linker provides all of WASI p2 plus wasi:http, and a component
 only imports what it actually uses. Guest-side HTTP crates such as `wstd` bring their own `wasi:http` bindings.

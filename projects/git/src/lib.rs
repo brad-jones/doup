@@ -1,9 +1,9 @@
 //! Every Git operation doup needs, behind a [`GitBackend`] that can be swapped out.
 //!
 //! ```no_run
-//! use git::{CloneOptions, Git, GitBackend, GitCli};
+//! use doup_git::{CloneOptions, Git, GitBackend, GitCli};
 //!
-//! # async fn run() -> Result<(), git::GitError> {
+//! # async fn run() -> Result<(), doup_git::GitError> {
 //! let git = Git::new(GitCli);
 //! git.clone_repo(&CloneOptions::new("https://github.com/a/b.git", "b")).await?;
 //! # Ok(())

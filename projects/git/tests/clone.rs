@@ -1,6 +1,6 @@
 //! Clones from real remotes, so these need network access.
 
-use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use std::num::NonZeroU32;
 use tempfile::TempDir;
 

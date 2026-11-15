@@ -8,7 +8,7 @@ itself.
 Pick a backend when building a `Git`, then call operations on it (they live on the `GitBackend` trait):
 
 ```rust
-use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use std::num::NonZeroU32;
 
 let git = Git::new(GitCli); // or Git::new(Grit)

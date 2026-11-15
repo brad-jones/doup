@@ -138,14 +138,14 @@ tasks:
     deps:
       - init:rustup
     cmds:
-      - cargo run -p cli -- {{.CLI_ARGS}}
+      - cargo run -p doup-cli -- {{.CLI_ARGS}}
 
   build:cli:
     desc: Builds the doup CLI project for a given target
     deps:
       - init:rustup
     cmds:
-      - cargo build -p cli --release {{if .TARGET}}--target {{.TARGET}}{{end}}
+      - cargo build -p doup-cli --release {{if .TARGET}}--target {{.TARGET}}{{end}}
 
   build:plugins:
     desc: Builds the doup WASM plugins

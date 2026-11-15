@@ -1,5 +1,5 @@
 [package]
-name = "plugin-macro"
+name = "doup-plugin-macro"
 version = "0.1.0"
 edition = "2024"
 description = "Generates store-owning wrappers for wasmtime plugin bindings from a WIT world."

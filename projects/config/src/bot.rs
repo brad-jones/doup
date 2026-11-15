@@ -163,8 +163,8 @@ fn validate_openssh_key(text: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::config::env::vars_to_value;
-  use crate::config::file::{Loaded, load_with_env};
+  use crate::env::vars_to_value;
+  use crate::file::{Loaded, load_with_env};
   use assert_fs::{TempDir, prelude::*};
   use serde_json::json;
 

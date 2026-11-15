@@ -1,5 +1,5 @@
 use super::loader;
-use plugin_macro::plugin_wrapper;
+use doup_plugin_macro::plugin_wrapper;
 use std::path::Path;
 use wasmtime::Result;
 

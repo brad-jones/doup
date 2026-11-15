@@ -275,8 +275,8 @@ Whichever you choose, the enum approach never needs `dyn`, so you avoid the `Box
 **Use the hand-written enum with a native async trait.**
 
 1. **It fits the problem.** doup picks a strategy from a fixed list in configuration (`GitBackendKind` in
-   [bot.rs](../../projects/cli/src/config/bot.rs) is already an enum of the choices). The set of strategies is closed
-   and known at compile time, which is exactly where an enum shines.
+   [bot.rs](../../projects/config/src/bot.rs) is already an enum of the choices). The set of strategies is closed and
+   known at compile time, which is exactly where an enum shines.
 2. **It is consistent.** `Git` already does this, so there is one pattern to learn and one to maintain.
 3. **The compiler helps you.** Add a variant and forget a `match` arm? Compile error. With `Box<dyn>` a forgotten case
    is a runtime surprise.
@@ -366,8 +366,8 @@ Beginner notes on that snippet:
 
 ## What I actually tested
 
-The `async` variants were compiled (`cargo check -p cli` through pixi) in a temporary scratch module, which has since
-been removed. Each case defined a trait with an async method, one variant, and a call that moved the value into
+The `async` variants were compiled (`cargo check -p doup-cli` through pixi) in a temporary scratch module, which has
+since been removed. Each case defined a trait with an async method, one variant, and a call that moved the value into
 `tokio::spawn` (which requires `Send`).
 
 | Case                                                            | Result                                                  |

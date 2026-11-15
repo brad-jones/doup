@@ -2,8 +2,10 @@
 resolver = "3"
 members = [
   "projects/cli",
+  "projects/config",
   "projects/git",
-  "projects/plugin-macro",
   "projects/plugins/ecosystem/doup",
+  "projects/plugins/host",
+  "projects/plugins/macro",
   "projects/plugins/platform/github",
 ]

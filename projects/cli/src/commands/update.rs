@@ -1,16 +1,13 @@
 use anyhow::{Result, bail};
 use clap::Args;
-use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
-use tempfile::TempDir;
-
-use crate::{
-  config::{
-    bot::{DoupBotConfigFile, DoupBotRepoAuth, GitBackendKind},
-    file::ConfigFile,
-    repo::DoupRepoConfigFile,
-  },
-  plugin_host::{load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path},
+use doup_config::{
+  bot::{DoupBotConfigFile, DoupBotRepoAuth, GitBackendKind},
+  file::ConfigFile,
+  repo::DoupRepoConfigFile,
 };
+use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_plugin_host::{load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path};
+use tempfile::TempDir;
 
 /// Runs the doup update process
 #[derive(Args)]

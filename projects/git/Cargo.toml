@@ -1,5 +1,5 @@
 [package]
-name = "git"
+name = "doup-git"
 version = "0.1.0"
 edition = "2024"
 description = "Abstracts the Git operations doup needs behind a swappable backend."
