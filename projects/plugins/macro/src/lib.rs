@@ -127,17 +127,47 @@ fn expand(input: Input) -> syn::Result<TokenStream2> {
     state,
     ..
   } = &input;
+  let pre = format_ident!("{}Pre", bindings);
   Ok(quote! {
     #(const _: &[u8] = include_bytes!(#tracked);)*
 
+    type Configure = ::std::sync::Arc<
+      dyn Fn(&mut ::wasmtime_wasi::WasiCtxBuilder) + Send + Sync,
+    >;
+
+    /// A plugin component, instantiated lazily into a fresh `Store` per phase.
     pub struct #name {
-      store: ::wasmtime::Store<#state>,
-      bindings: #bindings,
+      pre: #pre<#state>,
+      configure: Configure,
+      session: Option<(::wasmtime::Store<#state>, #bindings)>,
     }
 
     impl #name {
-      pub fn new(store: ::wasmtime::Store<#state>, bindings: #bindings) -> Self {
-        Self { store, bindings }
+      pub fn new(
+        pre: #pre<#state>,
+        configure: impl Fn(&mut ::wasmtime_wasi::WasiCtxBuilder) + Send + Sync + 'static,
+      ) -> Self {
+        Self { pre, configure: ::std::sync::Arc::new(configure), session: None }
+      }
+
+      /// Discards the current instance; the next call instantiates a fresh one using `configure`.
+      pub fn begin_phase(
+        &mut self,
+        configure: impl Fn(&mut ::wasmtime_wasi::WasiCtxBuilder) + Send + Sync + 'static,
+      ) {
+        self.configure = ::std::sync::Arc::new(configure);
+        self.session = None;
+      }
+
+      async fn take_session(
+        &mut self,
+      ) -> ::wasmtime::Result<(::wasmtime::Store<#state>, #bindings)> {
+        if let Some(session) = self.session.take() {
+          return Ok(session);
+        }
+        let mut store = ::wasmtime::Store::new(self.pre.engine(), #state::new(&*self.configure));
+        let bindings = self.pre.instantiate_async(&mut store).await?;
+        Ok((store, bindings))
       }
 
       #(#methods)*
@@ -179,7 +209,13 @@ fn method(cx: &TypeCx, func: &Function) -> syn::Result<TokenStream2> {
   Ok(quote! {
     #[doc = #doc]
     pub async fn #method(&mut self, #(#names: #types),*) -> ::wasmtime::Result<#ret> {
-      self.bindings.#call(&mut self.store, #(#names),*).await
+      let (mut store, bindings) = self.take_session().await?;
+      let result = bindings.#call(&mut store, #(#names),*).await;
+      // An Err here is a trap or host failure, so the instance is dropped rather than reused.
+      if result.is_ok() {
+        self.session = Some((store, bindings));
+      }
+      result
     }
   })
 }

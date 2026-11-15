@@ -16,7 +16,7 @@
           "description": "Either a plugin package reference in wkg format (namespace:package@version) or a path to an explicit wasm module (eg: ./plugin.wasm).",
           "type": "string",
           "anyOf": [
-            { "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*(@\\S+)?$" },
+            { "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*:[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*(@.+)?$" },
             { "pattern": "^\\S.*\\.wasm$" }
           ]
         },

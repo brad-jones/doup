@@ -6,7 +6,9 @@ use doup_config::{
   repo::DoupRepoConfigFile,
 };
 use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
-use doup_plugin_host::{load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path};
+use doup_plugin_host::{
+  PluginRuntime, load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path,
+};
 use tempfile::TempDir;
 
 /// Runs the doup update process
@@ -18,15 +20,15 @@ pub struct UpdateArgs {
 }
 
 pub async fn update(_args: UpdateArgs) -> Result<()> {
-  let config = DoupBotConfigFile::load(None, None)?.merged;
+  let runtime = PluginRuntime::new()?;
 
+  let config = DoupBotConfigFile::load(None, None)?.merged;
   let git = match config.git_backend {
     GitBackendKind::GitCli => Git::new(GitCli),
     GitBackendKind::Grit => Git::new(Grit),
   };
 
   let mut failed = 0;
-
   for (index, repo) in config.repos.iter().enumerate() {
     let dir = TempDir::new()?;
     let destination = dir.path();
@@ -57,12 +59,12 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     println!("Loaded repo config {:#?}", repo_config);
 
     let platform_path = resolve_plugin_path(&repo_config.platform.plugin, Some(destination))?;
-    let mut platform = load_platform_plugin(&platform_path).await?;
+    let mut platform = load_platform_plugin(&runtime, &platform_path)?;
     println!("Platform says: {}", platform.hello_world().await?);
 
     for ecosystem in &repo_config.ecosystems {
       let ecosystem_path = resolve_plugin_path(&ecosystem.plugin, Some(destination))?;
-      let mut ecosystem = load_ecosystem_plugin(&ecosystem_path).await?;
+      let mut ecosystem = load_ecosystem_plugin(&runtime, &ecosystem_path)?;
       println!("Ecosystem says: {}", ecosystem.hello_world().await?);
     }
   }

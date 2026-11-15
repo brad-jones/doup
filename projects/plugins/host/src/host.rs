@@ -1,7 +1,7 @@
-use wasmtime::component::ResourceTable;
+use wasmtime::component::{ResourceTable, bindgen};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
-wasmtime::component::bindgen!({
+bindgen!({
   path: "../wit",
   world: "shared",
 });

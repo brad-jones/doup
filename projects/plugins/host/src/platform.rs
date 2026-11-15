@@ -1,9 +1,10 @@
-use super::loader;
+use super::runtime::PluginRuntime;
 use doup_plugin_macro::plugin_wrapper;
 use std::path::Path;
 use wasmtime::Result;
+use wasmtime::component::bindgen;
 
-wasmtime::component::bindgen!({
+bindgen!({
   path: "../wit",
   world: "platform",
   exports: { default: async },
@@ -18,9 +19,11 @@ plugin_wrapper! {
   state = super::host::HostState,
 }
 
-pub async fn load_plugin(path: &Path) -> Result<PlatformPlugin> {
-  let mut loaded = loader::load(path, |_wasi| {})?;
-  let bindings =
-    Platform::instantiate_async(&mut loaded.store, &loaded.component, &loaded.linker).await?;
-  Ok(PlatformPlugin::new(loaded.store, bindings))
+pub fn load_plugin(runtime: &PluginRuntime, path: &Path) -> Result<PlatformPlugin> {
+  Ok(PlatformPlugin::new(
+    PlatformPre::new(runtime.platform_pre(path)?)?,
+    |_wasi| {
+      // Set custom WASI permissions for this plugin type here
+    },
+  ))
 }

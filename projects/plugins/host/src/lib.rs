@@ -1,5 +1,6 @@
 mod host;
-mod loader;
+mod runtime;
+pub use runtime::PluginRuntime;
 
 mod resolve;
 pub use resolve::resolve_plugin_path;
