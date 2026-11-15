@@ -71,6 +71,11 @@ WIT has no `any` or dynamic type. Every value crossing the boundary must have a 
 to pass plugin config as a **JSON-encoded string**. Each plugin then deserialises it into its own
 `#[derive(Deserialize)] struct Config` with `serde_json`. The host never needs to understand it.
 
+The string is delivered through a `configure: func(config: string) -> result<_, string>` export that every world has.
+The host calls it once, straight after loading, with `{}` when `with` is absent. A `Store` and its instance persist
+between calls, so the plugin keeps the parsed config in a static for its later calls. A trap drops the instance, and
+with it the config.
+
 ### 3. Versions are opaque strings to the host
 
 Semver, PEP 440, calver, Go pseudo-versions and git SHAs all have different rules, which is why versioning lives inside

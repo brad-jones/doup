@@ -12,11 +12,15 @@ world shared {
 world platform {
   import host-api;
 
+  // Called once, before any other export, with the repo config's `with` as a JSON object string.
+  export configure: func(config: string) -> result<_, string>;
   export hello-world: func() -> string;
 }
 
 world ecosystem {
   import host-api;
 
+  // Called once, before any other export, with the repo config's `with` as a JSON object string.
+  export configure: func(config: string) -> result<_, string>;
   export hello-world: func() -> string;
 }

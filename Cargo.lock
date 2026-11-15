@@ -895,6 +895,7 @@ dependencies = [
  "doup-git",
  "doup-plugin-host",
  "predicates",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
@@ -916,6 +917,7 @@ dependencies = [
 name = "doup-ecosystem-plugin-doup"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "wit-bindgen 0.63.0",
 ]
 
@@ -940,6 +942,7 @@ dependencies = [
 name = "doup-platform-plugin-github"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "wit-bindgen 0.63.0",
 ]
 

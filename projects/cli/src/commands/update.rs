@@ -3,7 +3,7 @@ use clap::Args;
 use doup_config::{
   bot::{DoupBotConfigFile, DoupBotRepoAuth, GitBackendKind},
   file::ConfigFile,
-  repo::DoupRepoConfigFile,
+  repo::{DoupRepoConfigFile, DoupRepoPlugin},
 };
 use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use doup_plugin_host::{
@@ -60,12 +60,26 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
 
     let platform_path = resolve_plugin_path(&repo_config.platform.plugin, Some(destination))?;
     let mut platform = load_platform_plugin(&runtime, &platform_path)?;
+    let config = plugin_config_json(&repo_config.platform)?;
+    if let Err(err) = platform.configure(&config).await? {
+      bail!(
+        "platform plugin {} rejected its config: {err}",
+        repo_config.platform.plugin
+      );
+    }
     println!("Platform says: {}", platform.hello_world().await?);
 
     for ecosystem in &repo_config.ecosystems {
       let ecosystem_path = resolve_plugin_path(&ecosystem.plugin, Some(destination))?;
-      let mut ecosystem = load_ecosystem_plugin(&runtime, &ecosystem_path)?;
-      println!("Ecosystem says: {}", ecosystem.hello_world().await?);
+      let mut plugin = load_ecosystem_plugin(&runtime, &ecosystem_path)?;
+      let config = plugin_config_json(ecosystem)?;
+      if let Err(err) = plugin.configure(&config).await? {
+        bail!(
+          "ecosystem plugin {} rejected its config: {err}",
+          ecosystem.plugin
+        );
+      }
+      println!("Ecosystem says: {}", plugin.hello_world().await?);
     }
   }
 
@@ -73,4 +87,11 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     bail!("{failed} repo(s) failed to update");
   }
   Ok(())
+}
+
+/// The plugin's `with` as the JSON object string its `configure` export expects.
+fn plugin_config_json(plugin: &DoupRepoPlugin) -> Result<String> {
+  Ok(serde_json::to_string(
+    &plugin.with.clone().unwrap_or_default(),
+  )?)
 }
