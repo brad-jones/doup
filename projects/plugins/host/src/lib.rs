@@ -1,12 +1,19 @@
+use anyhow::Result;
+use doup_config::repo::DoupRepoPlugin;
+
 mod host;
+mod resolve;
 mod runtime;
 pub use runtime::PluginRuntime;
 
-mod resolve;
-pub use resolve::resolve_plugin_path;
-
 mod platform;
-pub use platform::load_plugin as load_platform_plugin;
+pub use platform::PlatformPlugin;
 
 mod ecosystem;
-pub use ecosystem::load_plugin as load_ecosystem_plugin;
+pub use ecosystem::EcosystemPlugin;
+
+fn plugin_config_json(plugin: &DoupRepoPlugin) -> Result<String> {
+  Ok(serde_json::to_string(
+    &plugin.with.clone().unwrap_or_default(),
+  )?)
+}

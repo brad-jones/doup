@@ -3,12 +3,10 @@ use clap::Args;
 use doup_config::{
   bot::{DoupBotConfigFile, DoupBotRepoAuth, GitBackendKind},
   file::ConfigFile,
-  repo::{DoupRepoConfigFile, DoupRepoPlugin},
+  repo::DoupRepoConfigFile,
 };
 use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
-use doup_plugin_host::{
-  PluginRuntime, load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path,
-};
+use doup_plugin_host::{EcosystemPlugin, PlatformPlugin, PluginRuntime};
 use tempfile::TempDir;
 
 /// Runs the doup update process
@@ -58,27 +56,12 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
 
-    let platform_path = resolve_plugin_path(&repo_config.platform.plugin, Some(destination))?;
-    let mut platform = load_platform_plugin(&runtime, &platform_path)?;
-    let config = plugin_config_json(&repo_config.platform)?;
-    if let Err(err) = platform.configure(&config).await? {
-      bail!(
-        "platform plugin {} rejected its config: {err}",
-        repo_config.platform.plugin
-      );
-    }
+    let mut platform =
+      PlatformPlugin::load(&runtime, &repo_config.platform, Some(destination)).await?;
     println!("Platform says: {}", platform.hello_world().await?);
 
     for ecosystem in &repo_config.ecosystems {
-      let ecosystem_path = resolve_plugin_path(&ecosystem.plugin, Some(destination))?;
-      let mut plugin = load_ecosystem_plugin(&runtime, &ecosystem_path)?;
-      let config = plugin_config_json(ecosystem)?;
-      if let Err(err) = plugin.configure(&config).await? {
-        bail!(
-          "ecosystem plugin {} rejected its config: {err}",
-          ecosystem.plugin
-        );
-      }
+      let mut plugin = EcosystemPlugin::load(&runtime, ecosystem, Some(destination)).await?;
       println!("Ecosystem says: {}", plugin.hello_world().await?);
     }
   }
@@ -87,11 +70,4 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     bail!("{failed} repo(s) failed to update");
   }
   Ok(())
-}
-
-/// The plugin's `with` as the JSON object string its `configure` export expects.
-fn plugin_config_json(plugin: &DoupRepoPlugin) -> Result<String> {
-  Ok(serde_json::to_string(
-    &plugin.with.clone().unwrap_or_default(),
-  )?)
 }

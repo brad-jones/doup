@@ -6,7 +6,9 @@ description = "Loads and runs doup's WASM plugins using wasmtime."
 
 [dependencies]
 anyhow = "1.0.104"
+doup-config = { path = "../../config" }
 doup-plugin-macro = { path = "../macro" }
+serde_json = "1.0.154"
 wasmtime = "50.0.0"
 wasmtime-wasi = "50.0.0"
 
