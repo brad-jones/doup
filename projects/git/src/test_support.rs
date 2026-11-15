@@ -79,11 +79,7 @@ pub(crate) type Expect = fn(&crate::GitError) -> bool;
 /// The branch a clone has checked out, read straight from `.git/HEAD`.
 pub(crate) fn head_branch(repo: &Path) -> String {
   let head = std::fs::read_to_string(repo.join(".git/HEAD")).unwrap();
-  head
-    .trim()
-    .strip_prefix("ref: refs/heads/")
-    .unwrap()
-    .to_owned()
+  head.trim().strip_prefix("ref: refs/heads/").unwrap().to_owned()
 }
 
 pub(crate) fn commit_count(repo: &Path) -> u32 {
@@ -93,11 +89,7 @@ pub(crate) fn commit_count(repo: &Path) -> u32 {
     .output()
     .unwrap();
   assert!(output.status.success(), "{output:?}");
-  String::from_utf8(output.stdout)
-    .unwrap()
-    .trim()
-    .parse()
-    .unwrap()
+  String::from_utf8(output.stdout).unwrap().trim().parse().unwrap()
 }
 
 /// Behaviour every [`crate::GitBackend`] must share, generated as tests for `$backend`.

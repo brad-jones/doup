@@ -71,10 +71,7 @@ async fn validate(options: &CloneOptions) -> Result<(), GitError> {
       });
     }
   }
-  if options
-    .branch()
-    .is_some_and(|branch| branch.trim().is_empty())
-  {
+  if options.branch().is_some_and(|branch| branch.trim().is_empty()) {
     return Err(GitError::EmptyBranch);
   }
   ensure_empty_destination(options.destination()).await
@@ -167,10 +164,7 @@ mod tests {
       ("/srv/repo.git", ssh()),
     ] {
       let result = validate(&CloneOptions::new(url, "/tmp/never").with_auth(auth)).await;
-      assert!(
-        matches!(result, Err(GitError::AuthMismatch { .. })),
-        "{url}"
-      );
+      assert!(matches!(result, Err(GitError::AuthMismatch { .. })), "{url}");
     }
   }
 

@@ -8,6 +8,5 @@ pub trait GitBackend: Send + Sync {
   /// # Errors
   ///
   /// Returns a [`GitError`] when `options` are invalid or the clone fails.
-  fn clone_repo(&self, options: &CloneOptions)
-  -> impl Future<Output = Result<(), GitError>> + Send;
+  fn clone_repo(&self, options: &CloneOptions) -> impl Future<Output = Result<(), GitError>> + Send;
 }

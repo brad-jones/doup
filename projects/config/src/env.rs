@@ -73,10 +73,7 @@ where
   let needle = needle(prefix);
 
   // Sort so output is deterministic (env order is arbitrary).
-  let mut matched: Vec<(String, String)> = vars
-    .into_iter()
-    .filter(|(k, _)| k.starts_with(&needle))
-    .collect();
+  let mut matched: Vec<(String, String)> = vars.into_iter().filter(|(k, _)| k.starts_with(&needle)).collect();
   matched.sort_by(|a, b| a.0.cmp(&b.0));
 
   let mut root = Value::Null;
@@ -154,11 +151,7 @@ fn insert(node: &mut Value, path: &[Seg], leaf: Value) {
       if !node.is_object() {
         *node = Value::Object(Map::new());
       }
-      let child = node
-        .as_object_mut()
-        .unwrap()
-        .entry(k.clone())
-        .or_insert(Value::Null);
+      let child = node.as_object_mut().unwrap().entry(k.clone()).or_insert(Value::Null);
       insert(child, rest, leaf);
     }
     Seg::Index(i) => {
@@ -268,11 +261,7 @@ mod tests {
 
   #[test]
   fn layered_without_scope_skips_indexed_vars() {
-    let v = run_layered(
-      &[("APP_X", "1"), ("APP_0_X", "2"), ("APP__0__Y", "3")],
-      "APP",
-      None,
-    );
+    let v = run_layered(&[("APP_X", "1"), ("APP_0_X", "2"), ("APP__0__Y", "3")], "APP", None);
     assert_eq!(v, json!({"x": "1"}));
   }
 

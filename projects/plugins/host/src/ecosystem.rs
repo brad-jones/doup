@@ -43,11 +43,7 @@ pub struct EcosystemPlugin {
 }
 
 impl EcosystemPlugin {
-  pub async fn load(
-    runtime: &PluginRuntime,
-    plugin: &DoupRepoPlugin,
-    repo_dir: Option<&Path>,
-  ) -> Result<Self> {
+  pub async fn load(runtime: &PluginRuntime, plugin: &DoupRepoPlugin, repo_dir: Option<&Path>) -> Result<Self> {
     let plugin_path = resolve_plugin_path(&plugin.plugin, repo_dir)?;
     let plugin_pre = EcosystemPre::new(runtime.ecosystem_pre(&plugin_path)?)?;
 
@@ -56,10 +52,7 @@ impl EcosystemPlugin {
     });
 
     if let Err(err) = wrapper.configure(&plugin_config_json(plugin)?).await? {
-      bail!(
-        "ecosystem plugin {} rejected its config: {err}",
-        plugin.plugin
-      );
+      bail!("ecosystem plugin {} rejected its config: {err}", plugin.plugin);
     }
 
     Ok(Self { wrapper })

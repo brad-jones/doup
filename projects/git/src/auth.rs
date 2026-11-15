@@ -43,10 +43,7 @@ impl fmt::Debug for Auth {
 
 /// The `Authorization` header value Git sends for HTTPS basic auth.
 pub(crate) fn basic_auth_header(user: &str, pass: &str) -> String {
-  format!(
-    "Authorization: Basic {}",
-    STANDARD.encode(format!("{user}:{pass}"))
-  )
+  format!("Authorization: Basic {}", STANDARD.encode(format!("{user}:{pass}")))
 }
 
 #[cfg(test)]
@@ -70,9 +67,6 @@ mod tests {
 
   #[test]
   fn basic_auth_header_is_base64_user_colon_pass() {
-    assert_eq!(
-      basic_auth_header("user", "pass"),
-      "Authorization: Basic dXNlcjpwYXNz"
-    );
+    assert_eq!(basic_auth_header("user", "pass"), "Authorization: Basic dXNlcjpwYXNz");
   }
 }

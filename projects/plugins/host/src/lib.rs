@@ -13,7 +13,5 @@ mod ecosystem;
 pub use ecosystem::EcosystemPlugin;
 
 fn plugin_config_json(plugin: &DoupRepoPlugin) -> Result<String> {
-  Ok(serde_json::to_string(
-    &plugin.with.clone().unwrap_or_default(),
-  )?)
+  Ok(serde_json::to_string(&plugin.with.clone().unwrap_or_default())?)
 }

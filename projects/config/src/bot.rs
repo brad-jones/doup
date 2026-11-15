@@ -36,8 +36,7 @@ impl ConfigFile for DoupBotConfigFile {
 
   const ENV_PREFIX: &'static str = "DOUP_BOT";
 
-  const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> =
-    DoupBotConfigFileSchema::validate;
+  const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = DoupBotConfigFileSchema::validate;
 
   fn source(&self) -> Option<&Path> {
     self.source.as_deref()
@@ -54,8 +53,7 @@ impl ConfigFile for DoupBotConfigFile {
         continue;
       };
       if let Some(path) = key_path {
-        let text = read_to_string(&path)
-          .with_context(|| format!("failed to read key {}", path.display()))?;
+        let text = read_to_string(&path).with_context(|| format!("failed to read key {}", path.display()))?;
         *key = Some(text);
       }
       let text = key.as_deref().unwrap_or_default();
@@ -153,10 +151,7 @@ impl Serialize for DoupBotRepoAuth {
 
 fn validate_openssh_key(text: &str) -> Result<()> {
   let key = ssh_key::PrivateKey::from_openssh(text)?;
-  anyhow::ensure!(
-    !key.is_encrypted(),
-    "key must not be protected by a passphrase"
-  );
+  anyhow::ensure!(!key.is_encrypted(), "key must not be protected by a passphrase");
   Ok(())
 }
 
@@ -208,9 +203,7 @@ y5yYJ2PSeOZakF6g==
 
   #[test]
   fn https_auth_round_trips() {
-    let json = config_json(
-      json!({ "origin": "https://github.com/a/b.git", "auth": { "user": "u", "pass": "p" } }),
-    );
+    let json = config_json(json!({ "origin": "https://github.com/a/b.git", "auth": { "user": "u", "pass": "p" } }));
     let config = DoupBotConfigFile::from_json(&json).unwrap();
     assert_eq!(
       only_repo(config.clone()).auth,
@@ -249,8 +242,7 @@ y5yYJ2PSeOZakF6g==
     file.write_str(KEY).unwrap();
     let path = file.path().to_string_lossy().into_owned();
 
-    let json =
-      config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": path } }));
+    let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": path } }));
     let config = DoupBotConfigFile::from_json(&json).unwrap();
     assert_eq!(
       only_repo(config.clone()).auth,
@@ -270,24 +262,19 @@ y5yYJ2PSeOZakF6g==
     let file = dir.child("id_ed25519");
     file.write_str("not a key").unwrap();
 
-    let json = config_json(
-      json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": file.path() } }),
-    );
+    let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": file.path() } }));
     assert!(DoupBotConfigFile::from_json(&json).is_err());
   }
 
   #[test]
   fn missing_ssh_key_file_is_rejected() {
-    let json = config_json(
-      json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": "/does/not/exist" } }),
-    );
+    let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": "/does/not/exist" } }));
     assert!(DoupBotConfigFile::from_json(&json).is_err());
   }
 
   #[test]
   fn encrypted_ssh_key_is_rejected() {
-    let json =
-      config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key": ENCRYPTED_KEY } }));
+    let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key": ENCRYPTED_KEY } }));
     assert!(DoupBotConfigFile::from_json(&json).is_err());
   }
 
@@ -336,8 +323,7 @@ repos:
     assert_eq!(config.git_backend, GitBackendKind::GitCli);
     assert!(!config.to_json().unwrap().contains("git_backend"));
 
-    let json =
-      json!({ "git_backend": "grit", "repos": [{ "origin": "https://github.com/a/b.git" }] });
+    let json = json!({ "git_backend": "grit", "repos": [{ "origin": "https://github.com/a/b.git" }] });
     let config = DoupBotConfigFile::from_json(&json.to_string()).unwrap();
     assert_eq!(config.git_backend, GitBackendKind::Grit);
     assert_eq!(
@@ -349,10 +335,7 @@ repos:
   #[test]
   fn schema_rejects_unknown_git_backend() {
     let repo = json!({ "origin": "https://github.com/a/b.git" });
-    assert!(
-      DoupBotConfigFileSchema::validate(&json!({ "git_backend": "libgit2", "repos": [repo] }))
-        .is_err()
-    );
+    assert!(DoupBotConfigFileSchema::validate(&json!({ "git_backend": "libgit2", "repos": [repo] })).is_err());
   }
 
   #[test]
@@ -402,9 +385,7 @@ repos:
     let dir = TempDir::new().unwrap();
     dir
       .child("doupbot.json")
-      .write_str(&config_json(
-        json!({ "origin": "https://github.com/a/b.git" }),
-      ))
+      .write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" })))
       .unwrap();
     let env = vars_to_value(
       vars.iter().map(|(k, v)| (k.to_string(), v.to_string())),
@@ -418,10 +399,7 @@ repos:
   fn env_overrides_file_values() {
     let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
     assert_eq!(loaded.merged.repos[0].origin, "https://github.com/c/d.git");
-    assert_eq!(
-      loaded.file.unwrap().repos[0].origin,
-      "https://github.com/a/b.git"
-    );
+    assert_eq!(loaded.file.unwrap().repos[0].origin, "https://github.com/a/b.git");
   }
 
   #[test]
@@ -433,10 +411,7 @@ repos:
 
   #[test]
   fn env_can_supply_partial_overrides() {
-    let (_dir, loaded) = load_with(&[
-      ("DOUP_BOT_REPOS_0_AUTH_USER", "u"),
-      ("DOUP_BOT_REPOS_0_AUTH_PASS", "p"),
-    ]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_AUTH_USER", "u"), ("DOUP_BOT_REPOS_0_AUTH_PASS", "p")]);
     assert_eq!(
       loaded.merged.repos[0].auth,
       Some(DoupBotRepoAuth::Https {
@@ -480,9 +455,7 @@ repos:
     let dir = TempDir::new().unwrap();
     dir
       .child("doupbot.json")
-      .write_str(&config_json(
-        json!({ "origin": "https://github.com/a/b.git" }),
-      ))
+      .write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" })))
       .unwrap();
     let env = vars_to_value(
       [("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())],

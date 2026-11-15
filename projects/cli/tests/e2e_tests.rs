@@ -10,10 +10,7 @@ fn test_cli_help_flag() -> Result<()> {
 
   cmd.arg("--help");
 
-  cmd
-    .assert()
-    .success()
-    .stdout(predicate::str::contains("Usage: doup"));
+  cmd.assert().success().stdout(predicate::str::contains("Usage: doup"));
 
   Ok(())
 }

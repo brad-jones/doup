@@ -21,10 +21,7 @@ pub struct Loaded<T> {
 /// [`ConfigFile::load`] with the env supplied by the caller rather than read from the process.
 /// The env is merged over the file before validating, so it may be a partial override.
 /// A free function (not a trait method) so it stays out of the trait's public API; tests use it.
-pub(super) fn load_with_env<T: ConfigFile>(
-  start_dir: Option<&Path>,
-  env: Value,
-) -> Result<Loaded<T>> {
+pub(super) fn load_with_env<T: ConfigFile>(start_dir: Option<&Path>, env: Value) -> Result<Loaded<T>> {
   let file = match T::locate_file(start_dir)? {
     Some(path) => Some(T::from_file(&path)?),
     None => None,

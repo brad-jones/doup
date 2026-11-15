@@ -26,8 +26,7 @@ impl GitBackend for Grit {
     let options = options.clone();
     let cancel = CancelToken::new();
     let _cancel_on_drop = CancelOnDrop(cancel.clone());
-    let result =
-      tokio::task::spawn_blocking(move || clone_blocking(&options, ssh_command, &cancel)).await?;
+    let result = tokio::task::spawn_blocking(move || clone_blocking(&options, ssh_command, &cancel)).await?;
     drop(agent);
     result
   }
@@ -42,11 +41,7 @@ impl Drop for CancelOnDrop {
   }
 }
 
-fn clone_blocking(
-  options: &CloneOptions,
-  ssh_command: Option<String>,
-  cancel: &CancelToken,
-) -> Result<(), GitError> {
+fn clone_blocking(options: &CloneOptions, ssh_command: Option<String>, cancel: &CancelToken) -> Result<(), GitError> {
   let dest = options.destination();
   let dest_existed = dest.exists();
 
@@ -71,9 +66,7 @@ fn clone_blocking(
     grit_options,
     &mut NullProgress,
     cancel,
-    http_factory
-      .as_ref()
-      .map(|factory| factory as &dyn HttpClientFactory),
+    http_factory.as_ref().map(|factory| factory as &dyn HttpClientFactory),
   );
 
   match result {
@@ -93,12 +86,8 @@ fn classify_failure(options: &CloneOptions, err: &Error) -> Option<GitError> {
     return None;
   };
   Some(match err {
-    RemoteError::Auth { .. } | RemoteError::CredentialsUnavailable { .. } => {
-      GitError::AuthenticationFailed { url }
-    }
-    RemoteError::HttpStatus {
-      status: 401 | 403, ..
-    } => GitError::AuthenticationFailed { url },
+    RemoteError::Auth { .. } | RemoteError::CredentialsUnavailable { .. } => GitError::AuthenticationFailed { url },
+    RemoteError::HttpStatus { status: 401 | 403, .. } => GitError::AuthenticationFailed { url },
     RemoteError::HttpStatus { status: 404, .. } => GitError::RepositoryNotFound { url },
     RemoteError::Unreadable {
       reason: RemoteUnreadableReason::RepositoryNotFound,
@@ -154,9 +143,7 @@ impl CredentialProvider for StaticCredentials {
   fn fill(&self, input: &Credential) -> grit_lib::error::Result<Credential> {
     let mut filled = input.clone();
     // Never hand the credentials to another origin, e.g. after a redirect.
-    if input.protocol.as_deref() == Some(&self.protocol)
-      && input.host.as_deref() == Some(&self.host)
-    {
+    if input.protocol.as_deref() == Some(&self.protocol) && input.host.as_deref() == Some(&self.host) {
       filled.username = Some(self.user.clone());
       filled.password = Some(self.pass.clone());
     }
@@ -184,10 +171,7 @@ impl HttpClientFactory for StaticCredentialsFactory {
     Ok(Box::new(client))
   }
 
-  fn create_for_preflight(
-    &self,
-    config: &ConfigSet,
-  ) -> grit_lib::error::Result<Box<dyn HttpClient>> {
+  fn create_for_preflight(&self, config: &ConfigSet) -> grit_lib::error::Result<Box<dyn HttpClient>> {
     self.create(config)
   }
 }
@@ -215,9 +199,7 @@ mod tests {
 
   #[test]
   fn fills_credentials_for_the_same_origin() {
-    let filled = credentials()
-      .fill(&request("https", "example.com:8443"))
-      .unwrap();
+    let filled = credentials().fill(&request("https", "example.com:8443")).unwrap();
     assert_eq!(filled.username.as_deref(), Some("user"));
     assert_eq!(filled.password.as_deref(), Some("hunter2"));
   }
@@ -247,8 +229,7 @@ mod tests {
 
   #[test]
   fn classifies_grit_failures() {
-    let options =
-      CloneOptions::new("https://u:secret@example.com/a.git", "/tmp/b").with_branch("nope");
+    let options = CloneOptions::new("https://u:secret@example.com/a.git", "/tmp/b").with_branch("nope");
     let remote = |err: RemoteError| Error::Remote(err);
     let cases: Vec<(Error, Expect)> = vec![
       (
@@ -258,13 +239,9 @@ mod tests {
         }),
         |e| matches!(e, GitError::AuthenticationFailed { .. }),
       ),
-      (
-        remote(RemoteError::HttpStatus {
-          url: None,
-          status: 403,
-        }),
-        |e| matches!(e, GitError::AuthenticationFailed { .. }),
-      ),
+      (remote(RemoteError::HttpStatus { url: None, status: 403 }), |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
       (
         remote(RemoteError::Unreadable {
           url: None,
@@ -287,11 +264,9 @@ mod tests {
         |e| matches!(e, GitError::RemoteUnreachable { .. }),
       ),
       (
-        remote(RemoteError::Clone(Box::new(
-          CloneError::RemoteRefNotFound {
-            name: "nope".into(),
-          },
-        ))),
+        remote(RemoteError::Clone(Box::new(CloneError::RemoteRefNotFound {
+          name: "nope".into(),
+        }))),
         |e| matches!(e, GitError::BranchNotFound { branch } if branch == "nope"),
       ),
       (

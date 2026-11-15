@@ -118,10 +118,11 @@ impl TypeCx<'_> {
         let namespace = format_ident!("{}", package.namespace.to_snake_case());
         let package = format_ident!("{}", package.name.to_snake_case());
         let iface = format_ident!("{}", iface_name.to_snake_case());
-        let imported =
-          self.world.imports.values().any(
-            |item| matches!(item, WorldItem::Interface { id: imported, .. } if *imported == id),
-          );
+        let imported = self
+          .world
+          .imports
+          .values()
+          .any(|item| matches!(item, WorldItem::Interface { id: imported, .. } if *imported == id));
         Ok(if imported {
           quote!(#namespace::#package::#iface::#ty)
         } else {

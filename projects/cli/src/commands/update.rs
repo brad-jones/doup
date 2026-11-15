@@ -56,8 +56,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
 
-    let mut platform =
-      PlatformPlugin::load(&runtime, &repo_config.platform, Some(destination)).await?;
+    let mut platform = PlatformPlugin::load(&runtime, &repo_config.platform, Some(destination)).await?;
     println!("Platform says: {}", platform.hello_world().await?);
 
     for ecosystem in &repo_config.ecosystems {

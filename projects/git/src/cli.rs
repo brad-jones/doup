@@ -51,10 +51,7 @@ struct Invocation {
 }
 
 /// Secrets only ever go in the environment, never in args that `ps` can show.
-fn clone_invocation(
-  options: &CloneOptions,
-  agent: Option<&SshAgent>,
-) -> Result<Invocation, GitError> {
+fn clone_invocation(options: &CloneOptions, agent: Option<&SshAgent>) -> Result<Invocation, GitError> {
   let mut args: Vec<OsString> = vec!["clone".into(), "--quiet".into()];
   if let Some(branch) = options.branch() {
     args.push(format!("--branch={branch}").into());
@@ -62,11 +59,7 @@ fn clone_invocation(
   if let Some(depth) = options.depth() {
     args.push(format!("--depth={depth}").into());
   }
-  args.extend([
-    "--".into(),
-    options.url().into(),
-    options.destination().into(),
-  ]);
+  args.extend(["--".into(), options.url().into(), options.destination().into()]);
 
   let mut envs = vec![("GIT_TERMINAL_PROMPT", "0".into())];
   if let Some(Auth::Https { user, pass }) = options.auth() {
@@ -170,11 +163,7 @@ mod tests {
   }
 
   fn args(invocation: &Invocation) -> Vec<&str> {
-    invocation
-      .args
-      .iter()
-      .map(|arg| arg.to_str().unwrap())
-      .collect()
+    invocation.args.iter().map(|arg| arg.to_str().unwrap()).collect()
   }
 
   #[test]
@@ -183,13 +172,7 @@ mod tests {
     let invocation = clone_invocation(&options, None).unwrap();
     assert_eq!(
       args(&invocation),
-      [
-        "clone",
-        "--quiet",
-        "--",
-        "https://github.com/a/b.git",
-        "/tmp/b"
-      ]
+      ["clone", "--quiet", "--", "https://github.com/a/b.git", "/tmp/b"]
     );
     assert_eq!(env(&invocation, "GIT_TERMINAL_PROMPT"), Some("0"));
     assert_eq!(env(&invocation, "GIT_CONFIG_COUNT"), None);
@@ -218,11 +201,10 @@ mod tests {
 
   #[test]
   fn https_auth_goes_in_an_extra_header_not_the_args() {
-    let options =
-      CloneOptions::new("https://github.com/a/b.git", "/tmp/b").with_auth(Auth::Https {
-        user: "user".into(),
-        pass: "hunter2".into(),
-      });
+    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b").with_auth(Auth::Https {
+      user: "user".into(),
+      pass: "hunter2".into(),
+    });
     let invocation = clone_invocation(&options, None).unwrap();
     assert!(args(&invocation).iter().all(|arg| !arg.contains("hunter2")));
     assert_eq!(env(&invocation, "GIT_CONFIG_COUNT"), Some("1"));
@@ -240,8 +222,7 @@ mod tests {
   async fn ssh_auth_sets_the_ssh_command() {
     let key = crate::test_support::generate_ssh_key("ed25519", "");
     let agent = SshAgent::new(&key).unwrap();
-    let options =
-      CloneOptions::new("git@github.com:a/b.git", "/tmp/b").with_auth(Auth::Ssh { key });
+    let options = CloneOptions::new("git@github.com:a/b.git", "/tmp/b").with_auth(Auth::Ssh { key });
     let invocation = clone_invocation(&options, Some(&agent)).unwrap();
     assert_eq!(
       env(&invocation, "GIT_SSH_COMMAND"),

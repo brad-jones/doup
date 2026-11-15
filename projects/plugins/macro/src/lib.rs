@@ -80,9 +80,7 @@ impl Parse for Input {
 #[proc_macro]
 pub fn plugin_wrapper(input: TokenStream) -> TokenStream {
   let input = parse_macro_input!(input as Input);
-  expand(input)
-    .unwrap_or_else(syn::Error::into_compile_error)
-    .into()
+  expand(input).unwrap_or_else(syn::Error::into_compile_error).into()
 }
 
 fn expand(input: Input) -> syn::Result<TokenStream2> {
@@ -122,10 +120,7 @@ fn expand(input: Input) -> syn::Result<TokenStream2> {
     .collect::<Vec<_>>();
 
   let Input {
-    bindings,
-    name,
-    state,
-    ..
+    bindings, name, state, ..
   } = &input;
   let pre = format_ident!("{}Pre", bindings);
   Ok(quote! {
@@ -179,10 +174,7 @@ fn method(cx: &TypeCx, func: &Function) -> syn::Result<TokenStream2> {
   if !matches!(func.kind, FunctionKind::Freestanding) {
     return Err(syn::Error::new(
       Span::call_site(),
-      format!(
-        "plugin_wrapper!: `{}` must be a plain synchronous func",
-        func.name
-      ),
+      format!("plugin_wrapper!: `{}` must be a plain synchronous func", func.name),
     ));
   }
 

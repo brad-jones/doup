@@ -149,10 +149,7 @@ ecosystems:
   }
 
   /// Writes a config file, then loads it with the given env vars applied under an optional scope.
-  fn load_with(
-    vars: &[(&str, &str)],
-    scope: Option<&str>,
-  ) -> (TempDir, crate::file::Loaded<DoupRepoConfigFile>) {
+  fn load_with(vars: &[(&str, &str)], scope: Option<&str>) -> (TempDir, crate::file::Loaded<DoupRepoConfigFile>) {
     let dir = TempDir::new().unwrap();
     dir
       .child("doup.json")
@@ -212,10 +209,7 @@ ecosystems:
   #[test]
   fn other_repos_scoped_env_alone_leaves_the_file_intact() {
     let scope = DoupRepoConfigFile::repo_env_prefix(1);
-    let (_dir, loaded) = load_with(
-      &[("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3")],
-      Some(&scope),
-    );
+    let (_dir, loaded) = load_with(&[("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3")], Some(&scope));
     let file = loaded.file.unwrap();
     assert_eq!(loaded.merged.platform, file.platform);
     assert_eq!(loaded.merged.ecosystems, file.ecosystems);
@@ -226,14 +220,8 @@ ecosystems:
     let dir = TempDir::new().unwrap();
     let env = layered_vars_to_value(
       [
-        (
-          "DOUP_REPO_0_PLATFORM_USE".to_string(),
-          "doup:github@^1".to_string(),
-        ),
-        (
-          "DOUP_REPO_0_ECOSYSTEMS_0_USE".to_string(),
-          "doup:npm@1.2.3".to_string(),
-        ),
+        ("DOUP_REPO_0_PLATFORM_USE".to_string(), "doup:github@^1".to_string()),
+        ("DOUP_REPO_0_ECOSYSTEMS_0_USE".to_string(), "doup:npm@1.2.3".to_string()),
       ],
       DoupRepoConfigFile::ENV_PREFIX,
       Some(&DoupRepoConfigFile::repo_env_prefix(0)),
@@ -267,10 +255,7 @@ ecosystems:
       ],
       None,
     );
-    assert_eq!(
-      loaded.merged.platform.with,
-      json!({"foo": "bar"}).as_object().cloned()
-    );
+    assert_eq!(loaded.merged.platform.with, json!({"foo": "bar"}).as_object().cloned());
     assert_eq!(
       loaded.merged.ecosystems[0].with,
       json!({"some_key": "baz"}).as_object().cloned()
@@ -283,14 +268,8 @@ ecosystems:
     let dir = TempDir::new().unwrap();
     let env = vars_to_value(
       [
-        (
-          "DOUP_REPO_PLATFORM_USE".to_string(),
-          "doup:github@^1".to_string(),
-        ),
-        (
-          "DOUP_REPO_ECOSYSTEMS_0_USE".to_string(),
-          "doup:npm@1.2.3".to_string(),
-        ),
+        ("DOUP_REPO_PLATFORM_USE".to_string(), "doup:github@^1".to_string()),
+        ("DOUP_REPO_ECOSYSTEMS_0_USE".to_string(), "doup:npm@1.2.3".to_string()),
       ],
       DoupRepoConfigFile::ENV_PREFIX,
     );

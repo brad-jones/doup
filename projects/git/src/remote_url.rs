@@ -37,10 +37,7 @@ impl RemoteUrl {
   /// The config key Git reads an extra HTTP header from for this remote's origin.
   pub(crate) fn extra_header_key(&self) -> Option<String> {
     match self {
-      Self::Http(url) => Some(format!(
-        "http.{}/.extraheader",
-        url.origin().ascii_serialization()
-      )),
+      Self::Http(url) => Some(format!("http.{}/.extraheader", url.origin().ascii_serialization())),
       _ => None,
     }
   }
@@ -77,10 +74,7 @@ mod tests {
       "http://example.com:8080/a/b",
       "HTTPS://github.com/a/b",
     ] {
-      assert!(
-        matches!(RemoteUrl::parse(url), Ok(RemoteUrl::Http(_))),
-        "{url}"
-      );
+      assert!(matches!(RemoteUrl::parse(url), Ok(RemoteUrl::Http(_))), "{url}");
     }
   }
 
@@ -144,10 +138,7 @@ mod tests {
       redact("https://user:secret@example.com/a.git"),
       "https://user@example.com/a.git"
     );
-    assert_eq!(
-      redact("https://example.com/a.git"),
-      "https://example.com/a.git"
-    );
+    assert_eq!(redact("https://example.com/a.git"), "https://example.com/a.git");
     assert_eq!(redact("git@github.com:a/b.git"), "git@github.com:a/b.git");
   }
 

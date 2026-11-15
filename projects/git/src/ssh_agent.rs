@@ -168,15 +168,9 @@ impl KeySession {
       return Err(GitError::EncryptedSshKey);
     }
     let public = key.public_key().key_data().clone();
-    let public_openssh = key
-      .public_key()
-      .to_openssh()
-      .map_err(GitError::InvalidSshKey)?
-      + "\n";
+    let public_openssh = key.public_key().to_openssh().map_err(GitError::InvalidSshKey)? + "\n";
     let signer = match key.key_data() {
-      KeypairData::Rsa(rsa) => {
-        KeySigner::Rsa(rsa_private_key(rsa).map_err(GitError::InvalidSshKey)?)
-      }
+      KeypairData::Rsa(rsa) => KeySigner::Rsa(rsa_private_key(rsa).map_err(GitError::InvalidSshKey)?),
       KeypairData::Ed25519(_) | KeypairData::Ecdsa(_) => KeySigner::Ssh(key),
       _ => {
         return Err(GitError::UnsupportedSshKey {
@@ -221,8 +215,7 @@ impl KeySigner {
       )));
     };
     let signature = signature.map_err(AgentError::other)?;
-    Signature::new(Algorithm::Rsa { hash: Some(hash) }, signature.to_vec())
-      .map_err(AgentError::other)
+    Signature::new(Algorithm::Rsa { hash: Some(hash) }, signature.to_vec()).map_err(AgentError::other)
   }
 }
 
@@ -252,9 +245,7 @@ mod tests {
 
   async fn client(agent: &SshAgent) -> Box<dyn Session> {
     #[cfg(unix)]
-    let stream = tokio::net::UnixStream::connect(&agent.socket)
-      .await
-      .unwrap();
+    let stream = tokio::net::UnixStream::connect(&agent.socket).await.unwrap();
     #[cfg(windows)]
     let stream = tokio::net::windows::named_pipe::ClientOptions::new()
       .open(&agent.socket)
@@ -307,10 +298,7 @@ mod tests {
     let agent = SshAgent::new(&key).unwrap();
     let identities = client(&agent).await.request_identities().await.unwrap();
     assert_eq!(identities.len(), 1);
-    assert_eq!(
-      identities[0].credential.key_data(),
-      public_key(&key).key_data()
-    );
+    assert_eq!(identities[0].credential.key_data(), public_key(&key).key_data());
   }
 
   #[tokio::test]

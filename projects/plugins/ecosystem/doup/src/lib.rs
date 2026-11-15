@@ -13,9 +13,7 @@ struct Plugin;
 impl Guest for Plugin {
   fn configure(config: String) -> Result<(), String> {
     let value = serde_json::from_str(&config).map_err(|err| format!("invalid config: {err}"))?;
-    CONFIG
-      .set(value)
-      .map_err(|_| "already configured".to_string())
+    CONFIG.set(value).map_err(|_| "already configured".to_string())
   }
 
   fn hello_world() -> String {

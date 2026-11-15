@@ -7,8 +7,8 @@ use tempfile::TempDir;
 async fn clones_a_public_https_repository(backend: impl Into<Git>) {
   let dir = TempDir::new().unwrap();
   let dest = dir.path().join("clone");
-  let options = CloneOptions::new("https://github.com/octocat/Hello-World.git", &dest)
-    .with_depth(NonZeroU32::new(1).unwrap());
+  let options =
+    CloneOptions::new("https://github.com/octocat/Hello-World.git", &dest).with_depth(NonZeroU32::new(1).unwrap());
   Git::new(backend).clone_repo(&options).await.unwrap();
   assert!(dest.join(".git").is_dir());
   assert!(dest.join("README").exists());
@@ -45,19 +45,13 @@ async fn grit_clones_a_public_https_repository() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-  not(doup_test_ssh),
-  ignore = "set DOUP_TEST_SSH_URL and DOUP_TEST_SSH_KEY to run"
-)]
+#[cfg_attr(not(doup_test_ssh), ignore = "set DOUP_TEST_SSH_URL and DOUP_TEST_SSH_KEY to run")]
 async fn git_cli_clones_over_ssh_with_an_in_memory_key() {
   clones_over_ssh_with_an_in_memory_key(GitCli).await;
 }
 
 #[tokio::test]
-#[cfg_attr(
-  not(doup_test_ssh),
-  ignore = "set DOUP_TEST_SSH_URL and DOUP_TEST_SSH_KEY to run"
-)]
+#[cfg_attr(not(doup_test_ssh), ignore = "set DOUP_TEST_SSH_URL and DOUP_TEST_SSH_KEY to run")]
 async fn grit_clones_over_ssh_with_an_in_memory_key() {
   clones_over_ssh_with_an_in_memory_key(Grit).await;
 }
