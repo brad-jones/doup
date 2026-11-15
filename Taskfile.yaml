@@ -154,3 +154,17 @@ tasks:
     cmds:
       - cargo build -p doup-ecosystem-plugin-doup --release --target wasm32-wasip2
       - cargo build -p doup-platform-plugin-github --release --target wasm32-wasip2
+
+  run:update:
+    desc: Local version of .github/workflows/update.yaml
+    deps:
+      - build:cli
+      - build:plugins
+    env:
+      DOUP_BOT__GIT_BACKEND: grit
+      DOUP_BOT_REPOS_0_ORIGIN: https://github.com/brad-jones/doup.git
+      DOUP_BOT_REPOS_0_AUTH_USER: x-access-token
+      DOUP_BOT_REPOS_0_AUTH_PASS:
+        sh: gh auth token -u brad-jones
+    cmds:
+      - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update

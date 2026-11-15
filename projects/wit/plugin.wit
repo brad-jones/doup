@@ -4,6 +4,11 @@ interface host-api {
   host-version: func() -> string;
 }
 
+// Host-only world used to generate the shared host-api bindings.
+world shared {
+  import host-api;
+}
+
 world platform {
   import host-api;
 

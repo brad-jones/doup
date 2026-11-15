@@ -68,14 +68,17 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: x86_64-unknown-linux-gnu
-      - run: chmod +x ./doup && sudo mv ./doup /usr/bin/doup
+      - run: |
+          chmod +x ./doup
+          sudo mv ./doup /usr/bin/doup
 
       - name: ⬇️ Download Plugins
         uses: actions/download-artifact@v8
         with:
           name: plugins
-      - run: ls -hal .
-      - run: tree .
+      - run: |
+          mkdir -p ./target/wasm32-wasip2/release
+          mv ./*.wasm ./target/wasm32-wasip2/release/.
 
       - name: 🚀 Update Dependencies with Doup
         run: doup update

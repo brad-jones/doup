@@ -1,12 +1,15 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, bail};
 use clap::Args;
 use git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use tempfile::TempDir;
 
-use crate::config::{
-  bot::{DoupBotConfigFile, DoupBotRepo, DoupBotRepoAuth, GitBackendKind},
-  file::ConfigFile,
-  repo::DoupRepoConfigFile,
+use crate::{
+  config::{
+    bot::{DoupBotConfigFile, DoupBotRepoAuth, GitBackendKind},
+    file::ConfigFile,
+    repo::DoupRepoConfigFile,
+  },
+  plugin_host::{load_ecosystem_plugin, load_platform_plugin, resolve_plugin_path},
 };
 
 /// Runs the doup update process
@@ -55,6 +58,16 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     let env_prefix = DoupRepoConfigFile::repo_env_prefix(index);
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
+
+    let platform_path = resolve_plugin_path(&repo_config.platform.plugin, Some(destination))?;
+    let mut platform = load_platform_plugin(&platform_path).await?;
+    println!("Platform says: {}", platform.hello_world().await?);
+
+    for ecosystem in &repo_config.ecosystems {
+      let ecosystem_path = resolve_plugin_path(&ecosystem.plugin, Some(destination))?;
+      let mut ecosystem = load_ecosystem_plugin(&ecosystem_path).await?;
+      println!("Ecosystem says: {}", ecosystem.hello_world().await?);
+    }
   }
 
   if failed > 0 {
