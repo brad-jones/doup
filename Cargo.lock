@@ -955,6 +955,7 @@ dependencies = [
  "doup-config",
  "doup-plugin-macro",
  "serde_json",
+ "tokio",
  "wasmtime",
  "wasmtime-wasi",
 ]

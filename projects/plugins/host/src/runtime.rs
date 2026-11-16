@@ -5,7 +5,7 @@ use wasmtime::{Config, Engine, Result};
 
 /// Process-wide wasmtime state: one `Engine` and one `Linker` per plugin world.
 pub struct PluginRuntime {
-  engine: Engine,
+  pub engine: Engine,
   ecosystem_linker: Linker<HostState>,
   platform_linker: Linker<HostState>,
 }

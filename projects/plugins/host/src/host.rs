@@ -16,7 +16,6 @@ pub struct HostState {
 impl HostState {
   pub fn new(configure: impl FnOnce(&mut WasiCtxBuilder)) -> Self {
     let mut builder = WasiCtxBuilder::new();
-    builder.inherit_stdout().inherit_stderr();
     configure(&mut builder);
     Self {
       wasi: builder.build(),

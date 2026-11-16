@@ -12,6 +12,11 @@ pub use platform::PlatformPlugin;
 mod ecosystem;
 pub use ecosystem::EcosystemPlugin;
 
+mod session;
+
+mod ecosystem_alt;
+pub use ecosystem_alt::EcosystemPluginAlt;
+
 fn plugin_config_json(plugin: &DoupRepoPlugin) -> Result<String> {
   Ok(serde_json::to_string(&plugin.with.clone().unwrap_or_default())?)
 }
