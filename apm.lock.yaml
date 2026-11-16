@@ -4,12 +4,11 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: awesome-copilot-rust
   host: github.com
-  resolved_commit: 222eba62d518c27317e917c92e3ec1a7e6729455
+  resolved_commit: dc0083dbe22133bfa7ce3500dee85e187e0cd47a
   resolved_ref: main
   version: 1.0.0
   virtual_path: instructions/rust.instructions.md
   is_virtual: true
-  package_type: apm_package
   deployed_files:
   - .claude/rules/rust.md
   - .github/instructions/rust.instructions.md
@@ -20,7 +19,7 @@ dependencies:
 - repo_url: github/awesome-copilot
   name: git-commit
   host: github.com
-  resolved_commit: 222eba62d518c27317e917c92e3ec1a7e6729455
+  resolved_commit: dc0083dbe22133bfa7ce3500dee85e187e0cd47a
   resolved_ref: main
   version: unknown
   virtual_path: skills/git-commit
