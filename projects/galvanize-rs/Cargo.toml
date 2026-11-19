@@ -12,6 +12,7 @@ galvanize-rs-macros = { path = "macros" }
 
 [dev-dependencies]
 divan = "0.1.21"
+galvanize-rs-descriptor-models = { path = "research/descriptor-models" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
 trybuild = "1.0.125"
 

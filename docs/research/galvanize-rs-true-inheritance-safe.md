@@ -2,6 +2,10 @@
 
 Status: **Research**. Nothing here is scheduled.
 
+An executable [descriptor-based variant](galvanize-rs-true-inheritance-descriptors.md) now demonstrates this safe
+runtime with separate class/method attributes, immediate-parent-only declarations, and `#[class_override]` markers
+without declaring-class annotations. It is included as a third implementation in the benchmarks.
+
 > **Read [galvanize-rs-true-inheritance.md](galvanize-rs-true-inheritance.md) first.** This document is a companion to
 > it. It reuses that document's terminology (Option A, Option B, open classes, `#[class_methods]`, `init`) and only
 > describes what changes. Section numbers like "section 4.4" refer to the main document.

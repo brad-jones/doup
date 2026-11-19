@@ -2,6 +2,11 @@
 
 Status: **Research**. Nothing here is scheduled.
 
+This two-design comparison predates the [defensive review](galvanize-rs-true-inheritance-defensive-review.md) and the
+executable [safe descriptor design](galvanize-rs-true-inheritance-descriptors.md). The latter demonstrates ergonomic
+separate attributes without unsafe runtime code; see its write-up for the expanded three-design comparison and
+limitations.
+
 This is a high-level comparison of the two proposed designs, plus a finger-in-the-air recommendation. Neither design
 needs to be understood in detail to read it:
 

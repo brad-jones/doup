@@ -5,6 +5,8 @@ members = [
   "projects/config",
   "projects/galvanize-rs",
   "projects/galvanize-rs/macros",
+  "projects/galvanize-rs/research/descriptor-macros",
+  "projects/galvanize-rs/research/descriptor-models",
   "projects/git",
   "projects/plugins/ecosystem/doup",
   "projects/plugins/host",
