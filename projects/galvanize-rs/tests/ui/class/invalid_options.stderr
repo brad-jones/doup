@@ -1,0 +1,41 @@
+error: unknown class option, expected `strategy = ...` or `crate = ...`
+ --> tests/ui/class/invalid_options.rs:3:9
+  |
+3 | #[class(unknown = 1)]
+  |         ^^^^^^^
+
+error: unknown field option, expected `readonly` or `strategy = ...`
+  --> tests/ui/class/invalid_options.rs:10:11
+   |
+10 |   #[class(writeonly)]
+   |           ^^^^^^^^^
+
+error: `readonly` has no effect on a private field, its setter is already private
+  --> tests/ui/class/invalid_options.rs:16:11
+   |
+16 |   #[class(readonly)]
+   |           ^^^^^^^^
+
+error: duplicate option
+  --> tests/ui/class/invalid_options.rs:23:3
+   |
+23 |   #[class(readonly)]
+   |   ^^^^^^^^^^^^^^^^^^
+
+error: generic classes are not supported
+  --> tests/ui/class/invalid_options.rs:28:15
+   |
+28 | struct Generic<T> {
+   |               ^^^
+
+error: #[class] requires a struct with named fields
+  --> tests/ui/class/invalid_options.rs:33:8
+   |
+33 | struct Tuple(String);
+   |        ^^^^^
+
+error: `ptr_eq` is reserved by #[class], rename the field
+  --> tests/ui/class/invalid_options.rs:37:3
+   |
+37 |   ptr_eq: String,
+   |   ^^^^^^

@@ -133,6 +133,13 @@ tasks:
     cmds:
       - cargo test --workspace --test '*' {{if .TARGET}}--target {{.TARGET}}{{end}}
 
+  bench:
+    desc: Runs the benchmarks. Pass a name filter after `--`, eg. `task bench -- mixed`.
+    deps:
+      - init:rustup
+    cmds:
+      - cargo bench -p galvanize-rs {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
+
   run:cli:
     desc: Runs the cli using `cargo run`.
     deps:

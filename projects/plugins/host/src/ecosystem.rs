@@ -7,7 +7,7 @@ use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::Mutex;
+use std::sync::RwLock;
 use wasmtime::Store;
 use wasmtime::component::bindgen;
 use wasmtime_wasi::WasiCtxBuilder;
@@ -24,7 +24,7 @@ pub struct EcosystemPlugin {
   plugin: DoupRepoPlugin,
   wasm_module_path: OnceLock<PathBuf>,
   pre: OnceLock<EcosystemPre<HostState>>,
-  session: Mutex<Option<(Store<HostState>, Ecosystem)>>,
+  session: RwLock<Option<Arc<(Store<HostState>, Ecosystem)>>>,
   repo_dir: Option<PathBuf>,
   configure: Arc<dyn Fn(&mut WasiCtxBuilder) + Send + Sync>,
 }
@@ -35,7 +35,7 @@ impl EcosystemPlugin {
       runtime: Arc::clone(runtime),
       plugin: plugin.clone(),
       pre: OnceLock::new(),
-      session: Mutex::new(None),
+      session: RwLock::new(None),
       wasm_module_path: OnceLock::new(),
       repo_dir,
       configure: Arc::new(|wasi| {
@@ -72,28 +72,34 @@ impl EcosystemPlugin {
     Ok(self.pre.get_or_init(|| pre))
   }
 
-  async fn new_session(&self) -> Result<(Store<HostState>, Ecosystem)> {
+  async fn get_session(&self) -> Result<Arc<(Store<HostState>, Ecosystem)>> {
+    if let Some(session) = self.session.read().unwrap().as_ref() {
+      return Ok(Arc::clone(session));
+    }
+
     let mut store = Store::new(&self.runtime.engine, HostState::new(&*self.configure));
     let bindings = self.get_pre()?.instantiate_async(&mut store).await?;
-    Ok((store, bindings))
+
+    let session = Arc::new((store, bindings));
+    *self.session.write().unwrap() = Some(Arc::clone(&session));
+    Ok(session)
   }
 
-  async fn configure(&self) -> Result<()> {
+  fn clear_session(&self) {
+    *self.session.write().unwrap() = None;
+  }
+
+  async fn configure(&mut self) -> Result<()> {
     let config = plugin_config_json(&self.plugin)?;
-    let mut guard = self.session.lock().await;
+    let (mut store, bindings) = self.get_session().await?.as_ref();
+    let result = bindings.call_configure(&mut store, &config).await;
+    if result.is_err() {
+      self.clear_session();
+    }
 
-    // Taking the session out means a failed call drops it, so the next call starts fresh.
-    let (mut store, bindings) = match guard.take() {
-      Some(session) => session,
-      None => self.new_session().await?,
-    };
-
-    bindings
-      .call_configure(&mut store, &config)
-      .await?
-      .map_err(anyhow::Error::msg)?;
-
-    *guard = Some((store, bindings));
-    Ok(())
+    match result {
+      Ok(v) => v,
+      Err(v) => v,
+    }
   }
 }

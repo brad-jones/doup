@@ -1,0 +1,139 @@
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:8:6
+  |
+8 |   a: NotClone,
+  |      ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `galvanize_rs::Strategy::Ptr`
+ --> src/pointers/strategy.rs
+  |
+  | pub trait Strategy {
+  |   /// The pointer type used to hold a value of type `T`.
+  |   type Ptr<T: Clone>: MutablePointer<T>;
+  |               ^^^^^ required by this bound in `Strategy::Ptr`
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:6:1
+  |
+6 | #[class]
+  | ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `galvanize_rs::Strategy::Ptr`
+ --> src/pointers/strategy.rs
+  |
+  | pub trait Strategy {
+  |   /// The pointer type used to hold a value of type `T`.
+  |   type Ptr<T: Clone>: MutablePointer<T>;
+  |               ^^^^^ required by this bound in `Strategy::Ptr`
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:6:1
+  |
+6 | #[class]
+  | ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `galvanize_rs::Strategy::Ptr`
+ --> src/pointers/strategy.rs
+  |
+  | pub trait Strategy {
+  |   /// The pointer type used to hold a value of type `T`.
+  |   type Ptr<T: Clone>: MutablePointer<T>;
+  |               ^^^^^ required by this bound in `Strategy::Ptr`
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:8:3
+  |
+6 | #[class]
+  | -------- required by a bound introduced by this call
+7 | struct Foo {
+8 |   a: NotClone,
+  |   ^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `new`
+ --> src/pointers/mutable_pointer.rs
+  |
+  | pub trait MutablePointer<T: Clone>: Clone {
+  |                             ^^^^^ required by this bound in `MutablePointer::new`
+  |   /// Creates a new pointer owning `value`.
+  |   fn new(value: T) -> Self;
+  |
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0609]: no field `a` on type `Arc<__FooFields>`
+ --> tests/ui/class/not_clone.rs:8:3
+  |
+8 |   a: NotClone,
+  |   ^ unknown field
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:6:1
+  |
+6 | #[class]
+  | ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `read_with`
+ --> src/pointers/mutable_pointer.rs
+  |
+  | pub trait MutablePointer<T: Clone>: Clone {
+  |                             ^^^^^ required by this bound in `MutablePointer::read_with`
+...
+  |   fn read_with<R>(&self, f: impl FnOnce(&T) -> R) -> R;
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:6:1
+  |
+6 | #[class]
+  | ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
+
+error[E0277]: the trait bound `NotClone: Clone` is not satisfied
+ --> tests/ui/class/not_clone.rs:6:1
+  |
+6 | #[class]
+  | ^^^^^^^^ the trait `Clone` is not implemented for `NotClone`
+  |
+note: required by a bound in `write_with`
+ --> src/pointers/mutable_pointer.rs
+  |
+  | pub trait MutablePointer<T: Clone>: Clone {
+  |                             ^^^^^ required by this bound in `MutablePointer::write_with`
+...
+  |   fn write_with<R>(&self, f: impl FnMut(&mut T) -> R) -> R;
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NotClone;
+  |
