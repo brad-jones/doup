@@ -150,10 +150,19 @@ tasks:
 
   bench:
     desc: Runs the benchmarks. Pass a name filter after `--`, eg. `task bench -- mixed`.
+    summary: |
+      Also writes the results as JSON (with machine info) next to each benchmark source,
+      eg. projects/galvanize-rs/benches/pointers.bench.json. See scripts/bench-to-json.ts.
     deps:
       - init:rustup
     cmds:
-      - cargo bench -p galvanize-rs {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
+      - bun scripts/bench-to-json.ts {{.CLI_ARGS}}
+      - bun scripts/bench-to-html.ts
+
+  bench:html:
+    desc: Re-renders the HTML reports from the existing *.bench.json files without re-running benchmarks.
+    cmds:
+      - bun scripts/bench-to-html.ts
 
   miri:
     desc: Checks hardened inheritance and historical probes with Miri, or a supplied standalone .rs file.
