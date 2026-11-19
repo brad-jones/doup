@@ -73,7 +73,7 @@ use proc_macro::TokenStream;
 ///   called more than once (see `MutablePointer::write_with`).
 ///
 /// The getter has the field's visibility, and so do the setter and updater
-/// unless the field is marked `#[class(readonly)]`.
+/// unless the field is marked `#[class_prop(readonly)]`.
 ///
 /// The handle also gets `from_data` (private), `ptr_eq`, and implementations
 /// of `Clone`, `PartialEq`, `Eq` and `Hash` (all by identity), `Debug` (prints
@@ -93,21 +93,23 @@ use proc_macro::TokenStream;
 /// * `crate = some::path`: the path to `galvanize_rs`, if it has been renamed
 ///   or re-exported.
 ///
-/// On a field, `#[class(...)]` takes:
+/// On a field, `#[class_prop(...)]` takes comma separated options:
 ///
 /// * `readonly`: makes `set_x` and `update_x` private. The field still can't
 ///   be reassigned from outside the module, but a handle-typed field (such as a
 ///   `List`) can still be modified through its getter.
 /// * `strategy = SomeStrategy`: overrides the class's strategy for this field.
 ///
+/// `class_prop` is read and removed by `#[class]`, so it doesn't need importing.
+///
 /// ```
 /// use galvanize_rs::{ArcMutexStrategy, ArcSwapStrategy, Str, class};
 ///
 /// #[class(strategy = ArcSwapStrategy)]
 /// pub struct Counter {
-///   #[class(readonly)]
+///   #[class_prop(readonly)]
 ///   pub label: Str,
-///   #[class(strategy = ArcMutexStrategy)]
+///   #[class_prop(strategy = ArcMutexStrategy)]
 ///   pub count: i64,
 /// }
 ///

@@ -14,14 +14,14 @@ struct ClassOptions {
   strategy: Type,
 }
 
-/// Options given to `#[class(...)]` on a field.
+/// Options given to `#[class_prop(...)]` on a field.
 #[derive(Default)]
 struct FieldOptions {
   readonly: Option<Span>,
   strategy: Option<Type>,
 }
 
-/// A field of the class with its `#[class]` attributes removed.
+/// A field of the class with its `#[class_prop]` attributes removed.
 struct ClassField {
   ident: Ident,
   vis: Visibility,
@@ -97,7 +97,7 @@ fn validate_struct(item: &ItemStruct) -> Result<()> {
   Ok(())
 }
 
-/// Collects the fields, removing and applying their `#[class(...)]` attributes.
+/// Collects the fields, removing and applying their `#[class_prop(...)]` attributes.
 fn take_fields(item: &mut ItemStruct, options: &ClassOptions) -> Result<Vec<ClassField>> {
   let mut errors: Option<Error> = None;
   let mut fields = Vec::new();
@@ -127,10 +127,17 @@ fn take_field(field: &mut syn::Field, options: &ClassOptions) -> Result<ClassFie
     ));
   }
 
-  let (class_attrs, attrs): (Vec<_>, Vec<_>) = field.attrs.drain(..).partition(|a| a.path().is_ident("class"));
-  // Options may be split across several `#[class(...)]` attributes, but each may only be given once.
+  if let Some(attr) = field.attrs.iter().find(|a| a.path().is_ident("class")) {
+    return Err(Error::new_spanned(
+      attr,
+      "#[class] can't be used on a field, use #[class_prop(...)] instead",
+    ));
+  }
+
+  let (prop_attrs, attrs): (Vec<_>, Vec<_>) = field.attrs.drain(..).partition(|a| a.path().is_ident("class_prop"));
+  // Options may be split across several `#[class_prop(...)]` attributes, but each may only be given once.
   let mut merged = FieldOptions::default();
-  for attr in &class_attrs {
+  for attr in &prop_attrs {
     let parsed = parse_field_options(attr)?;
     let duplicate = (parsed.readonly.is_some() && merged.readonly.is_some())
       || (parsed.strategy.is_some() && merged.strategy.is_some());

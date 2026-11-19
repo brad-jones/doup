@@ -29,8 +29,8 @@ impl Person {
 ```
 
 Each field lives in its own pointer, chosen by a `Strategy` (`ArcRwLockStrategy` by default). Pick another for the whole
-class with `#[class(strategy = ArcSwapStrategy)]`, or for a single field by putting the same attribute on it. Mark a
-public field `#[class(readonly)]` to keep its setter private.
+class with `#[class(strategy = ArcSwapStrategy)]`, or for a single field with `#[class_prop(strategy = ...)]`. Mark a
+public field `#[class_prop(readonly)]` to keep its setter private.
 
 See the `class` macro docs for everything that's generated, and [examples/class.rs](examples/class.rs) for a runnable
 example (`cargo run -p galvanize-rs --example class`).

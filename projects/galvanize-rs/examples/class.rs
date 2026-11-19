@@ -39,7 +39,7 @@ pub struct Team {
   pub name: Str,
 
   // Anyone can read the leader, but only `Team` can replace them.
-  #[class(readonly)]
+  #[class_prop(readonly)]
   pub leader: Person,
 }
 

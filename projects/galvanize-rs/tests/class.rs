@@ -175,20 +175,20 @@ impl Strategy for Counting {
 struct AllCounted {
   a: i64,
   b: i64,
-  #[class(strategy = ArcSwapStrategy)]
+  #[class_prop(strategy = ArcSwapStrategy)]
   c: i64,
 }
 
 #[class]
 struct OneCounted {
   a: i64,
-  #[class(strategy = Counting)]
+  #[class_prop(strategy = Counting)]
   b: i64,
 }
 
 #[class(strategy = ArcMutexStrategy)]
 struct Mutexed {
-  #[class(strategy = ArcSwapStrategy)]
+  #[class_prop(strategy = ArcSwapStrategy)]
   pub list: List<i64>,
   pub n: i64,
 }

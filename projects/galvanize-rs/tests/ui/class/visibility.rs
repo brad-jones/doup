@@ -3,7 +3,7 @@ mod model {
 
   #[class]
   pub struct Foo {
-    #[class(readonly)]
+    #[class_prop(readonly)]
     pub id: Str,
     secret: Str,
   }
