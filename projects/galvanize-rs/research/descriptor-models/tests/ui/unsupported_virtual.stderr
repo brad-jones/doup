@@ -1,5 +1,5 @@
-error: virtual methods require a synchronous, safe, non-generic `&self` signature
+error: virtual methods require a safe, non-generic `&self` signature
  --> tests/ui/unsupported_virtual.rs:9:7
   |
-9 |   pub async fn get(&self) -> u64 {
-  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+9 |   pub fn get<T: Default>(&self) -> T {
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

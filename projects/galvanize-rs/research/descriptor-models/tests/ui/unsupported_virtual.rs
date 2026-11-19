@@ -6,8 +6,8 @@ pub struct Bad {}
 #[class_methods]
 impl Bad {
   #[class_virtual]
-  pub async fn get(&self) -> u64 {
-    1
+  pub fn get<T: Default>(&self) -> T {
+    T::default()
   }
 }
 

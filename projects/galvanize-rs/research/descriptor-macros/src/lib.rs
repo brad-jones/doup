@@ -1,5 +1,5 @@
 //! Research-only `#[class]` and `#[class_methods]` attributes.
-//! Descriptors transport ancestor types and virtual method names, not method bodies or runtime state.
+//! Descriptors transport ancestor types, virtual names and asyncness, not method bodies or runtime state.
 #![forbid(unsafe_code)]
 
 use proc_macro::TokenStream;
@@ -8,7 +8,7 @@ use quote::{ToTokens, format_ident, quote, quote_spanned};
 use std::collections::{HashMap, HashSet};
 use syn::{
   Error, Fields, FnArg, GenericArgument, GenericParam, Generics, Ident, ImplItem, ImplItemFn, ItemImpl, ItemStruct,
-  LitBool, Pat, PathArguments, Result, Token, Type, braced, bracketed,
+  LitBool, Pat, PathArguments, Result, ReturnType, Token, Type, braced, bracketed,
   fold::{self, Fold},
   parse::{Parse, ParseStream, Parser},
   parse_quote,
@@ -108,12 +108,37 @@ impl Parse for Input {
 }
 
 #[derive(Clone)]
+struct VirtualMethod {
+  name: Ident,
+  is_async: bool,
+}
+
+impl Parse for VirtualMethod {
+  fn parse(input: ParseStream<'_>) -> Result<Self> {
+    let name = input.parse()?;
+    let is_async: LitBool = input.parse()?;
+    input.parse::<Token![;]>()?;
+    Ok(Self {
+      name,
+      is_async: is_async.value,
+    })
+  }
+}
+
+impl ToTokens for VirtualMethod {
+  fn to_tokens(&self, tokens: &mut Tokens) {
+    let Self { name, is_async } = self;
+    tokens.extend(quote! { #name #is_async; });
+  }
+}
+
+#[derive(Clone)]
 struct Ancestor {
   handle: Type,
   fields: Type,
   data: Type,
   object: Type,
-  methods: Vec<Ident>,
+  methods: Vec<VirtualMethod>,
 }
 
 impl Parse for Ancestor {
@@ -345,7 +370,6 @@ fn method_kind(method: &mut ImplItemFn) -> Result<Kind> {
       .receiver()
       .is_some_and(|r| r.reference.is_some() && r.mutability.is_none() && r.colon_token.is_none());
     if !receiver_ok
-      || sig.asyncness.is_some()
       || sig.unsafety.is_some()
       || sig.constness.is_some()
       || sig.abi.is_some()
@@ -354,7 +378,7 @@ fn method_kind(method: &mut ImplItemFn) -> Result<Kind> {
     {
       return Err(Error::new_spanned(
         sig,
-        "virtual methods require a synchronous, safe, non-generic `&self` signature",
+        "virtual methods require a safe, non-generic `&self` signature",
       ));
     }
     if !matches!(method.vis, syn::Visibility::Public(_)) {
@@ -387,6 +411,59 @@ fn arguments(method: &ImplItemFn) -> Result<Vec<Ident>> {
       Ok(pattern.ident.clone())
     })
     .collect()
+}
+
+struct FutureLifetime;
+
+impl Fold for FutureLifetime {
+  fn fold_type_reference(&mut self, mut ty: syn::TypeReference) -> syn::TypeReference {
+    if ty.lifetime.is_none() {
+      ty.lifetime = Some(parse_quote!('__class_future));
+    }
+    fold::fold_type_reference(self, ty)
+  }
+
+  fn fold_lifetime(&mut self, lifetime: syn::Lifetime) -> syn::Lifetime {
+    if lifetime.ident == "_" {
+      parse_quote!('__class_future)
+    } else {
+      lifetime
+    }
+  }
+
+  // Function signatures have their own lifetime binders, unlike references captured by the future.
+  fn fold_type_bare_fn(&mut self, ty: syn::TypeBareFn) -> syn::TypeBareFn {
+    ty
+  }
+
+  fn fold_path_arguments(&mut self, args: PathArguments) -> PathArguments {
+    if matches!(args, PathArguments::Parenthesized(_)) {
+      args
+    } else {
+      fold::fold_path_arguments(self, args)
+    }
+  }
+}
+
+fn object_signature(method: &ImplItemFn, receiver: &Type) -> Tokens {
+  let name = &method.sig.ident;
+  let params = method.sig.inputs.iter().skip(1);
+  let output = &method.sig.output;
+  if method.sig.asyncness.is_none() {
+    return quote! { fn #name(&self, __this: &#receiver, #(#params),*) #output };
+  }
+  let params = params.cloned().map(|arg| FutureLifetime.fold_fn_arg(arg));
+  let output = match output {
+    ReturnType::Default => quote!(()),
+    ReturnType::Type(_, ty) => quote!(#ty),
+  };
+  quote! {
+    fn #name<'__class_future>(
+      &'__class_future self, __this: &'__class_future #receiver, #(#params),*
+    ) -> ::core::pin::Pin<::std::boxed::Box<
+      dyn ::core::future::Future<Output = #output> + ::core::marker::Send + '__class_future
+    >>
+  }
 }
 
 fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
@@ -446,7 +523,7 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
   let mut inherited_methods = HashMap::new();
   for (index, ancestor) in ancestors.iter().enumerate() {
     for method in &ancestor.methods {
-      inherited_methods.insert(method.to_string(), index);
+      inherited_methods.insert(method.name.to_string(), (index, method.is_async));
     }
   }
   let mut generated_names: HashSet<String> = ["from_data", "is", "downcast", "upcast", "ptr_eq"]
@@ -502,6 +579,12 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
           "no ancestor declares this virtual method",
         ));
       }
+      Kind::Override if inherited_methods[&label].1 != method.sig.asyncness.is_some() => {
+        return Err(Error::new_spanned(
+          &method.sig,
+          "override must match the inherited method's asyncness",
+        ));
+      }
       _ => {}
     }
     methods.push((kind, method));
@@ -518,7 +601,10 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
   let own_virtuals: Vec<_> = methods
     .iter()
     .filter(|(kind, _)| *kind == Kind::Virtual)
-    .map(|(_, method)| method.sig.ident.clone())
+    .map(|(_, method)| VirtualMethod {
+      name: method.sig.ident.clone(),
+      is_async: method.sig.asyncness.is_some(),
+    })
     .collect();
   let own = Ancestor {
     handle: own_handle.clone(),
@@ -547,13 +633,17 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
       let method_name = &method.sig.ident;
       let body_name = format_ident!("__body_{method_name}");
       let args = arguments(method)?;
-      let params = method.sig.inputs.iter().skip(1);
-      let output = &method.sig.output;
+      let signature = object_signature(method, &own_handle);
+      let body = if method.sig.asyncness.is_some() {
+        quote!(::std::boxed::Box::pin(__this.#body_name(#(#args),*)))
+      } else {
+        quote!(__this.#body_name(#(#args),*))
+      };
       Ok(quote! {
-        fn #method_name(&self, __this: &#own_handle, #(#params),*) #output {
+        #signature {
           match <Self as #own_object>::__parent(self) {
             Some(parent) => parent.#method_name(__this, #(#args),*),
-            None => __this.#body_name(#(#args),*),
+            None => #body,
           }
         }
       })
@@ -595,21 +685,36 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
       let overrides = methods
         .iter()
         .filter(|(kind, method)| {
-          *kind == Kind::Override && inherited_methods.get(&method.sig.ident.to_string()) == Some(&index)
+          *kind == Kind::Override
+            && inherited_methods
+              .get(&method.sig.ident.to_string())
+              .map(|(index, _)| *index)
+              == Some(index)
         })
         .map(|(_, method)| {
           let method_name = &method.sig.ident;
           let body_name = format_ident!("__body_{method_name}");
           let receiver = &ancestor.handle;
-          let params = method.sig.inputs.iter().skip(1);
-          let output = &method.sig.output;
+          let signature = object_signature(method, receiver);
           let args = arguments(method)?;
+          let view = quote! {
+            __this.downcast::<#own_handle>()
+              .expect("override receiver must belong to its declaring class")
+          };
+          let body = if method.sig.asyncness.is_some() {
+            quote! {
+              ::std::boxed::Box::pin(async move {
+                let view = #view;
+                view.#body_name(#(#args),*).await
+              })
+            }
+          } else {
+            quote!(#view.#body_name(#(#args),*))
+          };
           Ok(quote! {
             #[inline]
-            fn #method_name(&self, __this: &#receiver, #(#params),*) #output {
-              __this.downcast::<#own_handle>()
-                .expect("override receiver must belong to its declaring class")
-                .#body_name(#(#args),*)
+            #signature {
+              #body
             }
           })
         })
@@ -637,6 +742,7 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
     body.vis = syn::Visibility::Inherited;
     handle_methods.push(quote!(#body));
     let args = arguments(method)?;
+    let await_call = method.sig.asyncness.map(|_| quote!(.await));
     let receiver = &method
       .sig
       .receiver()
@@ -647,12 +753,12 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
       let attrs = &method.attrs;
       handle_methods.push(quote! {
         #(#attrs)*
-        pub #sig { <_ as #own_object>::#method_name(#receiver.__obj.as_ref(), #receiver, #(#args),*) }
+        pub #sig { <_ as #own_object>::#method_name(#receiver.__obj.as_ref(), #receiver, #(#args),*) #await_call }
       });
     } else {
       let mut sig = method.sig.clone();
       sig.ident = format_ident!("super_{method_name}");
-      let ancestor = &ancestors[inherited_methods[&method_name.to_string()]];
+      let ancestor = &ancestors[inherited_methods[&method_name.to_string()].0];
       let declaring_trait = &ancestor.object;
       let parent_fields = &parent
         .ok_or_else(|| Error::new_spanned(method, "override requires parent"))?
@@ -661,7 +767,7 @@ fn generate(input: Input, ancestors: Vec<Ancestor>) -> Result<Tokens> {
         #sig {
           <#parent_fields as #declaring_trait>::#method_name(
             &<_ as #own_object>::__fields(#receiver.__obj.as_ref()).base, #receiver, #(#args),*
-          )
+          ) #await_call
         }
       });
     }

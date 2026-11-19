@@ -153,3 +153,100 @@ impl<T> Tagged<T> {
     self.super_get()
   }
 }
+
+async fn suspend_once() {
+  let mut suspended = false;
+  std::future::poll_fn(|cx| {
+    if suspended {
+      std::task::Poll::Ready(())
+    } else {
+      suspended = true;
+      cx.waker().wake_by_ref();
+      std::task::Poll::Pending
+    }
+  })
+  .await;
+}
+
+/// Async root used by the cross-crate tests, separate from the synchronous benchmark fixtures.
+#[class(open)]
+pub struct AsyncAnimal {
+  pub name: String,
+}
+
+#[class_methods]
+impl AsyncAnimal {
+  pub fn init(name: &str) -> AsyncAnimalData {
+    AsyncAnimalData { name: name.into() }
+  }
+
+  #[class_virtual]
+  pub fn sound(&self) -> String {
+    "...".into()
+  }
+
+  #[class_virtual]
+  pub async fn speak(&self, prefix: &str) -> Result<String, &'static str> {
+    suspend_once().await;
+    if prefix == "fail" {
+      return Err("requested failure");
+    }
+    Ok(format!("{prefix}{}:{}", self.name(), self.sound()))
+  }
+
+  #[class_virtual]
+  pub async fn append(&self, prefix: Option<&str>, output: &mut String, convert: fn(&str) -> String) {
+    suspend_once().await;
+    if let Some(prefix) = prefix {
+      output.push_str(&convert(prefix));
+    }
+    output.push_str(&self.sound());
+  }
+
+  pub async fn describe(&self, prefix: &str) -> Result<String, &'static str> {
+    Ok(format!("[{}]", self.speak(prefix).await?))
+  }
+}
+
+/// Async override with a real suspension and an awaited lexical super call.
+#[class(open, extends = AsyncAnimal)]
+pub struct AsyncDog {
+  pub adjective: String,
+}
+
+#[class_methods]
+impl AsyncDog {
+  pub fn init(name: &str) -> AsyncDogData {
+    AsyncDogData {
+      base: AsyncAnimal::init(name),
+      adjective: "dog".into(),
+    }
+  }
+
+  #[class_override]
+  pub fn sound(&self) -> String {
+    "woof".into()
+  }
+
+  #[class_override]
+  pub async fn speak(&self, prefix: &str) -> Result<String, &'static str> {
+    let parent = self.super_speak(prefix).await?;
+    suspend_once().await;
+    Ok(format!("{parent}/{}", self.adjective()))
+  }
+}
+
+/// Generic async root for typed return values and cancellation tests.
+#[class(open)]
+pub struct AsyncBoxed<T> {
+  pub value: T,
+}
+
+#[class_methods]
+impl<T> AsyncBoxed<T> {
+  #[class_virtual]
+  pub async fn get(&self) -> T {
+    suspend_once().await;
+    self.value()
+  }
+}

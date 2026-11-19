@@ -19,7 +19,8 @@ The important qualification is that this is a third **macro/design combination**
 - The compiler generates the safe implementation's ancestor traits and forwarding code.
 - Handles still grow with depth, and overrides still reconstruct typed owning handles.
 - There is no runtime descriptor lookup or generic-vtable registry.
-- Measurements land in the same range as the handwritten safe implementation.
+- Synchronous measurements land in the same range as the handwritten safe implementation. Async virtual methods are now
+  also supported, with boxed `Send` futures as described in section 4.1.
 
 The trade is **macro complexity instead of unsafe object-layout machinery**, not free performance.
 
@@ -126,9 +127,9 @@ The expansion pipeline is:
 5. **The generator emits the safe implementation**, selects the declaring ancestor for each override, and publishes the
    subclass's extended descriptor.
 
-A descriptor record contains the defining class's handle, storage, data and object-trait types, plus the names of the
-virtual methods it declares. It does **not** duplicate method bodies or signatures. Trait definitions keep their
-signatures in the defining crate; Rust checks an override against that trait.
+A descriptor record contains the defining class's handle, storage, data and object-trait types, plus the names and
+asyncness of the virtual methods it declares. It does **not** duplicate method bodies or signatures. Trait definitions
+keep their signatures in the defining crate; Rust checks an override against that trait.
 
 Descriptors exist at macro-expansion time. They do not become an object header, runtime map, lock, or downcast cache.
 
@@ -198,7 +199,7 @@ weight call still reaches the most-derived override.
 There are **no raw-pointer dereferences, unsafe blocks/impls, representation casts, or manually maintained vtables** in
 this object model. Allocation addresses are only compared or formatted through safe APIs. The macro implementation,
 fixtures, tests, and example forbid unsafe code. Since that lint alone is not an audit of proc-macro output, the actual
-expanded six-class fixture was also inspected: it contains no `unsafe` keyword.
+expanded model fixtures were also inspected: they contain no `unsafe` keyword.
 
 No Miri run was needed or performed for this spike. A nightly compiler was used only to inspect expanded Rust; the
 implementation builds and tests on the pinned **stable Rust 1.100.0** toolchain.
@@ -206,7 +207,84 @@ implementation builds and tests on the pinned **stable Rust 1.100.0** toolchain.
 “Safe” here describes this implementation and its generated runtime, not a claim that the standard library or proc-macro
 dependencies contain no internal unsafe code.
 
-### What happens to the previous review's defects?
+### 4.1 Async virtual methods and overrides
+
+The [async fixtures](../../projects/galvanize-rs/research/descriptor-models/src/lib.rs) and
+[cross-crate async tests](../../projects/galvanize-rs/research/descriptor-models/tests/async_inheritance.rs) now
+demonstrate ordinary `async fn` syntax on the existing markers:
+
+```rust
+#[class_override]
+pub async fn speak(&self, prefix: &str) -> Result<String, &'static str> {
+  let parent = self.super_speak(prefix).await?;
+  Ok(format!("{parent}/{}", self.adjective()))
+}
+```
+
+Callers use `.await` as usual. Non-virtual async methods can call virtual async methods; the calls remain late-bound. An
+inherited override, a further override in another crate, and an awaited `super` chain all retain the original object's
+identity. An override must match whether the ancestor declared the method sync or async; the descriptor checks this and
+reports a compile error on a mismatch.
+
+#### Dyn-compatible lowering
+
+Native async methods cannot directly supply the trait-object dispatch used by this runtime. Internally, the generator
+lowers an async object-trait method to this shape:
+
+```rust
+fn speak<'f>(
+  &'f self,
+  this: &'f AsyncAnimal,
+  prefix: &'f str,
+) -> Pin<Box<dyn Future<Output = Result<String, &'static str>> + Send + 'f>>;
+```
+
+The public handle method and the user's body remain `async fn`; only the hidden dispatch interface is boxed. Elided
+input references and `'_` input lifetimes are tied to the lifetime of the returned future. Function-pointer argument
+signatures keep their own lifetime binders rather than being rewritten to that capture lifetime.
+
+For an override, the boxed async block reconstructs and retains its typed handle while awaiting the user's body. This
+avoids returning a future that borrows a temporary handle which has already been dropped. No unsafe code or
+`async-trait` dependency is needed. The generated runtime is executor-independent; Tokio is a test-only dependency.
+
+#### Required `Send` contract
+
+The chosen contract is **`Send` futures**, consistent with the thread-safe class model:
+
+- Holding an `Rc` or another non-Send value across an await is rejected at compile time.
+- Borrowed inputs work; the future is not required to be `'static`.
+- `tokio::spawn` additionally needs a `'static` future and a Send, `'static` output. The tests move an owning class
+  handle and its input into an `async move` block before spawning it.
+- This spike does not offer a local-only/`?Send` alternative.
+
+#### What was exercised
+
+The async tests use a future that actually returns `Poll::Pending`, not just an async wrapper around an immediate value.
+They verify:
+
+- Cross-crate overrides and inherited overrides through an ancestor view.
+- Awaited `super` calls and a base async body calling a further-overridden synchronous virtual method.
+- Borrowed strings, `Option<&str>`, mutable output references, function-pointer callbacks, and a unit return.
+- `Result`/`?` propagation and a normal non-virtual async method calling the overridden method.
+- Generic class return types, renamed generic parents, and `tokio::spawn` on a multithreaded runtime.
+- Lazy execution: a field changed after creating the future is observed when the future is awaited.
+- Cancellation after suspension: dropping the future releases its retained value and temporary class views. Dropping the
+  remaining owner then releases the allocation. Cancellation does not promise to roll back earlier side effects.
+
+Compile-fail tests check non-Send futures and sync/async override mismatches in both directions. Method-level generics
+(including lifetime parameters), borrowed-return APIs, and `Self`-dependent virtual signatures remain outside this
+spike's supported surface. Lifetimes hidden behind type aliases may need explicit `'_` arguments.
+
+#### Cost
+
+Each entered async virtual body is represented by a boxed future. Forwarding an unoverridden method reuses the parent's
+future rather than boxing at every ancestor. An override that awaits `super` also creates the parent's boxed future; the
+safe runtime's handle/refcount work remains.
+
+No async timing measurements were taken. **The nanosecond figures below are synchronous benchmarks, not async-call
+costs.** Async support establishes correctness and usable syntax, not allocation-free dynamic dispatch.
+
+### 4.2 What happens to the previous review's defects?
 
 - There is no safe raw-handle reconstruction API capable of reinterpreting Animal storage as Dog storage.
 - Generic handles retain the actual typed trait-object/storage relationships. The function-pointer covariance coercions
@@ -294,8 +372,11 @@ annotation burden while preserving **both its strengths and its weaknesses**.
 - Renamed and nested generic type arguments.
 - Shared mutation through ancestor views, retained dynamic identity, failed sibling casts, thread transfer, and
   exactly-once storage destruction without an internal ownership cycle.
-- Compile-fail fixtures for an unknown override, incompatible signature, extending a final class, unsupported async
-  virtual method, and the generic covariance coercions from the review.
+- Async dispatch, suspension, borrowed inputs, generic outputs, error propagation, Send spawning, and cancellation
+  cleanup as detailed in section 4.1.
+- Compile-fail fixtures for an unknown override, incompatible signature, extending a final class, unsupported generic
+  virtual method, non-Send async future, sync/async override mismatch, and the generic covariance coercions from the
+  review.
 - The existing composition class tests and their compile-fail fixtures still pass.
 
 ### Deliberate spike boundaries
@@ -309,9 +390,10 @@ annotation burden while preserving **both its strengths and its weaknesses**.
    name. Dependency renaming/version skew and a public, versioned descriptor protocol are not handled.
 4. **Only type generics.** No class lifetime or const parameters; all type parameters get `Clone + Send + Sync +
    'static` bounds. Bounds belong on the struct, and parent arguments must be supplied explicitly.
-5. **A limited virtual-method surface.** Public synchronous, safe, non-generic `&self` methods with named parameters are
-   supported. No async/generic virtuals, borrowed-return or `Self`-dependent virtual API design, abstract methods,
-   virtual accessors, or protected visibility is claimed.
+5. **A limited virtual-method surface.** Public synchronous or async, safe, non-generic `&self` methods with named
+   parameters are supported. Async methods return boxed Send futures internally (section 4.1). No method-level generics,
+   borrowed-return or `Self`-dependent virtual API design, abstract methods, virtual accessors, or protected visibility
+   is claimed.
 6. **Not the complete production class macro.** No configurable field strategies, readonly/update accessors,
    lifetime-preserving closed classes, dynamic field-rich Debug, heterogeneous equality/hash, or full attribute
    forwarding. Field attributes are currently rejected; class structs accept doc attributes only.
@@ -349,6 +431,9 @@ pixi run --locked cargo run -p galvanize-rs-descriptor-models --example inherita
 
 # Cross-crate behaviour and compile-fail contracts.
 pixi run --locked cargo test -p galvanize-rs-descriptor-models
+
+# Only the async behaviour, suspension, Send and cancellation tests.
+pixi run --locked cargo test -p galvanize-rs-descriptor-models --test async_inheritance
 
 # Run every benchmark once with startup result checks.
 pixi run --locked cargo test -p galvanize-rs --bench inheritance

@@ -1395,6 +1395,7 @@ name = "galvanize-rs-descriptor-models"
 version = "0.0.0"
 dependencies = [
  "galvanize-rs-descriptor-macros",
+ "tokio",
  "trybuild",
 ]
 

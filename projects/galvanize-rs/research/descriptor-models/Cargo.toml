@@ -9,4 +9,5 @@ description = "Generated class fixtures for the safe descriptor inheritance expe
 galvanize-rs-descriptor-macros = { path = "../descriptor-macros" }
 
 [dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
 trybuild = "1.0.125"
