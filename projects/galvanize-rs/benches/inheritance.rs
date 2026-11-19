@@ -30,9 +30,28 @@ use main_design::Class as _;
 static ALLOC: AllocProfiler = AllocProfiler::system();
 
 fn main() {
+  race::<MainDesign>();
+  race::<SafeDesign>();
   verify::<MainDesign>();
   verify::<SafeDesign>();
   divan::main();
+}
+
+/// Threads racing to create the first object of each class, and so its vtable. Must run before anything else
+/// touches the classes. Mostly for Miri (`task miri`), which runs this but none of the benchmarks.
+fn race<D: Design>() {
+  let threads: Vec<_> = (0..THREADS[1])
+    .map(|_| {
+      std::thread::spawn(|| {
+        let a = (**D::puppy(NAME)).clone();
+        let b = (*D::tagged(7)).clone();
+        (D::weight(&a), D::get(&b))
+      })
+    })
+    .collect();
+  for t in threads {
+    assert_eq!(t.join().unwrap(), (7, 7), "race of {}", std::any::type_name::<D>());
+  }
 }
 
 /// Both designs must behave identically, or comparing them is meaningless.

@@ -6,6 +6,11 @@ dotenv: [".env"]
 set: [pipefail]
 shopt: [globstar]
 
+vars:
+  # Miri only ships on nightly, pinned so its results are reproducible. Not every nightly has
+  # Miri, check https://rust-lang.github.io/rustup-components-history/ before bumping.
+  MIRI_TOOLCHAIN: nightly-2026-11-19
+
 tasks:
   init:
     desc: Setup dev env (anything that pixi can't install and setup for us).
@@ -79,6 +84,16 @@ tasks:
       - if: '[ -n "$TARGET" ]'
         cmd: rustup target add {{.TARGET}}
 
+  init:miri:
+    desc: Installs the pinned nightly toolchain with Miri & builds its sysroot (into $MIRI_SYSROOT).
+    deps:
+      - init:rustup:init
+    cmds:
+      - rustup toolchain install {{.MIRI_TOOLCHAIN}} --profile minimal --component miri,rust-src --no-self-update
+      # Idempotent, a no-op when the sysroot is already up to date. Must be run explicitly
+      # because cargo miri won't build a sysroot itself when MIRI_SYSROOT is set.
+      - cargo +{{.MIRI_TOOLCHAIN}} miri setup
+
   update:
     desc: Interactively updates our dependencies to their latest versions.
     summary: |
@@ -139,6 +154,41 @@ tasks:
       - init:rustup
     cmds:
       - cargo bench -p galvanize-rs {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
+
+  miri:
+    desc: Runs the unsafe code under Miri to catch UB. Pass a standalone .rs file to check just that.
+    summary: |
+      Without args, checks the "true" inheritance spike (docs/research/galvanize-rs-true-inheritance-spike.rs)
+      and galvanize-rs's inheritance bench, whose benchmarks Miri can't run, but its race & verify checks it does.
+      With args, eg. `task miri -- path/to/file.rs`, checks that standalone file instead.
+
+      Everything is run under both of Miri's aliasing models (Stacked & Tree Borrows), with strict
+      provenance, across several thread scheduling seeds. Extra flags can be added via MIRIFLAGS.
+    deps:
+      - init:miri
+    cmds:
+      - task: miri:run
+        vars:
+          CMD: run
+          ARGS: '--manifest-path {{.CLI_ARGS | default "docs/research/galvanize-rs-true-inheritance-spike.rs"}}'
+      - if: '[ -z "{{.CLI_ARGS}}" ]'
+        task: miri:run
+        vars:
+          CMD: test
+          ARGS: -p galvanize-rs --bench inheritance
+
+  miri:run:
+    internal: true
+    requires:
+      vars: [CMD, ARGS]
+    env:
+      # cargo-script lets cargo (and thus cargo miri) treat a lone .rs file as a package.
+      CARGO_UNSTABLE_SCRIPT: "true"
+    cmds:
+      - for: ["", "-Zmiri-tree-borrows"]
+        cmd: >-
+          MIRIFLAGS="-Zmiri-strict-provenance -Zmiri-many-seeds=0..8 {{.ITEM}} $MIRIFLAGS"
+          cargo +{{.MIRI_TOOLCHAIN}} miri {{.CMD}} -q {{.ARGS}}
 
   run:cli:
     desc: Runs the cli using `cargo run`.

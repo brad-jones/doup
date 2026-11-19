@@ -123,10 +123,10 @@ fn vtable_for<K: 'static, V: Send + Sync + 'static>(build: impl FnOnce() -> V) -
   if let Some(v) = REGISTRY.read().unwrap().get(&id) {
     return v.downcast_ref().unwrap();
   }
-  // Built outside the lock because building a subclass's vtable looks up its parent's. Racing threads leak
-  // a duplicate, and the first one registered wins.
-  let built: &'static (dyn Any + Send + Sync) = Box::leak(Box::new(build()));
-  let v = *REGISTRY.write().unwrap().entry(id).or_insert(built);
+  // Built outside the lock because building a subclass's vtable looks up its parent's. Racing threads may
+  // each build one, the first registered wins and is leaked, the others are dropped.
+  let built = Box::new(build());
+  let v = *REGISTRY.write().unwrap().entry(id).or_insert_with(|| Box::leak(built));
   v.downcast_ref().unwrap()
 }
 

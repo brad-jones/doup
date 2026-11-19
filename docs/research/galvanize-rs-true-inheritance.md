@@ -5,7 +5,7 @@ Status: **Research**. Nothing here is scheduled. It describes what it would take
 
 A hand-expanded prototype of the proposed design lives in
 [galvanize-rs-true-inheritance-spike.rs](galvanize-rs-true-inheritance-spike.rs). It's standalone, compiles on our
-pinned stable toolchain, and runs. It hasn't been checked under Miri yet.
+pinned stable toolchain, and runs. It passes Miri (`task miri`), see [4.10](#410-unsafe-inventory-and-soundness).
 
 A fully safe variant of this design, with no `unsafe` at all, is described in a companion document,
 [galvanize-rs-true-inheritance-safe.md](galvanize-rs-true-inheritance-safe.md). It trades `unsafe` for extra
@@ -342,6 +342,8 @@ expect from inheritance.
 
 - Vtables of generic classes (`fn(&Boxed<T>) -> T`) can't be `static`s. The prototype uses a `TypeId`-keyed registry of
   leaked `&'static` vtables. Non-generic classes can use a plain `LazyLock` static instead.
+- A vtable is built outside the registry's lock, because building a subclass's vtable looks up its parent's. Threads
+  racing to build the same one must drop the losers rather than leak them, or Miri reports the leak.
 - The registry costs a read lock plus a `HashMap` lookup, about 15 ns, on every construction of a generic class. `super`
   calls into a generic parent pay it too, because they fetch the parent's vtable with `Parent::<T>::vtable()`. Each
   vtable could store a pointer to its parent's to avoid that. The numbers come from the safe variant's section 3.1.
@@ -372,7 +374,9 @@ All `unsafe` lives in the runtime crate or in code the macro generates from fixe
 | `unsafe trait Class`                   | Only the macro implements it. Hand-written impls would break the invariants.                                              |
 
 Any implementation must run its test suite under **Miri** (`cargo +nightly miri test`) and keep it in CI. The prototype
-hasn't been run under Miri yet.
+passes `task miri`, which runs it under both Stacked and Tree Borrows, with strict provenance, across 8 thread
+scheduling seeds each. That only covers the paths its `main` exercises (upcasts, overrides, `super` calls, downcasts and
+sending a handle to another thread), not every invariant in the table above.
 
 A fully safe variant is possible in two ways:
 

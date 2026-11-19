@@ -10,7 +10,8 @@ needs to be understood in detail to read it:
 - the **safe variant**, [galvanize-rs-true-inheritance-safe.md](galvanize-rs-true-inheritance-safe.md), with one trait
   per class, handles that grow with depth, and no `unsafe`.
 
-It assumes the main design passes Miri. Without that, the question is moot.
+It assumes the main design passes Miri. Without that, the question is moot. The prototype does (`task miri`), so far for
+the paths its `main` exercises.
 
 ## TL;DR
 

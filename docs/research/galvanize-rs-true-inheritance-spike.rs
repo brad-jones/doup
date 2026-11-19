@@ -9,7 +9,8 @@
 //! /tmp/spike
 //! ```
 //!
-//! It has not been checked under Miri yet, which any real implementation must be.
+//! It passes Miri (`pixi run -- task miri`) under Stacked & Tree Borrows with strict provenance.
+//! Any real implementation must keep its test suite under Miri too.
 #![allow(dead_code)]
 use std::any::{Any, TypeId};
 use std::ops::{Deref, DerefMut};

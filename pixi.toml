@@ -14,7 +14,9 @@ bun = ">=1.4.4,<2"
 [target.unix.activation.env]
 PATH = "$PIXI_PROJECT_ROOT/scripts:$PATH"
 USER_MEMORY_FILE_PATH = "$HOME/.config/mcp-memory/memory.jsonl"
+MIRI_SYSROOT = "$PIXI_PROJECT_ROOT/.pixi/envs/default/.miri"
 
 [target.win.activation.env]
 PATH = "%PIXI_PROJECT_ROOT%\\scripts;%PATH%"
 USER_MEMORY_FILE_PATH = "%USERPROFILE%\\.config\\mcp-memory\\memory.jsonl"
+MIRI_SYSROOT = "%PIXI_PROJECT_ROOT%\\.pixi\\envs\\default\\.miri"
