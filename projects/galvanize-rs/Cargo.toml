@@ -18,3 +18,7 @@ trybuild = "1.0.125"
 [[bench]]
 name = "pointers"
 harness = false
+
+[[bench]]
+name = "inheritance"
+harness = false

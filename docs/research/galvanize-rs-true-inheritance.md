@@ -8,8 +8,11 @@ A hand-expanded prototype of the proposed design lives in
 pinned stable toolchain, and runs. It hasn't been checked under Miri yet.
 
 A fully safe variant of this design, with no `unsafe` at all, is described in a companion document,
-[galvanize-rs-true-inheritance-safe.md](galvanize-rs-true-inheritance-safe.md). It trades `unsafe` for extra annotations
-and larger handles. Read this document first, as the companion only describes what changes.
+[galvanize-rs-true-inheritance-safe.md](galvanize-rs-true-inheritance-safe.md). It trades `unsafe` for extra
+annotations, larger handles and slower overrides. Read this document first, as the companion only describes what
+changes. Its section 3.1 benchmarks both designs, and
+[galvanize-rs-true-inheritance-comparison.md](galvanize-rs-true-inheritance-comparison.md) compares them at a high
+level, with a recommendation.
 
 ## TL;DR
 
@@ -274,7 +277,9 @@ This line is the crux of the design, and the prototype confirms it works:
 - The closure's parameter type (`&Animal`) is inferred from the slot's `fn` pointer type, so the macro never names the
   declaring class. A signature that doesn't match the virtual method is a type error on that line.
 - The thunk converts `this` to a `Puppy` view without checking. That's sound because only `Puppy` objects ever point at
-  this vtable. A checked `downcast` would work too, at the cost of a `TypeId` walk per call.
+  this vtable, or a subclass's copy of it. A checked `downcast` would work too, at the cost of a `TypeId` walk plus an
+  `Arc` increment and decrement per call. That's about 5 ns, against about 1 ns for a whole unchecked call. The spike
+  takes this shortcut. The benchmark fork doesn't.
 
 The generated method on the handle just dispatches through the vtable:
 
@@ -336,8 +341,10 @@ expect from inheritance.
 ### 4.8 Generics
 
 - Vtables of generic classes (`fn(&Boxed<T>) -> T`) can't be `static`s. The prototype uses a `TypeId`-keyed registry of
-  leaked `&'static` vtables, which costs a read lock on construction. Non-generic classes can use a plain `LazyLock`
-  static instead.
+  leaked `&'static` vtables. Non-generic classes can use a plain `LazyLock` static instead.
+- The registry costs a read lock plus a `HashMap` lookup, about 15 ns, on every construction of a generic class. `super`
+  calls into a generic parent pay it too, because they fetch the parent's vtable with `Parent::<T>::vtable()`. Each
+  vtable could store a pointer to its parent's to avoid that. The numbers come from the safe variant's section 3.1.
 - `TypeId` needs `T: 'static`, and lifetimes on open classes are impossible. Non-open classes keep today's full generics
   support.
 - The rest of the existing generics machinery (`Clone` bounds, `XData` generics, strategy parameters) carries over.
@@ -457,8 +464,9 @@ associated types, autoderef on vtable fields and closure signature inference.
 ## 8. Open questions
 
 1. Section 4's design, or the [fully safe variant](galvanize-rs-true-inheritance-safe.md)? The `unsafe` in section 4 is
-   invisible to users, while the safe variant's annotations aren't. The safe variant's own open questions are listed in
-   its section 5.
+   invisible to users, while the safe variant's annotations aren't. At runtime, the designs differ mostly in overrides:
+   about 1 ns here against 25–60 ns in the safe variant (its section 3.1). The safe variant's own open questions are
+   listed in its section 5.
 2. Does Option B **replace** Option A's `extends`, or do both exist (e.g. Option A renamed to `#[class(delegate =
    Base)]`)? Replacing is clearer, keeping both avoids the `Send + Sync + 'static` restrictions for simple reuse.
 3. One `#[class_methods]` block per class, or a single function-like `class! { struct …; impl … }` that sees both? The
