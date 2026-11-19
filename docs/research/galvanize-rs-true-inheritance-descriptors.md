@@ -2,6 +2,14 @@
 
 Status: **Executable research spike**, not a replacement for the current class API. Tested on 2026-11-19.
 
+Follow-up: the [hardened main design](galvanize-rs-true-inheritance-hardened.md) is now the fourth benchmark candidate.
+Both generated candidates use the same
+[fixture declarations](../../projects/galvanize-rs/research/inheritance-fixtures.rs) and
+[synchronous parity scenarios](../../projects/galvanize-rs/research/inheritance-tests.rs). Common macro machinery and
+the unchanged safe generator now live in
+[inheritance-macro-support](../../projects/galvanize-rs/research/inheritance-macro-support/); the descriptor proc-macro
+package remains its entry point. The three-design measurements below are historical and have not been rewritten.
+
 This implements the third candidate identified in the
 [defensive review](galvanize-rs-true-inheritance-defensive-review.md): the
 [safe object model](galvanize-rs-true-inheritance-safe.md), with compile-time descriptors supplying the ancestry and

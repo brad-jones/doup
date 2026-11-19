@@ -9,6 +9,5 @@ description = "Research-only safe inheritance macros with cross-crate class desc
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.107"
+galvanize-rs-inheritance-macro-support = { path = "../inheritance-macro-support" }
 quote = "1.0.47"
-syn = { version = "2.0.119", features = ["full", "fold"] }

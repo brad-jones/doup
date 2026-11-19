@@ -1,6 +1,10 @@
 //! Bench-owned fork of `docs/research/galvanize-rs-true-inheritance-spike.rs`, the design in
 //! `galvanize-rs-true-inheritance.md`.
 //!
+//! Historical, known-unsound prototype: safe raw reconstruction permits UB and generic handles
+//! violate invariance. Retained unchanged as a comparison/negative control, not a usable API.
+//! See the defensive review and `galvanize-rs-true-inheritance-hardened.md` for the separate repair.
+//!
 //! It follows the design document where the spike took shortcuts:
 //!
 //! - Override thunks view `this` as the overriding class without checking (section 4.4), instead of a

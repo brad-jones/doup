@@ -1,0 +1,11 @@
+error[E0200]: the trait `Class` requires an `unsafe impl` declaration
+ --> tests/ui/safe_class_impl.rs:6:1
+  |
+6 | impl Class for Forged {
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: the trait `Class` enforces invariants that the compiler can't check. Review the trait documentation and make sure this implementation upholds those invariants before adding the `unsafe` keyword
+help: add `unsafe` to this trait implementation
+  |
+6 | unsafe impl Class for Forged {
+  | ++++++

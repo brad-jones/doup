@@ -1,0 +1,247 @@
+/// Root of the benchmark hierarchy.
+#[class(open)]
+pub struct Animal {
+  pub name: String,
+  pub age: u64,
+}
+
+#[class_methods]
+impl Animal {
+  pub fn new(name: &str) -> Self {
+    Self::from_data(Self::init(name))
+  }
+
+  pub fn init(name: &str) -> AnimalData {
+    AnimalData {
+      name: name.into(),
+      age: 3,
+    }
+  }
+
+  #[class_virtual]
+  pub fn speak(&self) -> String {
+    "...".into()
+  }
+
+  #[class_virtual]
+  pub fn legs(&self) -> u64 {
+    4
+  }
+
+  #[class_virtual]
+  pub fn weight(&self) -> u64 {
+    10
+  }
+
+  pub fn describe(&self) -> String {
+    format!("{} says {}", self.name(), self.speak())
+  }
+}
+
+/// An open subclass; only its immediate parent is named.
+#[class(open, extends = Animal)]
+pub struct Dog {
+  pub tricks: usize,
+}
+
+#[class_methods]
+impl Dog {
+  pub fn new(name: &str) -> Self {
+    Self::from_data(Self::init(name))
+  }
+
+  pub fn init(name: &str) -> DogData {
+    DogData {
+      base: Animal::init(name),
+      tricks: 0,
+    }
+  }
+
+  #[class_override]
+  pub fn speak(&self) -> String {
+    "Woof".into()
+  }
+
+  #[class_override]
+  pub fn weight(&self) -> u64 {
+    30
+  }
+
+  #[class_virtual]
+  pub fn bark_volume(&self) -> u64 {
+    8
+  }
+}
+
+/// A final subclass overriding methods declared at two different levels.
+#[class(extends = Dog)]
+pub struct Puppy {}
+
+#[class_methods]
+impl Puppy {
+  pub fn new(name: &str) -> Self {
+    Self::from_data(PuppyData { base: Dog::init(name) })
+  }
+
+  #[class_override]
+  pub fn speak(&self) -> String {
+    format!("{} (but squeakier)", self.super_speak())
+  }
+
+  #[class_override]
+  pub fn weight(&self) -> u64 {
+    self.super_weight() / 4
+  }
+
+  #[class_override]
+  pub fn bark_volume(&self) -> u64 {
+    self.super_bark_volume() / 2
+  }
+}
+
+/// A sibling that inherits its parent's implementations unchanged.
+#[class(extends = Dog)]
+pub struct Beagle {}
+
+#[class_methods]
+impl Beagle {
+  pub fn new(name: &str) -> Self {
+    Self::from_data(BeagleData { base: Dog::init(name) })
+  }
+}
+
+/// Generic root; the spike supplies Clone + Send + Sync + 'static bounds.
+#[class(open)]
+pub struct Boxed<T> {
+  pub value: T,
+}
+
+#[class_methods]
+impl<T> Boxed<T> {
+  pub fn new(value: T) -> Self {
+    Self::from_data(BoxedData { value })
+  }
+
+  #[class_virtual]
+  pub fn get(&self) -> T {
+    self.value()
+  }
+}
+
+/// Generic final subclass with a lexical super call.
+#[class(extends = Boxed<T>)]
+pub struct Tagged<T> {
+  pub tag: u64,
+}
+
+#[class_methods]
+impl<T> Tagged<T> {
+  pub fn new(value: T) -> Self {
+    Self::from_data(TaggedData {
+      base: BoxedData { value },
+      tag: 0,
+    })
+  }
+
+  #[class_override]
+  pub fn get(&self) -> T {
+    self.super_get()
+  }
+}
+
+async fn suspend_once() {
+  let mut suspended = false;
+  std::future::poll_fn(|cx| {
+    if suspended {
+      std::task::Poll::Ready(())
+    } else {
+      suspended = true;
+      cx.waker().wake_by_ref();
+      std::task::Poll::Pending
+    }
+  })
+  .await;
+}
+
+/// Async root used by the cross-crate tests, separate from the synchronous benchmark fixtures.
+#[class(open)]
+pub struct AsyncAnimal {
+  pub name: String,
+}
+
+#[class_methods]
+impl AsyncAnimal {
+  pub fn init(name: &str) -> AsyncAnimalData {
+    AsyncAnimalData { name: name.into() }
+  }
+
+  #[class_virtual]
+  pub fn sound(&self) -> String {
+    "...".into()
+  }
+
+  #[class_virtual]
+  pub async fn speak(&self, prefix: &str) -> Result<String, &'static str> {
+    suspend_once().await;
+    if prefix == "fail" {
+      return Err("requested failure");
+    }
+    Ok(format!("{prefix}{}:{}", self.name(), self.sound()))
+  }
+
+  #[class_virtual]
+  pub async fn append(&self, prefix: Option<&str>, output: &mut String, convert: fn(&str) -> String) {
+    suspend_once().await;
+    if let Some(prefix) = prefix {
+      output.push_str(&convert(prefix));
+    }
+    output.push_str(&self.sound());
+  }
+
+  pub async fn describe(&self, prefix: &str) -> Result<String, &'static str> {
+    Ok(format!("[{}]", self.speak(prefix).await?))
+  }
+}
+
+/// Async override with a real suspension and an awaited lexical super call.
+#[class(open, extends = AsyncAnimal)]
+pub struct AsyncDog {
+  pub adjective: String,
+}
+
+#[class_methods]
+impl AsyncDog {
+  pub fn init(name: &str) -> AsyncDogData {
+    AsyncDogData {
+      base: AsyncAnimal::init(name),
+      adjective: "dog".into(),
+    }
+  }
+
+  #[class_override]
+  pub fn sound(&self) -> String {
+    "woof".into()
+  }
+
+  #[class_override]
+  pub async fn speak(&self, prefix: &str) -> Result<String, &'static str> {
+    let parent = self.super_speak(prefix).await?;
+    suspend_once().await;
+    Ok(format!("{parent}/{}", self.adjective()))
+  }
+}
+
+/// Generic async root for typed return values and cancellation tests.
+#[class(open)]
+pub struct AsyncBoxed<T> {
+  pub value: T,
+}
+
+#[class_methods]
+impl<T> AsyncBoxed<T> {
+  #[class_virtual]
+  pub async fn get(&self) -> T {
+    suspend_once().await;
+    self.value()
+  }
+}

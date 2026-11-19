@@ -1377,6 +1377,7 @@ dependencies = [
  "divan",
  "galvanize-rs-descriptor-models",
  "galvanize-rs-macros",
+ "galvanize-rs-main-models",
  "tokio",
  "trybuild",
 ]
@@ -1385,9 +1386,8 @@ dependencies = [
 name = "galvanize-rs-descriptor-macros"
 version = "0.0.0"
 dependencies = [
- "proc-macro2",
+ "galvanize-rs-inheritance-macro-support",
  "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -1400,6 +1400,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "galvanize-rs-inheritance-macro-support"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "galvanize-rs-macros"
 version = "0.1.0"
 dependencies = [
@@ -1408,6 +1417,30 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
+
+[[package]]
+name = "galvanize-rs-main-macros"
+version = "0.0.0"
+dependencies = [
+ "galvanize-rs-inheritance-macro-support",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "galvanize-rs-main-models"
+version = "0.0.0"
+dependencies = [
+ "galvanize-rs-main-macros",
+ "galvanize-rs-main-runtime",
+ "tokio",
+ "trybuild",
+]
+
+[[package]]
+name = "galvanize-rs-main-runtime"
+version = "0.0.0"
 
 [[package]]
 name = "generic-array"

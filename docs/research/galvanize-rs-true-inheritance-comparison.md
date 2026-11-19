@@ -7,6 +7,10 @@ executable [safe descriptor design](galvanize-rs-true-inheritance-descriptors.md
 separate attributes without unsafe runtime code; see its write-up for the expanded three-design comparison and
 limitations.
 
+The subsequent [hardened main-design experiment](galvanize-rs-true-inheritance-hardened.md) adds real prefix-layout
+macros, async support, adversarial Miri/UI coverage, and a fourth benchmark candidate. The original unsafe candidate is
+known unsound and retained as historical comparison material; its happy-path Miri results do not validate its API.
+
 This is a high-level comparison of the two proposed designs, plus a finger-in-the-air recommendation. Neither design
 needs to be understood in detail to read it:
 

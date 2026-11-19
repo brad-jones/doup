@@ -3,6 +3,12 @@
 Status: **Research**. Nothing here is scheduled. It describes what it would take to go from today's `extends`
 (composition + `Deref`, "Option A") to inheritance that behaves like Python, Java, C# or Kotlin ("Option B").
 
+> **Historical safety warning:** the [defensive review](galvanize-rs-true-inheritance-defensive-review.md) demonstrated
+> UB through the original prototypes' safe APIs despite their existing Miri checks passing. The separate
+> [hardened, macro-generated follow-up](galvanize-rs-true-inheritance-hardened.md) repairs those boundaries, adds async
+> support and adversarial tests, and measures all four candidates. The original implementation below remains unchanged
+> historical material, not an approved safe API.
+
 A hand-expanded prototype of the proposed design lives in
 [galvanize-rs-true-inheritance-spike.rs](galvanize-rs-true-inheritance-spike.rs). It's standalone, compiles on our
 pinned stable toolchain, and runs. It passes Miri (`task miri`), see [4.10](#410-unsafe-inventory-and-soundness).

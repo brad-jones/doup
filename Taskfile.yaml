@@ -156,10 +156,11 @@ tasks:
       - cargo bench -p galvanize-rs {{if .CLI_ARGS}}-- {{.CLI_ARGS}}{{end}}
 
   miri:
-    desc: Runs the unsafe code under Miri to catch UB. Pass a standalone .rs file to check just that.
+    desc: Checks hardened inheritance and historical probes with Miri, or a supplied standalone .rs file.
     summary: |
-      Without args, checks the "true" inheritance spike (docs/research/galvanize-rs-true-inheritance-spike.rs)
-      and galvanize-rs's inheritance bench, whose benchmarks Miri can't run, but its race & verify checks it does.
+      Without args, runs miri:main, the historical "true" inheritance spike, and the inheritance bench's
+      race & verify checks (not its timed benchmarks). The old MainDesign remains known unsound;
+      passing its historical happy-path checks does not endorse its public API.
       With args, eg. `task miri -- path/to/file.rs`, checks that standalone file instead.
 
       Everything is run under both of Miri's aliasing models (Stacked & Tree Borrows), with strict
@@ -167,6 +168,8 @@ tasks:
     deps:
       - init:miri
     cmds:
+      - if: '[ -z "{{.CLI_ARGS}}" ]'
+        task: miri:main
       - task: miri:run
         vars:
           CMD: run
@@ -176,6 +179,21 @@ tasks:
         vars:
           CMD: test
           ARGS: -p galvanize-rs --bench inheritance
+
+  miri:main:
+    desc: Checks the hardened runtime and generated sync/async classes under both Miri aliasing models.
+    summary: |
+      Runs the generated inheritance, soundness, and async integration tests with strict provenance
+      and eight scheduling seeds per model. Compiler-driving UI tests and Tokio spawning run natively;
+      deterministic async suspension, borrowed inputs, thread migration, and cancellation run in Miri.
+      Passing checks are evidence for the written safety argument, not an exhaustive soundness proof.
+    deps:
+      - init:miri
+    cmds:
+      - task: miri:run
+        vars:
+          CMD: test
+          ARGS: -p galvanize-rs-main-runtime -p galvanize-rs-main-models --lib --tests
 
   miri:run:
     internal: true
