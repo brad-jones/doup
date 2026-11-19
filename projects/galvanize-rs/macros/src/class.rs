@@ -7,12 +7,17 @@ use syn::{
 };
 
 /// Names of methods the macro always generates, so fields can't use them.
-const RESERVED_NAMES: &[&str] = &["from_data", "ptr_eq"];
+const RESERVED_NAMES: &[&str] = &["from_data", "ptr_eq", "upcast"];
+
+/// The name of the base class slot in `XData`, and of its getter.
+const BASE_NAME: &str = "base";
 
 /// Options given to `#[class(...)]` on the struct.
 struct ClassOptions {
   krate: Path,
   strategy: Type,
+  /// The class this one extends.
+  extends: Option<Type>,
 }
 
 /// Options given to `#[class_prop(...)]` on a field.
@@ -58,34 +63,63 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
   let mut item: ItemStruct = syn::parse2(item)?;
   let options = parse_class_options(attr)?;
   validate_struct(&item)?;
+  if let Some(extends) = &options.extends {
+    validate_extends(extends, &item.generics)?;
+  }
 
   let self_ty = SelfType {
     ident: item.ident.clone(),
     ty_generics: item.generics.split_for_impl().1.to_token_stream(),
   };
   let fields = take_fields(&mut item, &options, &self_ty)?;
-  let generics = class_generics(&item.generics, &fields)?;
+  let generics = class_generics(&item.generics, &fields, options.extends.as_ref())?;
   Ok(generate(&item, &options, &generics, &fields))
 }
 
 fn parse_class_options(attr: TokenStream) -> Result<ClassOptions> {
   let mut krate = None;
   let mut strategy = None;
+  let mut extends = None;
 
   syn::meta::parser(|meta| {
     if meta.path.is_ident("strategy") {
       set_once(&mut strategy, meta.value()?.parse()?, &meta)
     } else if meta.path.is_ident("crate") {
       set_once(&mut krate, meta.value()?.parse()?, &meta)
+    } else if meta.path.is_ident("extends") {
+      set_once(&mut extends, meta.value()?.parse()?, &meta)
     } else {
-      Err(meta.error("unknown class option, expected `strategy = ...` or `crate = ...`"))
+      Err(meta.error("unknown class option, expected `extends = ...`, `strategy = ...` or `crate = ...`"))
     }
   })
   .parse2(attr)?;
 
   let krate: Path = krate.unwrap_or_else(|| parse_quote!(::galvanize_rs));
   let strategy = strategy.unwrap_or_else(|| parse_quote!(#krate::DefaultStrategy));
-  Ok(ClassOptions { krate, strategy })
+  Ok(ClassOptions {
+    krate,
+    strategy,
+    extends,
+  })
+}
+
+/// Rejects base types that can never be a class, which would otherwise give confusing errors
+/// from the generated impls.
+fn validate_extends(extends: &Type, generics: &Generics) -> Result<()> {
+  if names_in(extends.to_token_stream()).contains("Self") {
+    return Err(Error::new_spanned(extends, "a class can't extend itself"));
+  }
+  if let Type::Path(path) = extends
+    && path.qself.is_none()
+    && let Some(ident) = path.path.get_ident()
+    && generics.type_params().any(|p| p.ident == *ident)
+  {
+    return Err(Error::new_spanned(
+      extends,
+      "a class can't extend a type parameter, name a #[class] instead",
+    ));
+  }
+  Ok(())
 }
 
 fn parse_field_options(attr: &Attribute) -> Result<FieldOptions> {
@@ -145,7 +179,8 @@ fn take_fields(item: &mut ItemStruct, options: &ClassOptions, self_ty: &SelfType
 
 fn take_field(field: &mut syn::Field, options: &ClassOptions, self_ty: &SelfType) -> Result<ClassField> {
   let ident = field.ident.clone().expect("validated as a named field");
-  if RESERVED_NAMES.contains(&ident.unraw().to_string().as_str()) {
+  let bare = ident.unraw().to_string();
+  if RESERVED_NAMES.contains(&bare.as_str()) || (options.extends.is_some() && bare == BASE_NAME) {
     return Err(Error::new(
       ident.span(),
       format!("`{ident}` is reserved by #[class], rename the field"),
@@ -262,19 +297,25 @@ fn param_name(param: &GenericParam) -> String {
 }
 
 /// Works out the generics of each generated item from the struct's generics.
-fn class_generics(generics: &Generics, fields: &[ClassField]) -> Result<ClassGenerics> {
-  // Every parameter must reach the storage struct through a field type or strategy, otherwise
-  // rustc reports it as unused on the hidden storage struct, which is confusing. `Self` doesn't
-  // count as a use, as a parameter that's only used recursively is still unused.
+fn class_generics(generics: &Generics, fields: &[ClassField], extends: Option<&Type>) -> Result<ClassGenerics> {
+  let extends_names = extends.map(|ty| names_in(ty.to_token_stream())).unwrap_or_default();
+
+  // Every parameter must reach the storage struct through a field type, strategy or the base
+  // class, otherwise rustc reports it as unused on the hidden storage struct, which is confusing.
+  // `Self` doesn't count as a use, as a parameter that's only used recursively is still unused.
   let used: HashSet<&String> = fields
     .iter()
     .flat_map(|f| f.ty_names.iter().chain(&f.strategy_names))
+    .chain(&extends_names)
     .collect();
   let mut errors: Option<Error> = None;
   for param in &generics.params {
     let name = param_name(param);
     if !used.contains(&name) {
-      let e = Error::new_spanned(param, format!("`{name}` isn't used by any field or strategy"));
+      let e = Error::new_spanned(
+        param,
+        format!("`{name}` isn't used by any field, strategy or base class"),
+      );
       match errors.as_mut() {
         Some(errors) => errors.combine(e),
         None => errors = Some(e),
@@ -287,25 +328,33 @@ fn class_generics(generics: &Generics, fields: &[ClassField]) -> Result<ClassGen
 
   // Like `#[derive]`, bound the type parameters rather than the field types. Bounding a private
   // field type would trip the `private_bounds` lint on a public class. Parameters only used via
-  // `Self` (`Option<Self>` is `Clone` regardless) or a strategy don't need the bounds.
-  let bounded: Vec<&Ident> = generics
+  // `Self` (`Option<Self>` is `Clone` regardless) or a strategy don't need the bounds. The base
+  // class is treated like a field type, as its own fields bound its parameters with `Clone`.
+  let in_fields = |ident: &Ident| fields.iter().any(|f| f.ty_names.contains(&ident.to_string()));
+  let cloned: Vec<&Ident> = generics
     .type_params()
     .map(|p| &p.ident)
-    .filter(|ident| fields.iter().any(|f| f.ty_names.contains(&ident.to_string())))
+    .filter(|ident| in_fields(ident) || extends_names.contains(&ident.to_string()))
     .collect();
 
   let mut full = generics.clone();
   let where_clause = full.make_where_clause();
-  for ident in &bounded {
+  for ident in &cloned {
     where_clause.predicates.push(parse_quote!(#ident: ::core::clone::Clone));
   }
 
+  // Parameters only used by the base class get their `Debug` bounds via the base's `ClassDebug`
+  // impl, added in `generate`.
   let mut debug_where = where_clause.clone();
-  for ident in &bounded {
+  for ident in cloned.iter().filter(|ident| in_fields(ident)) {
     debug_where.predicates.push(parse_quote!(#ident: ::core::fmt::Debug));
   }
 
-  let data_names: HashSet<String> = fields.iter().flat_map(|f| names_in(f.ty.to_token_stream())).collect();
+  let data_names: HashSet<String> = fields
+    .iter()
+    .flat_map(|f| names_in(f.ty.to_token_stream()))
+    .chain(extends_names.iter().cloned())
+    .collect();
   let data = retain_params(&full, &data_names);
 
   Ok(ClassGenerics {
@@ -369,19 +418,31 @@ fn retain_params(generics: &Generics, keep: &HashSet<String>) -> Generics {
 
 fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics, fields: &[ClassField]) -> TokenStream {
   let krate = &options.krate;
+  let private = quote!(#krate::__private);
+  let extends = options.extends.as_ref();
   let vis = &item.vis;
   let name = &item.ident;
   let data = format_ident!("{}Data", name);
   let storage = format_ident!("__{}Fields", name);
+  let base = format_ident!("{}", BASE_NAME);
+  // The base slot, if any, comes first in `XData`, the storage struct and `Debug`.
+  let base_slot: Vec<&Ident> = extends.map(|_| &base).into_iter().collect();
 
   let (doc_attrs, data_attrs): (Vec<_>, Vec<_>) = item.attrs.iter().partition(|a| a.path().is_ident("doc"));
   let data_doc = format!("The initial field values of a [`{name}`].");
 
+  let data_base = extends.map(|ty| {
+    quote! {
+      /// The base class part of the object, usually created by the base class's constructor.
+      #vis #base: #ty,
+    }
+  });
   let data_fields = fields.iter().map(|f| {
     let (attrs, vis, ident, ty) = (&f.attrs, &f.vis, &f.ident, &f.ty);
     quote! { #(#attrs)* #vis #ident: #ty, }
   });
 
+  let storage_base = extends.map(|ty| quote! { #base: #ty, });
   let storage_fields = fields.iter().map(|f| {
     let (ident, ty, strategy) = (&f.ident, &f.ty, &f.strategy);
     quote_spanned! {ty.span()=> #ident: <#strategy as #krate::Strategy>::Ptr<#ty>, }
@@ -390,11 +451,12 @@ fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics,
   let field_idents: Vec<_> = fields.iter().map(|f| &f.ident).collect();
   let accessors = fields.iter().map(|f| generate_accessors(krate, f));
 
+  let debug_base = extends.map(|_| quote! { #private::ClassDebug::fmt_fields(&self.0.#base, d); });
   let debug_fields = fields.iter().map(|f| {
     let ident = &f.ident;
     let label = ident.unraw().to_string();
     quote! {
-      .field(#label, &#krate::MutablePointer::read_with(&self.0.#ident, ::core::clone::Clone::clone))
+      d.field(#label, &#krate::MutablePointer::read_with(&self.0.#ident, ::core::clone::Clone::clone));
     }
   });
   let name_label = name.to_string();
@@ -404,19 +466,71 @@ fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics,
   let data_generics = &generics.data;
   let data_where = &generics.data.where_clause;
   let data_ty_generics = generics.data.split_for_impl().1;
-  let debug_where = &generics.debug_where;
+  let mut debug_where = generics.debug_where.clone();
+  if let Some(ty) = extends {
+    debug_where.predicates.push(parse_quote!(#ty: #private::ClassDebug));
+  }
+
+  let base_getter = extends.map(|ty| {
+    quote! {
+      /// Returns the handle of the base class part of the object.
+      ///
+      /// It's the same base object that `self` dereferences to, so changes made through either
+      /// are visible through both.
+      #vis fn #base(&self) -> #ty {
+        ::core::clone::Clone::clone(&self.0.#base)
+      }
+    }
+  });
+
+  let subclass_impls = extends.map(|ty| {
+    quote! {
+      impl #impl_generics #private::SubClass for #name #ty_generics #where_clause {
+        type Base = #ty;
+
+        fn base_ref(&self) -> &#ty {
+          &self.0.#base
+        }
+      }
+
+      /// Gives access to the fields and methods of the base class.
+      impl #impl_generics ::core::ops::Deref for #name #ty_generics #where_clause {
+        type Target = #ty;
+
+        fn deref(&self) -> &#ty {
+          &self.0.#base
+        }
+      }
+
+      /// Returns the handle of the base class part of the object.
+      impl #impl_generics ::core::convert::From<#name #ty_generics> for #ty #where_clause {
+        fn from(value: #name #ty_generics) -> Self {
+          ::core::clone::Clone::clone(&value.0.#base)
+        }
+      }
+
+      /// Returns the handle of the base class part of the object.
+      impl #impl_generics ::core::convert::From<&#name #ty_generics> for #ty #where_clause {
+        fn from(value: &#name #ty_generics) -> Self {
+          ::core::clone::Clone::clone(&value.0.#base)
+        }
+      }
+    }
+  });
 
   quote! {
     #(#data_attrs)*
     #[doc = #data_doc]
     #[allow(dead_code)]
     #vis struct #data #data_generics #data_where {
+      #data_base
       #(#data_fields)*
     }
 
     #[doc(hidden)]
     #[allow(dead_code)]
     struct #storage #full #where_clause {
+      #storage_base
       #(#storage_fields)*
     }
 
@@ -427,8 +541,9 @@ fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics,
     impl #impl_generics #name #ty_generics #where_clause {
       /// Creates a new object from its initial field values.
       fn from_data(data: #data #data_ty_generics) -> Self {
-        let #data { #(#field_idents),* } = data;
+        let #data { #(#base_slot,)* #(#field_idents),* } = data;
         Self(::std::sync::Arc::new(#storage {
+          #(#base_slot,)*
           #(#field_idents: #krate::MutablePointer::new(#field_idents),)*
         }))
       }
@@ -438,8 +553,23 @@ fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics,
         ::std::sync::Arc::ptr_eq(&self.0, &other.0)
       }
 
+      /// Returns the handle of the object as a `B`, which is this class or any class it
+      /// (transitively) extends. See `Extends`.
+      #vis fn upcast<__B, __I>(&self) -> __B
+      where
+        Self: #krate::Extends<__B, __I>,
+      {
+        #krate::Extends::upcast(self)
+      }
+
+      #base_getter
+
       #(#accessors)*
     }
+
+    impl #impl_generics #private::Class for #name #ty_generics #where_clause {}
+
+    #subclass_impls
 
     /// Clones the handle, so both refer to the same object.
     impl #impl_generics ::core::clone::Clone for #name #ty_generics #where_clause {
@@ -464,11 +594,20 @@ fn generate(item: &ItemStruct, options: &ClassOptions, generics: &ClassGenerics,
       }
     }
 
+    impl #impl_generics #private::ClassDebug for #name #ty_generics #debug_where {
+      #[allow(unused_variables)]
+      fn fmt_fields(&self, d: &mut ::core::fmt::DebugStruct<'_, '_>) {
+        #debug_base
+        #(#debug_fields)*
+      }
+    }
+
+    /// Prints the field values, including those of the base classes.
     impl #impl_generics ::core::fmt::Debug for #name #ty_generics #debug_where {
       fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        f.debug_struct(#name_label)
-          #(#debug_fields)*
-          .finish()
+        let mut d = f.debug_struct(#name_label);
+        #private::ClassDebug::fmt_fields(self, &mut d);
+        d.finish()
       }
     }
 

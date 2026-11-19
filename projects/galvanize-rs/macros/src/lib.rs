@@ -75,7 +75,8 @@ use proc_macro::TokenStream;
 /// The getter has the field's visibility, and so do the setter and updater
 /// unless the field is marked `#[class_prop(readonly)]`.
 ///
-/// The handle also gets `from_data` (private), `ptr_eq`, and implementations
+/// The handle also gets `from_data` (private), `ptr_eq`, `upcast` (see
+/// [Inheritance](#inheritance)), and implementations
 /// of `Clone`, `PartialEq`, `Eq` and `Hash` (all by identity), `Debug` (prints
 /// the field values) and `From<&Person>` (clones the handle). As `Hash` and
 /// `Eq` ignore the field values, classes are sound `HashMap`/`HashSet` keys;
@@ -89,6 +90,8 @@ use proc_macro::TokenStream;
 ///
 /// On the struct, `#[class(...)]` takes comma separated options:
 ///
+/// * `extends = SomeClass`: makes this class a subclass of another `#[class]`,
+///   see [Inheritance](#inheritance).
 /// * `strategy = SomeStrategy`: the `Strategy` used for every field.
 /// * `crate = some::path`: the path to `galvanize_rs`, if it has been renamed
 ///   or re-exported.
@@ -156,6 +159,81 @@ use proc_macro::TokenStream;
 /// assert_eq!(format!("{list:?}"), "Node { value: 1, next: Some(Node { value: 3, next: None }) }");
 /// ```
 ///
+/// # Inheritance
+///
+/// `#[class(extends = Base)]` makes a class a subclass of `Base`, which must
+/// itself be a `#[class]`. The subclass object holds a handle to a `Base`
+/// object, its *base*, and:
+///
+/// * `XData` gets a `base: Base` field, which the constructor usually fills
+///   using `Base`'s own constructor, like calling `super().__init__()`.
+/// * the handle dereferences to `Base`, so `Base`'s accessors and methods can
+///   be called on it, and `&X` coerces to `&Base`. This chains, so a subclass
+///   of `X` can use `Base`'s methods too.
+/// * `base(&self) -> Base` returns the handle of the base, and so do
+///   `From<X>` and `From<&X>` for `Base`.
+/// * `upcast` converts to the class itself or any class it (transitively)
+///   extends, e.g. `let animal: Animal = puppy.upcast();`. To accept any
+///   subclass of `Base` by value, take an `impl Extends<Base, I>`.
+/// * `Debug` prints the fields of the base classes first, then its own.
+///
+/// ```
+/// use galvanize_rs::{Str, class};
+///
+/// #[class]
+/// pub struct Animal {
+///   pub name: Str,
+/// }
+///
+/// impl Animal {
+///   pub fn new(name: &str) -> Self {
+///     Self::from_data(AnimalData { name: name.into() })
+///   }
+///
+///   pub fn greet(&self) -> Str {
+///     galvanize_rs::sf!("Hi, I'm {}", self.name())
+///   }
+/// }
+///
+/// #[class(extends = Animal)]
+/// pub struct Dog {
+///   pub good: bool,
+/// }
+///
+/// impl Dog {
+///   pub fn new(name: &str) -> Self {
+///     Self::from_data(DogData { base: Animal::new(name), good: true })
+///   }
+/// }
+///
+/// fn introduce(animal: &Animal) -> Str {
+///   animal.greet()
+/// }
+///
+/// let dog = Dog::new("Rex");
+/// dog.set_name("Max"); // inherited from `Animal`
+/// assert_eq!(introduce(&dog), "Hi, I'm Max");
+///
+/// let animal: Animal = dog.upcast();
+/// assert!(animal.ptr_eq(&dog.base()));
+/// assert_eq!(format!("{dog:?}"), r#"Dog { name: "Max", good: true }"#);
+/// ```
+///
+/// This is composition rather than a single object, so:
+///
+/// * a method or accessor on the subclass with the same name as one on the
+///   base *shadows* it, but doesn't override it. Calling it through a `Base`
+///   or `&Base` still runs `Base`'s version. Use a trait for dynamic dispatch.
+/// * there is no downcasting from a `Base` back to the subclass.
+/// * `ptr_eq`, `==` and `Hash` compare the subclass objects. Several
+///   subclass objects may share one base, if it's passed to each of them.
+/// * the base's private items are only accessible in its own module, as usual.
+///   There's no equivalent of `protected`.
+/// * base methods that take `self` by value can't be called through `Deref`,
+///   call them on `x.base()` instead.
+/// * a generic base, such as `extends = Boxed<T>`, bounds the type parameters
+///   it uses with `Clone`, like a field type does.
+///
 /// # Attributes
 ///
 /// Doc comments on the struct document the handle. Any other attributes on the
@@ -165,12 +243,13 @@ use proc_macro::TokenStream;
 /// # Limitations
 ///
 /// * Only structs with named fields are supported.
-/// * Every generic parameter must be used by a field type or strategy; using it
-///   only through `Self` doesn't count.
+/// * Every generic parameter must be used by a field type, strategy or the base
+///   class; using it only through `Self` doesn't count.
 /// * Bounds such as `S: Strategy` aren't inferred, write them on the struct.
 /// * Like `#[derive]`, the `Clone` bound is on the type parameters rather than
 ///   the field types, so e.g. an `Arc<T>` field still requires `T: Clone`.
-/// * Fields can't be named `from_data` or `ptr_eq`.
+/// * Fields can't be named `from_data`, `ptr_eq` or `upcast`, nor `base` in a
+///   subclass.
 /// * Every field type must implement `Clone` and `Debug`.
 /// * `Debug` doesn't detect cycles; printing an object graph that refers back
 ///   to itself recurses forever.

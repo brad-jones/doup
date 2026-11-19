@@ -35,6 +35,34 @@ public field `#[class_prop(readonly)]` to keep its setter private.
 Classes can be generic, e.g. `struct Node<T> { value: T, next: Option<Self> }`. Type parameters used by fields are
 bounded with `Clone` for you, like `#[derive]` does.
 
+A class can extend another with `#[class(extends = Base)]`. The subclass holds a `Base` object, dereferences to it so
+`Base`'s accessors and methods work on the subclass, and can be converted back with `base()` or `upcast()`:
+
+```rust
+#[class(extends = Person)]
+pub struct Employee {
+  pub title: Str,
+}
+
+impl Employee {
+  pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>, title: impl Into<Str>) -> Self {
+    Self::from_data(EmployeeData {
+      base: Person::new(first_name, last_name),
+      title: title.into(),
+    })
+  }
+}
+
+let ada = Employee::new("Ada", "Lovelace", "Engineer");
+ada.visit("London"); // inherited from Person
+let person: Person = ada.upcast();
+```
+
+Same-named methods on a subclass shadow the base's rather than overriding them, so use traits for dynamic dispatch.
+[examples/traits.rs](examples/traits.rs) shows how (`cargo run -p galvanize-rs --example traits`).
+
 See the `class` macro docs for everything that's generated, and [examples/class.rs](examples/class.rs) for a runnable
 example (`cargo run -p galvanize-rs --example class`). [examples/generic_class.rs](examples/generic_class.rs) shows
-generic classes (`cargo run -p galvanize-rs --example generic_class`).
+generic classes (`cargo run -p galvanize-rs --example generic_class`), and
+[examples/inheritance.rs](examples/inheritance.rs) shows inheritance (`cargo run -p galvanize-rs --example
+inheritance`).

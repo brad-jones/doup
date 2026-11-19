@@ -1,0 +1,29 @@
+error: duplicate option
+ --> tests/ui/class/extends.rs:8:25
+  |
+8 | #[class(extends = Base, extends = Base)]
+  |                         ^^^^^^^^^^^^^^
+
+error: a class can't extend itself
+  --> tests/ui/class/extends.rs:13:19
+   |
+13 | #[class(extends = Self)]
+   |                   ^^^^
+
+error: a class can't extend a type parameter, name a #[class] instead
+  --> tests/ui/class/extends.rs:18:19
+   |
+18 | #[class(extends = T)]
+   |                   ^
+
+error: `base` is reserved by #[class], rename the field
+  --> tests/ui/class/extends.rs:25:3
+   |
+25 |   base: i64,
+   |   ^^^^
+
+error: `upcast` is reserved by #[class], rename the field
+  --> tests/ui/class/extends.rs:30:3
+   |
+30 |   upcast: i64,
+   |   ^^^^^^

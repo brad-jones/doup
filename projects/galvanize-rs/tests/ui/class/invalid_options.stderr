@@ -1,4 +1,4 @@
-error: unknown class option, expected `strategy = ...` or `crate = ...`
+error: unknown class option, expected `extends = ...`, `strategy = ...` or `crate = ...`
  --> tests/ui/class/invalid_options.rs:3:9
   |
 3 | #[class(unknown = 1)]
@@ -28,25 +28,25 @@ error: #[class] can't be used on a field, use #[class_prop(...)] instead
 29 |   #[class(readonly)]
    |   ^^^^^^^^^^^^^^^^^^
 
-error: `'a` isn't used by any field or strategy
+error: `'a` isn't used by any field, strategy or base class
   --> tests/ui/class/invalid_options.rs:34:20
    |
 34 | struct UnusedParam<'a, T, const N: usize> {
    |                    ^^
 
-error: `T` isn't used by any field or strategy
+error: `T` isn't used by any field, strategy or base class
   --> tests/ui/class/invalid_options.rs:34:24
    |
 34 | struct UnusedParam<'a, T, const N: usize> {
    |                        ^
 
-error: `N` isn't used by any field or strategy
+error: `N` isn't used by any field, strategy or base class
   --> tests/ui/class/invalid_options.rs:34:27
    |
 34 | struct UnusedParam<'a, T, const N: usize> {
    |                           ^^^^^^^^^^^^^^
 
-error: `T` isn't used by any field or strategy
+error: `T` isn't used by any field, strategy or base class
   --> tests/ui/class/invalid_options.rs:39:28
    |
 39 | struct OnlyUsedRecursively<T> {

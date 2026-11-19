@@ -11,4 +11,7 @@ mod dict;
 pub use crate::dict::Dict;
 
 mod class;
-pub use crate::class::class;
+pub use crate::class::{Extends, class};
+
+#[doc(hidden)]
+pub use crate::class::__private;

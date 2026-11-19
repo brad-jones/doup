@@ -1,0 +1,42 @@
+error[E0277]: `NotAClass` isn't a #[class]
+ --> tests/ui/class/extends_not_class.rs:6:19
+  |
+6 | #[class(extends = NotAClass)]
+  |                   ^^^^^^^^^ only a #[class] can be extended
+  |
+help: the trait `galvanize_rs::__private::Class` is not implemented for `NotAClass`
+ --> tests/ui/class/extends_not_class.rs:4:1
+  |
+4 | struct NotAClass;
+  | ^^^^^^^^^^^^^^^^
+help: the trait `galvanize_rs::__private::Class` is implemented for `Foo`
+ --> tests/ui/class/extends_not_class.rs:6:1
+  |
+6 | #[class(extends = NotAClass)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `galvanize_rs::__private::SubClass::Base`
+ --> src/class/mod.rs
+  |
+  |   pub trait SubClass: Class {
+  |     /// The class this one extends.
+  |     type Base: Class;
+  |                ^^^^^ required by this bound in `SubClass::Base`
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `NotAClass` isn't a #[class], or its fields don't implement `Debug`
+ --> tests/ui/class/extends_not_class.rs:6:1
+  |
+6 | #[class(extends = NotAClass)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `galvanize_rs::__private::ClassDebug` is not implemented for `NotAClass`
+ --> tests/ui/class/extends_not_class.rs:4:1
+  |
+4 | struct NotAClass;
+  | ^^^^^^^^^^^^^^^^
+help: the trait `galvanize_rs::__private::ClassDebug` is implemented for `Foo`
+ --> tests/ui/class/extends_not_class.rs:6:1
+  |
+6 | #[class(extends = NotAClass)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)

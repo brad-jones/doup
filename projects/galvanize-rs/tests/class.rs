@@ -1,4 +1,6 @@
-use galvanize_rs::{ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, List, MutablePointer, Str, Strategy, class};
+use galvanize_rs::{
+  ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, Extends, List, MutablePointer, Str, Strategy, class,
+};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -135,10 +137,18 @@ mod renamed {
     pub id: i64,
   }
 
+  #[class(crate = galvanize, extends = Thing)]
+  pub struct SubThing {
+    pub n: i64,
+  }
+
   #[test]
   fn crate_path_can_be_overridden() {
     let t = Thing::from_data(ThingData { id: 1 });
     assert_eq!(t.id(), 1);
+    let s = SubThing::from_data(SubThingData { base: t, n: 2 });
+    assert_eq!((s.id(), s.n()), (1, 2));
+    assert_eq!(format!("{s:?}"), "SubThing { id: 1, n: 2 }");
   }
 }
 
@@ -358,4 +368,219 @@ fn self_in_field_types_refers_to_the_class() {
     parent: Some(root.clone()),
   });
   assert_eq!(child.parent(), Some(root));
+}
+
+// ---------- inheritance ----------
+
+#[class]
+pub struct Animal {
+  pub name: Str,
+  legs: i64,
+}
+
+impl Animal {
+  fn new(name: &str, legs: i64) -> Self {
+    Self::from_data(AnimalData {
+      name: name.into(),
+      legs,
+    })
+  }
+
+  fn describe(&self) -> Str {
+    galvanize_rs::sf!("{} has {} legs", self.name(), self.legs())
+  }
+
+  fn kind(&self) -> &'static str {
+    "animal"
+  }
+}
+
+#[class(extends = Animal)]
+pub struct Dog {
+  pub tricks: List<Str>,
+}
+
+impl Dog {
+  fn new(name: &str) -> Self {
+    Self::from_data(DogData {
+      base: Animal::new(name, 4),
+      tricks: List::new(),
+    })
+  }
+
+  fn kind(&self) -> &'static str {
+    "dog"
+  }
+}
+
+#[class(extends = Dog, strategy = ArcSwapStrategy)]
+pub struct Puppy {
+  pub age_weeks: i64,
+}
+
+impl Puppy {
+  fn new(name: &str) -> Self {
+    Self::from_data(PuppyData {
+      base: Dog::new(name),
+      age_weeks: 8,
+    })
+  }
+}
+
+#[class(extends = Animal)]
+struct Snake {}
+
+fn legs_of(animal: &Animal) -> i64 {
+  animal.legs()
+}
+
+fn name_of<I>(animal: impl Extends<Animal, I>) -> Str {
+  animal.upcast().name()
+}
+
+#[test]
+fn subclasses_inherit_accessors_and_methods() {
+  let p = Puppy::new("Rex");
+  p.set_name("Max");
+  p.tricks().push("sit");
+  p.update_age_weeks(|w| *w += 1);
+
+  assert_eq!(p.describe(), "Max has 4 legs");
+  assert_eq!(p.tricks().len(), 1);
+  assert_eq!(p.age_weeks(), 9);
+  assert_eq!(legs_of(&p), 4);
+}
+
+#[test]
+fn subclass_methods_shadow_base_methods_statically() {
+  let d = Dog::new("Rex");
+  let as_animal: &Animal = &d;
+  assert_eq!(d.kind(), "dog");
+  assert_eq!(d.base().kind(), "animal");
+  assert_eq!(as_animal.kind(), "animal");
+}
+
+#[test]
+fn upcasting_returns_the_shared_base_object() {
+  let p = Puppy::new("Rex");
+  let dog: Dog = p.base();
+  let animal: Animal = p.upcast();
+
+  assert!(animal.ptr_eq(&dog.base()));
+  assert_eq!(Dog::from(&p), dog);
+  assert_eq!(Animal::from(dog.clone()), animal);
+  assert_eq!(p.upcast::<Dog, _>(), dog);
+  assert_eq!(p.upcast::<Puppy, _>(), p);
+
+  animal.set_name("Max");
+  assert_eq!(p.name(), "Max");
+  assert_eq!(name_of(p.clone()), "Max");
+  assert_eq!(name_of(dog), "Max");
+  assert_eq!(name_of(animal), "Max");
+}
+
+#[test]
+fn subclasses_sharing_a_base_keep_their_own_identity() {
+  let shared = Animal::new("Rex", 4);
+  let a = Dog::from_data(DogData {
+    base: shared.clone(),
+    tricks: List::new(),
+  });
+  let b = Dog::from_data(DogData {
+    base: shared,
+    tricks: List::new(),
+  });
+  a.set_name("Max");
+
+  assert_ne!(a, b);
+  assert_eq!(b.name(), "Max");
+  assert!(a.base().ptr_eq(&b.base()));
+}
+
+#[test]
+fn debug_includes_base_fields() {
+  let p = Puppy::new("Rex");
+  p.tricks().push("sit");
+  assert_eq!(
+    format!("{p:?}"),
+    r#"Puppy { name: "Rex", legs: 4, tricks: ["sit"], age_weeks: 8 }"#
+  );
+
+  let s = Snake::from_data(SnakeData {
+    base: Animal::new("Kaa", 0),
+  });
+  assert_eq!(format!("{s:?}"), r#"Snake { name: "Kaa", legs: 0 }"#);
+}
+
+#[test]
+fn subclass_handles_are_send_and_sync() {
+  let p = Puppy::new("Rex");
+  let worker = p.clone();
+  std::thread::spawn(move || worker.upcast::<Animal, _>().set_name("Max"))
+    .join()
+    .unwrap();
+  assert_eq!(p.name(), "Max");
+}
+
+#[class]
+pub struct Boxed<T> {
+  pub value: T,
+}
+
+#[class(extends = Boxed<T>)]
+pub struct Labelled<T> {
+  pub label: Str,
+}
+
+#[class(extends = Labelled<i64>)]
+pub struct Counted {
+  pub count: usize,
+}
+
+fn value_of<T: Clone, I>(boxed: impl Extends<Boxed<T>, I>) -> T {
+  boxed.upcast().value()
+}
+
+#[test]
+fn generic_classes_can_be_extended() {
+  let labelled = Labelled::from_data(LabelledData {
+    base: Boxed::from_data(BoxedData { value: Str::from("a") }),
+    label: "x".into(),
+  });
+  labelled.set_value("b");
+  assert_eq!(value_of(labelled.clone()), "b");
+  assert_eq!(format!("{labelled:?}"), r#"Labelled { value: "b", label: "x" }"#);
+
+  let counted = Counted::from_data(CountedData {
+    base: Labelled::from_data(LabelledData {
+      base: Boxed::from_data(BoxedData { value: 1 }),
+      label: "n".into(),
+    }),
+    count: 2,
+  });
+  counted.update_value(|v| *v += 1);
+  assert_eq!(value_of(counted.clone()), 2);
+  assert_eq!(counted.upcast::<Labelled<i64>, _>().label(), "n");
+  assert_eq!(format!("{counted:?}"), r#"Counted { value: 2, label: "n", count: 2 }"#);
+}
+
+#[test]
+fn generic_subclasses_only_need_debug_for_debug() {
+  let labelled = Labelled::from_data(LabelledData {
+    base: Boxed::from_data(BoxedData { value: NoDebug }),
+    label: "x".into(),
+  });
+  assert_eq!(labelled.label(), "x");
+}
+
+/// `base` is only reserved on subclasses.
+#[class]
+struct Statue {
+  base: Str,
+}
+
+#[test]
+fn base_is_a_valid_field_name_without_extends() {
+  let s = Statue::from_data(StatueData { base: "marble".into() });
+  assert_eq!(s.base(), "marble");
 }
