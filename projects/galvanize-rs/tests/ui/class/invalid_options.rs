@@ -31,8 +31,13 @@ struct ClassOnField {
 }
 
 #[class]
-struct Generic<T> {
-  a: T,
+struct UnusedParam<'a, T, const N: usize> {
+  a: String,
+}
+
+#[class]
+struct OnlyUsedRecursively<T> {
+  next: Option<Self>,
 }
 
 #[class]

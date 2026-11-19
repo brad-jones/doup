@@ -28,20 +28,38 @@ error: #[class] can't be used on a field, use #[class_prop(...)] instead
 29 |   #[class(readonly)]
    |   ^^^^^^^^^^^^^^^^^^
 
-error: generic classes are not supported
-  --> tests/ui/class/invalid_options.rs:34:15
+error: `'a` isn't used by any field or strategy
+  --> tests/ui/class/invalid_options.rs:34:20
    |
-34 | struct Generic<T> {
-   |               ^^^
+34 | struct UnusedParam<'a, T, const N: usize> {
+   |                    ^^
+
+error: `T` isn't used by any field or strategy
+  --> tests/ui/class/invalid_options.rs:34:24
+   |
+34 | struct UnusedParam<'a, T, const N: usize> {
+   |                        ^
+
+error: `N` isn't used by any field or strategy
+  --> tests/ui/class/invalid_options.rs:34:27
+   |
+34 | struct UnusedParam<'a, T, const N: usize> {
+   |                           ^^^^^^^^^^^^^^
+
+error: `T` isn't used by any field or strategy
+  --> tests/ui/class/invalid_options.rs:39:28
+   |
+39 | struct OnlyUsedRecursively<T> {
+   |                            ^
 
 error: #[class] requires a struct with named fields
-  --> tests/ui/class/invalid_options.rs:39:8
+  --> tests/ui/class/invalid_options.rs:44:8
    |
-39 | struct Tuple(String);
+44 | struct Tuple(String);
    |        ^^^^^
 
 error: `ptr_eq` is reserved by #[class], rename the field
-  --> tests/ui/class/invalid_options.rs:43:3
+  --> tests/ui/class/invalid_options.rs:48:3
    |
-43 |   ptr_eq: String,
+48 |   ptr_eq: String,
    |   ^^^^^^

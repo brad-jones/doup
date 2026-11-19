@@ -32,5 +32,9 @@ Each field lives in its own pointer, chosen by a `Strategy` (`ArcRwLockStrategy`
 class with `#[class(strategy = ArcSwapStrategy)]`, or for a single field with `#[class_prop(strategy = ...)]`. Mark a
 public field `#[class_prop(readonly)]` to keep its setter private.
 
+Classes can be generic, e.g. `struct Node<T> { value: T, next: Option<Self> }`. Type parameters used by fields are
+bounded with `Clone` for you, like `#[derive]` does.
+
 See the `class` macro docs for everything that's generated, and [examples/class.rs](examples/class.rs) for a runnable
-example (`cargo run -p galvanize-rs --example class`).
+example (`cargo run -p galvanize-rs --example class`). [examples/generic_class.rs](examples/generic_class.rs) shows
+generic classes (`cargo run -p galvanize-rs --example generic_class`).

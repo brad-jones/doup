@@ -124,6 +124,38 @@ use proc_macro::TokenStream;
 /// assert_eq!(c.count(), 1);
 /// ```
 ///
+/// # Generics
+///
+/// Classes may have type, lifetime and const parameters. Like `#[derive]`, the
+/// macro bounds each type parameter used by a field type with `Clone`, so you
+/// write `Node<T>` rather than `Node<T: Clone>`, but impls of the class must
+/// still repeat the bound. `Debug` is only implemented when those parameters
+/// are `Debug`.
+///
+/// `Self` in a field type refers to the class (here `Node<T>`). A parameter
+/// that only appears in a strategy (such as `S` below) isn't bounded with
+/// `Clone`, and `NodeData` doesn't have it.
+///
+/// ```
+/// use galvanize_rs::{DefaultStrategy, Strategy, class};
+///
+/// #[class(strategy = S)]
+/// pub struct Node<T, S: Strategy = DefaultStrategy> {
+///   pub value: T,
+///   pub next: Option<Self>,
+/// }
+///
+/// impl<T: Clone, S: Strategy> Node<T, S> {
+///   pub fn new(value: T, next: Option<Self>) -> Self {
+///     Self::from_data(NodeData { value, next })
+///   }
+/// }
+///
+/// let list: Node<i64> = Node::new(1, Some(Node::new(2, None)));
+/// list.next().unwrap().set_value(3);
+/// assert_eq!(format!("{list:?}"), "Node { value: 1, next: Some(Node { value: 3, next: None }) }");
+/// ```
+///
 /// # Attributes
 ///
 /// Doc comments on the struct document the handle. Any other attributes on the
@@ -132,7 +164,12 @@ use proc_macro::TokenStream;
 ///
 /// # Limitations
 ///
-/// * Only structs with named fields are supported, and they can't be generic.
+/// * Only structs with named fields are supported.
+/// * Every generic parameter must be used by a field type or strategy; using it
+///   only through `Self` doesn't count.
+/// * Bounds such as `S: Strategy` aren't inferred, write them on the struct.
+/// * Like `#[derive]`, the `Clone` bound is on the type parameters rather than
+///   the field types, so e.g. an `Arc<T>` field still requires `T: Clone`.
 /// * Fields can't be named `from_data` or `ptr_eq`.
 /// * Every field type must implement `Clone` and `Debug`.
 /// * `Debug` doesn't detect cycles; printing an object graph that refers back

@@ -215,3 +215,147 @@ fn strategies_apply_per_class_and_per_field() {
   m.update_n(|n| *n += 1);
   assert_eq!((m.list().len(), m.n()), (1, 1));
 }
+
+// ---------- generics ----------
+
+#[class]
+pub struct Node<T> {
+  pub value: T,
+  pub next: Option<Self>,
+}
+
+impl<T> Node<T>
+where
+  T: Clone,
+{
+  fn new(value: T) -> Self {
+    Self::from_data(NodeData { value, next: None })
+  }
+
+  fn len(&self) -> usize {
+    1 + self.next().map_or(0, |n| n.len())
+  }
+}
+
+#[test]
+fn generic_classes_get_typed_accessors() {
+  let head = Node::new(Str::from("a"));
+  head.set_next(Node::new("b".into()));
+  let doubled = head.update_value(|v| {
+    *v = v.clone() + "a";
+    v.len()
+  });
+
+  assert_eq!(doubled, 2);
+  assert_eq!(head.value(), "aa");
+  assert_eq!(head.len(), 2);
+  assert_eq!(Node::from(&head), head);
+  assert_eq!(
+    format!("{head:?}"),
+    r#"Node { value: "aa", next: Some(Node { value: "b", next: None }) }"#
+  );
+
+  let worker = head.clone();
+  std::thread::spawn(move || worker.next().unwrap().set_value("c"))
+    .join()
+    .unwrap();
+  assert_eq!(head.next().unwrap().value(), "c");
+}
+
+#[derive(Clone)]
+struct NoDebug;
+
+#[test]
+fn generic_classes_only_need_debug_for_debug() {
+  let n = Node::new(NoDebug);
+  assert!(n.next().is_none());
+}
+
+/// Type parameters named like the generated methods' own don't clash with them.
+#[class]
+#[derive(Default)]
+struct Pair<R, H = i64>
+where
+  R: Default,
+{
+  left: R,
+  right: H,
+}
+
+#[test]
+fn generic_classes_keep_defaults_and_where_clauses() {
+  let p: Pair<Str> = Pair::from_data(PairData::default());
+  p.update_right(|r| *r += 1);
+  p.set_left("a");
+
+  #[allow(clippy::mutable_key_type)]
+  let set: HashSet<Pair<Str>> = [p.clone(), p.clone()].into_iter().collect();
+  assert_eq!(set.len(), 1);
+  assert_eq!((p.left(), p.right()), (Str::from("a"), 1));
+}
+
+/// `S` is only used by the strategies, so `StoreData` doesn't get it, and it needn't be `Clone`.
+#[class(strategy = S)]
+struct Store<T, S: Strategy = galvanize_rs::DefaultStrategy> {
+  items: List<T>,
+  #[class_prop(strategy = S)]
+  count: usize,
+  #[class_prop(strategy = ArcSwapStrategy)]
+  label: Str,
+}
+
+#[test]
+fn generic_strategies_apply_to_fields() {
+  let before = COUNTED_POINTERS.load(Ordering::SeqCst);
+  let store: Store<i64, Counting> = Store::from_data(StoreData {
+    items: List::new(),
+    count: 0,
+    label: "nums".into(),
+  });
+  assert_eq!(COUNTED_POINTERS.load(Ordering::SeqCst) - before, 2);
+
+  store.items().push(1);
+  store.update_count(|c| *c += 1);
+  assert_eq!(
+    (store.items().len(), store.count(), store.label()),
+    (1, 1, Str::from("nums"))
+  );
+  assert_eq!(format!("{store:?}"), r#"Store { items: [1], count: 1, label: "nums" }"#);
+}
+
+#[class]
+struct Borrowed<'a> {
+  name: &'a str,
+}
+
+#[class]
+struct Buffer<const N: usize> {
+  bytes: [u8; N],
+}
+
+#[test]
+fn lifetime_and_const_generics_are_supported() {
+  let owned = String::from("Ada");
+  let b = Borrowed::from_data(BorrowedData { name: &owned });
+  assert_eq!(b.name(), "Ada");
+
+  let buf = Buffer::from_data(BufferData { bytes: [0; 4] });
+  buf.update_bytes(|b| b[0] = 1);
+  assert_eq!(buf.bytes(), [1, 0, 0, 0]);
+}
+
+#[class]
+struct Chain {
+  pub id: i64,
+  pub parent: Option<Self>,
+}
+
+#[test]
+fn self_in_field_types_refers_to_the_class() {
+  let root = Chain::from_data(ChainData { id: 1, parent: None });
+  let child = Chain::from_data(ChainData {
+    id: 2,
+    parent: Some(root.clone()),
+  });
+  assert_eq!(child.parent(), Some(root));
+}
