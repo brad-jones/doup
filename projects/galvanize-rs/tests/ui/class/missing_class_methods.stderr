@@ -1,17 +1,12 @@
 error[E0277]: every #[class] needs a #[class_methods] block after it, in the same module
- --> tests/ui/class/missing_class_methods.rs:4:12
+ --> tests/ui/class/missing_class_methods.rs:3:1
   |
-4 | pub struct Lonely {
-  |            ^^^^^^ add `#[class_methods] impl ... {}` after this struct, even if it's empty
+3 | #[class]
+  | ^^^^^^^^ add `#[class_methods] impl ... {}` after this struct, even if it's empty
   |
-help: the trait `galvanize_rs::__private::HasClassMethods` is not implemented for `__ClassMethodsOfLonely`
+help: the trait `galvanize_rs::__private::HasClassMethods<()>` is not implemented for `__ClassMethodsOfLonely`
  --> tests/ui/class/missing_class_methods.rs:3:1
   |
 3 | #[class]
   | ^^^^^^^^
-note: required by a bound in `galvanize_rs::__private::require_class_methods`
- --> src/class/mod.rs
-  |
-  |   pub const fn require_class_methods<M: HasClassMethods>() {}
-  |                                         ^^^^^^^^^^^^^^^ required by this bound in `require_class_methods`
   = note: this error originates in the attribute macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)

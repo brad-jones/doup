@@ -103,9 +103,6 @@ note: struct defined here, with 1 generic parameter: `T`
    |
    | pub struct Boxed<T> {
    |            ^^^^^ -
-...
-   | #[class_methods]
-   | ---------------- in this attribute macro expansion
 help: add missing generic argument
    |
 39 | #[class(extends = galvanize_rs_fixtures_safe::Boxed<T>)]

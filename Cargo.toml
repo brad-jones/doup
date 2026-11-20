@@ -1,15 +1,10 @@
 [workspace]
 resolver = "3"
 members = [
-  "projects/cli",
   "projects/config",
   "projects/galvanize-rs",
   "projects/galvanize-rs/fixtures/safe",
   "projects/galvanize-rs/fixtures/unsafe",
   "projects/galvanize-rs/macros",
   "projects/git",
-  "projects/plugins/ecosystem/doup",
-  "projects/plugins/host",
-  "projects/plugins/macro",
-  "projects/plugins/platform/github",
 ]

@@ -18,8 +18,10 @@ fn main() {
   let animal = Animal::new("not a dog");
   let _ = Dog::from_handle(animal.handle().clone());
   let _ = LocalDog {
-    __handle: animal.handle().clone(),
-    __invariant: Default::default(),
+    __inner: __LocalDogHandle {
+      __handle: animal.handle().clone(),
+      __invariant: Default::default(),
+    },
   };
   let _ = Dog::from_raw(animal.handle().clone());
   let dog = Dog::new("dog");
