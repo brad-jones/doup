@@ -154,6 +154,88 @@ impl<T> Tagged<T> {
   }
 }
 
+/// An interface, implemented by a class through `implements`.
+pub trait Shape: Send + Sync {
+  /// The shape's area.
+  fn area(&self) -> f64;
+
+  fn corners(&self) -> u64;
+
+  /// A default method, calling the class's virtual methods.
+  fn summary(&self) -> String {
+    format!("{} corners, area {}", self.corners(), self.area())
+  }
+}
+
+/// A second interface, so methods name the trait they implement.
+pub trait Named: Send + Sync {
+  fn title(&self) -> String;
+}
+
+/// An abstract root implementing two interfaces. `abstract` implies `open`.
+#[class(abstract, implements = (Shape, Named), runtime_strategy = SafeRuntimeStrategy)]
+pub struct Polygon {
+  pub label: String,
+}
+
+#[class_methods]
+impl Polygon {
+  pub fn init(label: &str) -> PolygonData {
+    PolygonData { label: label.into() }
+  }
+
+  /// Methods implementing a trait don't take a visibility, as in a trait impl.
+  #[class_abstract(Shape)]
+  fn area(&self) -> f64;
+
+  #[class_virtual(Shape)]
+  fn corners(&self) -> u64 {
+    0
+  }
+
+  #[class_virtual(Named)]
+  fn title(&self) -> String {
+    format!("polygon {}", self.label())
+  }
+
+  /// An abstract method that isn't part of an interface.
+  #[class_abstract]
+  pub fn scaled(&self, factor: f64) -> f64;
+
+  /// An ordinary method calling abstract ones.
+  pub fn describe(&self) -> String {
+    format!("{}: {}", self.title(), self.scaled(1.0))
+  }
+}
+
+/// An abstract subclass implementing some of its parent's abstract methods.
+#[class(abstract, extends = Polygon)]
+pub struct Rectangle {
+  pub width: f64,
+  pub height: f64,
+}
+
+#[class_methods]
+impl Rectangle {
+  pub fn init(label: &str, width: f64, height: f64) -> RectangleData {
+    RectangleData {
+      base: Polygon::init(label),
+      width,
+      height,
+    }
+  }
+
+  /// Implements `Polygon`'s abstract method, without `#[class_override]`.
+  fn area(&self) -> f64 {
+    self.width() * self.height()
+  }
+
+  #[class_override]
+  fn corners(&self) -> u64 {
+    self.super_corners() + 4
+  }
+}
+
 /// Returns `Pending` once before completing, so async tests exercise real suspension.
 pub async fn suspend_once() {
   let mut suspended = false;
@@ -253,5 +335,34 @@ impl<T> AsyncBoxed<T> {
   pub async fn get(&self) -> T {
     suspend_once().await;
     self.value()
+  }
+}
+
+/// An interface with an async method.
+pub trait Lookup: Send + Sync {
+  fn lookup(&self, key: &str) -> impl std::future::Future<Output = Result<String, &'static str>> + Send;
+}
+
+/// An abstract root implementing an interface with an async abstract method.
+#[class(abstract, implements = Lookup, runtime_strategy = SafeRuntimeStrategy)]
+pub struct AsyncSource {
+  pub name: String,
+}
+
+#[class_methods]
+impl AsyncSource {
+  pub fn init(name: &str) -> AsyncSourceData {
+    AsyncSourceData { name: name.into() }
+  }
+
+  #[class_abstract]
+  async fn lookup(&self, key: &str) -> Result<String, &'static str>;
+
+  pub async fn lookup_all(&self, keys: &[&str]) -> Result<Vec<String>, &'static str> {
+    let mut values = Vec::new();
+    for key in keys {
+      values.push(self.lookup(key).await?);
+    }
+    Ok(values)
   }
 }

@@ -11,7 +11,7 @@ macro_rules! PretendDog {
       { galvanize_rs_fixtures_unsafe::Dog;
         galvanize_rs_fixtures_unsafe::__DogFields;
         galvanize_rs_fixtures_unsafe::DogData;
-        galvanize_rs_fixtures_unsafe::__DogVTable; }
+        galvanize_rs_fixtures_unsafe::__DogVTable; [] [] }
     }
   };
 }

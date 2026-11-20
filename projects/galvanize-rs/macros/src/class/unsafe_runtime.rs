@@ -5,17 +5,19 @@
 //! descriptor claims. The handle is `repr(transparent)` over an invariant `Handle<Self>`.
 //!
 //! Each virtual method gets a slot in the declaring class's vtable, holding an `unsafe fn` thunk that views
-//! its receiver as the class that installed it and runs the user's body. A subclass's vtable copies its
-//! parent's, then replaces the slots it overrides. The public method calls the slot in the object's own
-//! table. `super_x` calls the slot in the declaring class's lexical parent's table, which each vtable
-//! retains a reference to, passing the original receiver so calls it makes stay late-bound.
+//! its receiver as the class that installed it and runs the user's body (an abstract method's thunk is
+//! unreachable, as concrete classes must override it). A subclass's vtable copies its parent's, then
+//! replaces the slots it overrides. The wrappers of virtual methods and overrides call the slot in the
+//! object's own table. `super_x` calls the slot in the declaring class's lexical parent's table, which each
+//! vtable retains a reference to, passing the original receiver so calls it makes stay late-bound.
 
 use super::common;
+use super::descriptor::class_name;
 use super::methods::{FutureLifetime, Kind, Method, arguments, future_lifetime};
 use super::{Model, Type};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Error, FnArg, Result, ReturnType, fold::Fold};
+use syn::{FnArg, Result, ReturnType, fold::Fold};
 
 /// A slot's type, the thunk's signature, and the `.await` the public wrapper needs, if any.
 fn slot(method: &Method, receiver: &Type) -> (TokenStream, TokenStream, TokenStream) {
@@ -83,11 +85,13 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     let method_name = method.name();
     let body_name = format_ident!("__body_{method_name}");
     let thunk_name = format_ident!("__thunk_{method_name}");
-    let mut body = item.clone();
-    body.sig.ident = body_name.clone();
-    body.vis = syn::Visibility::Inherited;
-    body.attrs.retain(|a| !a.path().is_ident("doc"));
-    handle_methods.push(quote!(#body));
+    if !method.is_abstract {
+      let mut body = item.clone();
+      body.sig.ident = body_name.clone();
+      body.vis = syn::Visibility::Inherited;
+      body.attrs.retain(|a| !a.path().is_ident("doc"));
+      handle_methods.push(quote!(#body));
+    }
     let args = arguments(item)?;
     let receiver = if method.kind == Kind::Virtual {
       &own
@@ -96,26 +100,33 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     };
     let (slot_type, thunk_sig, await_call) = slot(method, receiver);
     let invocation = quote!(view.#body_name(#(#args),*));
-    let thunk_body = if method.is_async() {
-      quote!(::std::boxed::Box::pin(#invocation))
+    let thunk_body = if method.is_abstract {
+      let message = format!("`{}::{method_name}` is abstract", class_name(&own));
+      quote!(::core::unreachable!(#message))
+    } else if method.is_async() {
+      quote! {
+        let view: &Self = unsafe { #rt::view_unchecked(__this) };
+        ::std::boxed::Box::pin(#invocation)
+      }
     } else {
-      invocation
+      quote! {
+        let view: &Self = unsafe { #rt::view_unchecked(__this) };
+        #invocation
+      }
     };
+    let allow_unused = method.is_abstract.then(|| quote!(#[allow(unused_variables)]));
     // The thunk is only installed in this class's table and its descendants' copies. Its slot's type
     // stops it being called detached from its object without `unsafe`.
     handle_methods.push(quote! {
       /// # Safety
       /// The receiver must be a `Self`, or a descendant of `Self`.
+      #allow_unused
       #thunk_sig {
-        let view: &Self = unsafe { #rt::view_unchecked(__this) };
         #thunk_body
       }
     });
-    let self_token = &item
-      .sig
-      .receiver()
-      .ok_or_else(|| Error::new_spanned(item, "missing receiver"))?
-      .self_token;
+    let self_token = method.receiver()?;
+    let (vis, attrs) = (&item.vis, &item.attrs);
     if method.kind == Kind::Virtual {
       slots.push(quote! {
         /// # Safety
@@ -125,10 +136,9 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       });
       initializers.push(quote!(#method_name: Self::#thunk_name,));
       let sig = &item.sig;
-      let attrs = &item.attrs;
       handle_methods.push(quote! {
         #(#attrs)*
-        pub #sig {
+        #vis #sig {
           // SAFETY: the slot comes from this object's own table.
           unsafe { (#self_token.__inner.__handle.table().#method_name)(#self_token, #(#args),*) } #await_call
         }
@@ -136,25 +146,40 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     } else {
       let index = model.declaring_ancestor(method);
       let mut path = quote!(table);
+      let mut own_path = quote!(#self_token.__inner.__handle.table());
       for _ in index..ancestors.len() {
         path = quote!(#path.base);
+        own_path = quote!(#own_path.base);
       }
       overrides.push(quote!(#path.#method_name = Self::#thunk_name;));
-      let mut sig = item.sig.clone();
-      sig.ident = format_ident!("super_{method_name}");
-      let mut super_path = quote!(#self_token.__inner.__handle.table().parent);
-      for _ in index + 1..ancestors.len() {
-        super_path = quote!(#super_path.base);
-      }
-      let doc = format!("Calls the parent class's implementation of `{method_name}`.");
+      let sig = &item.sig;
+      // An override's wrapper documents it, and is only called directly in its own module when private.
       handle_methods.push(quote! {
-        #[doc = #doc]
-        #[inline]
-        #sig {
-          // SAFETY: the parent's table holds slots of this object's ancestors.
-          unsafe { (#super_path.#method_name)(#self_token, #(#args),*) } #await_call
+        #(#attrs)*
+        #[allow(dead_code)]
+        #vis #sig {
+          // SAFETY: the slot comes from this object's own table.
+          unsafe { (#own_path.#method_name)(#self_token, #(#args),*) } #await_call
         }
       });
+      if method.has_super {
+        let mut sig = item.sig.clone();
+        sig.ident = format_ident!("super_{method_name}");
+        let mut super_path = quote!(#self_token.__inner.__handle.table().parent);
+        for _ in index + 1..ancestors.len() {
+          super_path = quote!(#super_path.base);
+        }
+        let doc = format!("Calls the parent class's implementation of `{method_name}`.");
+        handle_methods.push(quote! {
+          #[doc = #doc]
+          #[inline]
+          #[allow(dead_code)]
+          #sig {
+            // SAFETY: the parent's table holds slots of this object's ancestors.
+            unsafe { (#super_path.#method_name)(#self_token, #(#args),*) } #await_call
+          }
+        });
+      }
     }
   }
 
@@ -201,6 +226,15 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     }
   });
   let data_ty = model.data_ty();
+  let from_data = (!model.is_abstract).then(|| {
+    quote! {
+      #[inline]
+      fn __from_data(data: #data_ty) -> Self {
+        <Self as #rt::Class>::from_handle(#rt::Handle::new(<Self as #rt::ClassData>::build(data)))
+      }
+    }
+  });
+  let trait_impls = common::trait_impls(model)?;
   let shared = common::shared_items(model, quote!(self.__inner.__handle.identity()));
   let descriptor = common::descriptor(model, &own_fields, &own_table);
 
@@ -281,10 +315,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     }
 
     impl #ig #own #wc {
-      #[inline]
-      fn __from_data(data: #data_ty) -> Self {
-        <Self as #rt::Class>::from_handle(#rt::Handle::new(<Self as #rt::ClassData>::build(data)))
-      }
+      #from_data
 
       #[inline]
       fn __fields(&self) -> &#own_fields {
@@ -308,6 +339,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
     #deref
     #shared
+    #trait_impls
     #descriptor
   })
 }

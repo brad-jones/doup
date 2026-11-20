@@ -40,8 +40,8 @@ Classes can be generic, e.g. `struct Node<T> { value: T, next: Option<Self> }`. 
 ### Inheritance
 
 A class declared `#[class(open)]` can be extended with `#[class(extends = Parent)]`, naming only the immediate parent.
-Mark methods `#[class_virtual]` to let subclasses override them with `#[class_override]`, and call the parent's version
-with `super_x()`. Calls are late-bound, like in Python, Java or C#:
+Mark methods `#[class_virtual]` to let subclasses override them with `#[class_override]` (with the same signature and
+visibility), and call the parent's version with `super_x()`. Calls are late-bound, like in Python, Java or C#:
 
 ```rust
 #[class(open)]
@@ -89,6 +89,39 @@ assert!(animal.downcast::<Dog>().unwrap().good());
 
 A subclass dereferences to its parent, so the parent's accessors and methods work on it, and `upcast`, `is` and
 `downcast` convert between the classes of a hierarchy. Virtual methods can be `async`.
+
+A `#[class(abstract)]` class can't be instantiated, and may declare `#[class_abstract] fn x(&self);` methods without a
+body, which every concrete subclass must implement (checked at compile time). As in Scala, implementing an abstract
+method doesn't need `#[class_override]`, but replacing an implementation does, so a method can never silently shadow an
+inherited virtual one. With `implements = Trait`, the class's virtual and abstract methods declared without a
+visibility, like those of a trait impl, implement `Trait`:
+
+```rust
+pub trait Shape {
+  fn area(&self) -> f64;
+}
+
+#[class(abstract, implements = Shape)]
+pub struct Polygon {}
+
+#[class_methods]
+impl Polygon {
+  #[class_abstract]
+  fn area(&self) -> f64;
+}
+
+#[class(extends = Polygon)]
+pub struct Square {
+  pub side: f64,
+}
+
+#[class_methods]
+impl Square {
+  fn area(&self) -> f64 {
+    self.side() * self.side()
+  }
+}
+```
 
 An `open` class must be declared at the root of its crate (final classes can live anywhere). Classes get single
 inheritance; for multiple inheritance, implement traits as interfaces and mixins, as

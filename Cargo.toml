@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "projects/config",
+  "projects/config2",
   "projects/galvanize-rs",
   "projects/galvanize-rs/fixtures/safe",
   "projects/galvanize-rs/fixtures/unsafe",

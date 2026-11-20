@@ -1,7 +1,9 @@
 // Async virtual methods: suspension, borrowed inputs, `super`, laziness, thread migration and cancellation,
 // run against the fixture crate in scope as `fixtures`. See `scenarios.rs` for how it's shared.
 
-use fixtures::{AsyncAnimal, AsyncBoxed as ImportedBox, AsyncBoxedData, AsyncDog as ImportedDog};
+use fixtures::{
+  AsyncAnimal, AsyncBoxed as ImportedBox, AsyncBoxedData, AsyncDog as ImportedDog, AsyncSource, AsyncSourceData, Lookup,
+};
 use galvanize_rs::{class, class_methods};
 use std::future::Future;
 use std::sync::Arc;
@@ -189,4 +191,36 @@ async fn owning_async_tasks_spawn_on_tokio() {
   })
   .await
   .expect("Send task completed");
+}
+
+#[class(extends = AsyncSource)]
+pub struct MemorySource {
+  pub prefix: String,
+}
+
+#[class_methods]
+impl MemorySource {
+  async fn lookup(&self, key: &str) -> Result<String, &'static str> {
+    fixtures::suspend_once().await;
+    if key.is_empty() {
+      return Err("empty key");
+    }
+    Ok(format!("{}{}:{key}", self.prefix(), self.name()))
+  }
+}
+
+#[test]
+fn abstract_async_methods_dispatch_through_interfaces() {
+  let source = MemorySource::from_data(MemorySourceData {
+    base: AsyncSourceData { name: "mem".into() },
+    prefix: "@".into(),
+  });
+  let base: AsyncSource = source.upcast();
+  assert_eq!(run(Lookup::lookup(&base, "k")), Ok("@mem:k".to_string()));
+  assert_eq!(run(source.lookup("j")), Ok("@mem:j".to_string()));
+  assert_eq!(
+    run(base.lookup_all(&["a", "b"])),
+    Ok(vec!["@mem:a".to_string(), "@mem:b".to_string()])
+  );
+  assert_eq!(run(base.lookup_all(&["a", ""])), Err("empty key"));
 }

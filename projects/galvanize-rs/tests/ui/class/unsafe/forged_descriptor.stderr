@@ -13,8 +13,11 @@ error[E0277]: `Puppy` isn't an open #[class], so it can't be extended
              AsyncAnimal
              AsyncBoxed<T>
              AsyncDog
+             AsyncSource
              Boxed<T>
              Dog
+             Polygon
+             Rectangle
 note: required by a bound in `galvanize_rs::__private::require_open`
   --> src/class/mod.rs
    |

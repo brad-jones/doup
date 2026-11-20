@@ -18,11 +18,11 @@ mod unsafe_runtime;
 use descriptor::{Ancestor, Inheritance, Input, Substitute, VirtualMethod};
 use fields::{ClassField, RESERVED_NAMES, SelfType, names_in};
 use generics::ClassGenerics;
-use methods::{Inherited, Kind, Method};
+use methods::{Context, Inherited, InheritedMethod, Kind, Method};
 use options::{ClassOptions, Runtime, parse_class_options};
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use syn::{
   Attribute, Error, Fields, GenericArgument, Generics, Ident, ItemImpl, ItemStruct, Path, PathArguments, Result, Type,
   Visibility, parse_quote,
@@ -265,6 +265,41 @@ fn validate_declaration(options: &ClassOptions, item: &ItemStruct) -> Result<Cla
   generics::class_generics(&item.generics, &fields, options.extends.as_ref())
 }
 
+/// Requires a concrete class to implement every abstract method it inherits without an implementation.
+fn require_implementations(
+  class: &Ident,
+  ancestors: &[Ancestor],
+  unimplemented: &HashMap<String, usize>,
+  methods: &[Method],
+) -> Result<()> {
+  let mut missing: Vec<(usize, &String)> = unimplemented
+    .iter()
+    .filter(|(name, _)| {
+      !methods
+        .iter()
+        .any(|m| m.kind == Kind::Override && m.name() == name.as_str())
+    })
+    .map(|(name, index)| (*index, name))
+    .collect();
+  if missing.is_empty() {
+    return Ok(());
+  }
+  missing.sort();
+  let names: Vec<String> = missing
+    .iter()
+    .map(|(index, name)| format!("`{}::{name}`", descriptor::class_name(&ancestors[*index].handle)))
+    .collect();
+  let (noun, list) = match names.split_last() {
+    Some((last, [])) => ("method", last.clone()),
+    Some((last, rest)) => ("methods", format!("{} and {last}", rest.join(", "))),
+    None => unreachable!("missing isn't empty"),
+  };
+  Err(Error::new(
+    class.span(),
+    format!("`{class}` must implement the abstract {noun} {list}, or be declared #[class(abstract)]"),
+  ))
+}
+
 /// Rejects parents that can never be a class, which would otherwise give confusing errors.
 fn validate_extends(extends: &Type, generics: &Generics) -> Result<()> {
   if names_in(extends.to_token_stream()).contains("Self") {
@@ -291,6 +326,9 @@ pub struct Model {
   /// The struct's other attributes, which apply to `XData`.
   data_attrs: Vec<Attribute>,
   open: bool,
+  is_abstract: bool,
+  /// The traits named by `implements`, which `Method::implements` indexes.
+  implements: Vec<Path>,
   parent: Option<Type>,
   runtime: Runtime,
   /// The `runtime_strategy` as written, if it was.
@@ -308,6 +346,8 @@ impl Model {
     let mut options = parse_class_options(input.attr)?;
     let krate = options.krate.clone();
     let open = options.open;
+    let is_abstract = options.is_abstract;
+    let implements = std::mem::take(&mut options.implements);
     let extends = options.extends.clone();
     let runtime = options.runtime.take();
     let mut item = input.item;
@@ -341,9 +381,26 @@ impl Model {
     methods::validate_impl(&input.methods, &own, &generics.full)?;
 
     let mut inherited = Inherited::new();
+    // The inherited abstract methods that no ancestor implements, and the ancestor declaring each.
+    let mut unimplemented = HashMap::new();
     for (index, ancestor) in ancestors.iter().enumerate() {
       for method in &ancestor.methods {
-        inherited.insert(method.name.to_string(), (index, method.is_async));
+        let name = method.name.to_string();
+        if method.is_abstract {
+          unimplemented.insert(name.clone(), index);
+        }
+        inherited.insert(
+          name,
+          InheritedMethod {
+            index,
+            class: descriptor::class_name(&ancestor.handle),
+            is_async: method.is_async,
+            vis: method.vis.clone(),
+          },
+        );
+      }
+      for name in &ancestor.overrides {
+        unimplemented.remove(&name.to_string());
       }
     }
     let mut reserved: HashSet<String> = RESERVED_NAMES.iter().map(|n| n.to_string()).collect();
@@ -351,7 +408,16 @@ impl Model {
       let bare = field.bare();
       reserved.extend([bare.to_string(), format!("set_{bare}"), format!("update_{bare}")]);
     }
-    let methods = methods::collect(input.methods, &mut reserved, &inherited)?;
+    let context = Context {
+      inherited: &inherited,
+      unimplemented: &unimplemented.keys().cloned().collect(),
+      implements: &implements,
+      is_abstract,
+    };
+    let methods = methods::collect(input.methods, &mut reserved, &context)?;
+    if !is_abstract {
+      require_implementations(&name, &ancestors, &unimplemented, &methods)?;
+    }
 
     // Doc comments document the class, which `#[class]` already declared.
     let data_attrs = item.attrs.into_iter().filter(|a| !a.path().is_ident("doc")).collect();
@@ -361,6 +427,8 @@ impl Model {
       name,
       data_attrs,
       open,
+      is_abstract,
+      implements,
       parent: extends,
       runtime,
       runtime_path,
@@ -414,13 +482,25 @@ impl Model {
       .filter(|m| m.kind == Kind::Virtual)
       .map(|m| VirtualMethod {
         name: m.name().clone(),
+        vis: m.item.vis.clone(),
         is_async: m.is_async(),
+        is_abstract: m.is_abstract,
       })
+      .collect()
+  }
+
+  /// The names of the inherited virtual methods this class overrides.
+  fn own_overrides(&self) -> Vec<Ident> {
+    self
+      .methods
+      .iter()
+      .filter(|m| m.kind == Kind::Override)
+      .map(|m| m.name().clone())
       .collect()
   }
 
   /// The index of the ancestor that declares the virtual method an override overrides.
   fn declaring_ancestor(&self, method: &Method) -> usize {
-    self.inherited[&method.name().to_string()].0
+    self.inherited[&method.name().to_string()].index
   }
 }

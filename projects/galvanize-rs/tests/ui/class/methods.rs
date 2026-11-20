@@ -69,9 +69,6 @@ impl Unsupported {
   }
 
   #[class_virtual]
-  fn private(&self) {}
-
-  #[class_virtual]
   #[class_override]
   pub fn both(&self) {}
 
@@ -89,6 +86,17 @@ impl SuperCollision {
   }
 
   pub fn super_speak(&self) {}
+}
+
+// Replacing an inherited implementation must be marked.
+#[class(extends = Animal)]
+pub struct Unmarked {}
+
+#[class_methods]
+impl Unmarked {
+  pub fn speak(&self) -> String {
+    "hi".into()
+  }
 }
 
 #[class]

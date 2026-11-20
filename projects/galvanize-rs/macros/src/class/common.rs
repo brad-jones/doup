@@ -2,9 +2,10 @@
 //! hidden `__fields()` method each backend defines.
 
 use super::Model;
+use super::methods::arguments;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
-use syn::{Type, spanned::Spanned};
+use syn::{Result, Type, spanned::Spanned};
 
 /// `XData`, the initial values passed to `from_data`.
 pub fn data_struct(model: &Model) -> TokenStream {
@@ -124,6 +125,17 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
   });
   let label = name.to_string();
 
+  // An abstract class can't be instantiated, so it doesn't get a constructor.
+  let from_data = (!model.is_abstract).then(|| {
+    quote! {
+      /// Creates a new object from its initial values.
+      #[inline]
+      fn from_data(data: #data_ty) -> Self {
+        Self::__from_data(data)
+      }
+    }
+  });
+
   let open = model.open.then(|| quote!(impl #ig #private::OpenClass for #own #wc {}));
   let runtime_check = model.runtime_path.as_ref().map(|path| {
     let check = if model.runtime.is_unsafe() {
@@ -139,11 +151,7 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
 
     #[allow(dead_code)]
     impl #ig #own #wc {
-      /// Creates a new object from its initial values.
-      #[inline]
-      fn from_data(data: #data_ty) -> Self {
-        Self::__from_data(data)
-      }
+      #from_data
 
       /// Returns `true` if both handles refer to the same object, whatever class they view it as.
       #[inline]
@@ -279,9 +287,10 @@ pub fn descriptor(model: &Model, fields: &Type, dispatch: &Type) -> TokenStream 
   let own = model.own();
   let data = model.data_ty();
   let virtuals = model.own_virtuals();
+  let overrides = model.own_overrides();
   // A callback may run in another crate, so anchor this class's `$crate` to its own declaration.
   let record = quote_spanned! {name.span()=>
-    { $crate::#own; $crate::#fields; $crate::#data; $crate::#dispatch; #(#virtuals)* }
+    { $crate::#own; $crate::#fields; $crate::#data; $crate::#dispatch; [#(#virtuals)*] [#(#overrides)*] }
   };
   quote! {
     #[doc(hidden)]
@@ -296,4 +305,43 @@ pub fn descriptor(model: &Model, fields: &Type, dispatch: &Type) -> TokenStream 
     #[allow(unused_imports)]
     #vis use #descriptor as #name;
   }
+}
+
+/// The impls of the traits named by `implements`. Each of the trait's methods that the class declares
+/// forwards to the class's own (virtual) method, which `Self::x` names in preference to the trait's.
+///
+/// Only the method's docs and `cfg`s are repeated. Without docs of its own, rustdoc shows the trait's.
+pub fn trait_impls(model: &Model) -> Result<TokenStream> {
+  let own = model.own();
+  let (ig, _, wc) = model.generics.full.split_for_impl();
+  let mut impls = TokenStream::new();
+  for (index, path) in model.implements.iter().enumerate() {
+    let mut methods = Vec::new();
+    for method in model.methods.iter().filter(|m| m.implements == Some(index)) {
+      let item = &method.item;
+      let sig = &item.sig;
+      let name = &sig.ident;
+      let attrs = item.attrs.iter().filter(|a| {
+        let path = a.path();
+        path.is_ident("doc") || path.is_ident("cfg") || path.is_ident("cfg_attr")
+      });
+      let receiver = method.receiver()?;
+      let args = arguments(item)?;
+      let await_call = method.is_async().then(|| quote!(.await));
+      // Spanned so that errors about a method, e.g. that the trait doesn't have it, point at it.
+      methods.push(quote_spanned! {name.span()=>
+        #(#attrs)*
+        #[inline]
+        #sig {
+          Self::#name(#receiver, #(#args),*) #await_call
+        }
+      });
+    }
+    impls.extend(quote_spanned! {path.span()=>
+      impl #ig #path for #own #wc {
+        #(#methods)*
+      }
+    });
+  }
+  Ok(impls)
 }

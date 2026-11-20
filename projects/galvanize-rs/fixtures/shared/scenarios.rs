@@ -2,7 +2,9 @@
 // `fixtures`. Written for `SafeRuntimeStrategy`; the unsafe fixtures' build script rewrites it for
 // `UnsafeRuntimeStrategy` and runs its tests under Miri only.
 
-use fixtures::{Animal, Boxed as ImportedBox, BoxedData, Dog as ImportedDog, Puppy, Tagged};
+use fixtures::{
+  Animal, Boxed as ImportedBox, BoxedData, Dog as ImportedDog, Named, Polygon, Puppy, Rectangle, Shape, Tagged,
+};
 use galvanize_rs::{
   ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, DefaultPointerStrategy, Extends, List, MutablePointer,
   PointerStrategy, SafeRuntimeStrategy, Str, class, class_methods, sf,
@@ -603,4 +605,120 @@ fn typed_views_do_not_form_ownership_cycles() {
   assert_eq!(drops.load(Ordering::SeqCst), 0);
   drop(base);
   assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+// ---------- abstract classes and interfaces, across crates ----------
+
+/// Final classes can live in any module, which makes their private overrides private to it.
+mod shapes {
+  use super::fixtures::{Polygon, PolygonData, Rectangle};
+  use galvanize_rs::{class, class_methods};
+
+  #[class(extends = Rectangle)]
+  pub struct Square {}
+
+  #[class_methods]
+  impl Square {
+    pub fn new(label: &str, side: f64) -> Self {
+      Self::from_data(SquareData {
+        base: Rectangle::init(label, side, side),
+      })
+    }
+
+    /// Replaces `Rectangle`'s implementation of the abstract method, so it's marked.
+    #[class_override]
+    fn area(&self) -> f64 {
+      self.super_area() + 0.5
+    }
+
+    pub fn scaled(&self, factor: f64) -> f64 {
+      self.area() * factor
+    }
+  }
+
+  #[class(extends = Polygon)]
+  pub struct Triangle {
+    pub width: f64,
+    pub height: f64,
+  }
+
+  #[class_methods]
+  impl Triangle {
+    pub fn new(label: &str, width: f64, height: f64) -> Self {
+      Self::from_data(TriangleData {
+        base: PolygonData { label: label.into() },
+        width,
+        height,
+      })
+    }
+
+    /// Implements an abstract method, where the marker is optional.
+    #[class_override]
+    fn area(&self) -> f64 {
+      self.width() * self.height() / 2.0
+    }
+
+    #[class_override]
+    fn corners(&self) -> u64 {
+      3
+    }
+
+    #[class_override]
+    fn title(&self) -> String {
+      format!("triangle, not {}", self.super_title())
+    }
+
+    pub fn scaled(&self, factor: f64) -> f64 {
+      self.area() * factor
+    }
+  }
+}
+
+use shapes::{Square, Triangle};
+
+#[test]
+fn abstract_methods_dispatch_to_implementations() {
+  let polygons: Vec<Polygon> = vec![Square::new("sq", 2.0).upcast(), Triangle::new("tri", 3.0, 4.0).upcast()];
+  let areas: Vec<f64> = polygons.iter().map(Shape::area).collect();
+  assert_eq!(areas, [4.5, 6.0]);
+  assert_eq!(polygons[0].summary(), "4 corners, area 4.5");
+  assert_eq!(polygons[1].summary(), "3 corners, area 6");
+  assert_eq!(polygons[0].scaled(2.0), 9.0);
+  assert_eq!(polygons[1].describe(), "triangle, not polygon tri: 6");
+}
+
+#[test]
+fn subclasses_reach_interface_methods_through_their_ancestors() {
+  let square = Square::new("sq", 3.0);
+  // `Square`'s own `area` is private to `shapes`, so these resolve to `Polygon`'s trait impls.
+  assert_eq!(square.area(), 9.5);
+  assert_eq!(square.title(), "polygon sq");
+  assert_eq!(
+    Named::title(&*Triangle::new("tri", 1.0, 1.0)),
+    "triangle, not polygon tri"
+  );
+
+  fn total<S: Shape + ?Sized>(shapes: &[&S]) -> f64 {
+    shapes.iter().map(|s| s.area()).sum()
+  }
+  let rectangle: Rectangle = square.upcast();
+  let shapes: Vec<Box<dyn Shape>> = vec![
+    Box::new(rectangle.upcast::<Polygon, _>()),
+    Box::new(Polygon::from(&square)),
+  ];
+  assert_eq!(total(&shapes.iter().map(|s| &**s).collect::<Vec<_>>()), 19.0);
+}
+
+#[test]
+fn abstract_classes_support_casts_and_debug() {
+  let polygon: Polygon = Square::new("sq", 1.0).upcast();
+  assert!(polygon.is::<Rectangle>());
+  assert!(polygon.downcast::<Triangle>().is_none());
+  let rectangle: Rectangle = polygon.downcast().expect("a Square is a Rectangle");
+  assert!(rectangle.ptr_eq(&polygon.downcast::<Square>().expect("the dynamic class")));
+  assert_eq!(rectangle.width(), 1.0);
+  assert_eq!(
+    format!("{rectangle:?}"),
+    r#"Rectangle { label: "sq", width: 1.0, height: 1.0 }"#
+  );
 }

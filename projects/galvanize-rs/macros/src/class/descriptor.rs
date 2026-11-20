@@ -2,13 +2,15 @@
 //!
 //! An open class exports a `macro_rules!` descriptor under its own name, in the macro namespace. A subclass
 //! invokes its parent's descriptor with a callback (`__inherit`), which receives the parent's ancestry: its
-//! runtime strategy, and for the parent and each of its ancestors, the names of their generated types and
-//! virtual methods. Descriptors don't contain method bodies or signatures, and only exist while compiling.
+//! runtime strategy, and for the parent and each of its ancestors, the names of their generated types, the
+//! virtual methods they declare (with their visibility, and whether they're async or abstract) and the names
+//! of the methods they override. Descriptors don't contain method bodies or signatures, and only exist while
+//! compiling.
 
 use quote::{ToTokens, quote};
 use std::collections::HashMap;
 use syn::{
-  Ident, ItemImpl, ItemStruct, LitBool, Result, Token, Type, braced, bracketed,
+  Ident, ItemImpl, ItemStruct, LitBool, Result, Token, Type, Visibility, braced, bracketed,
   fold::{self, Fold},
   parse::{Parse, ParseStream},
 };
@@ -42,25 +44,39 @@ impl ToTokens for Input {
 #[derive(Clone)]
 pub struct VirtualMethod {
   pub name: Ident,
+  /// The visibility it was declared with, which overrides must repeat.
+  pub vis: Visibility,
   pub is_async: bool,
+  pub is_abstract: bool,
 }
 
 impl Parse for VirtualMethod {
   fn parse(input: ParseStream<'_>) -> Result<Self> {
     let name = input.parse()?;
+    let vis;
+    bracketed!(vis in input);
+    let vis = vis.parse()?;
     let is_async: LitBool = input.parse()?;
+    let is_abstract: LitBool = input.parse()?;
     input.parse::<Token![;]>()?;
     Ok(Self {
       name,
+      vis,
       is_async: is_async.value,
+      is_abstract: is_abstract.value,
     })
   }
 }
 
 impl ToTokens for VirtualMethod {
   fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-    let Self { name, is_async } = self;
-    tokens.extend(quote! { #name #is_async; });
+    let Self {
+      name,
+      vis,
+      is_async,
+      is_abstract,
+    } = self;
+    tokens.extend(quote! { #name [#vis] #is_async #is_abstract; });
   }
 }
 
@@ -77,6 +93,8 @@ pub struct Ancestor {
   pub dispatch: Type,
   /// The virtual methods the class declares (not those it inherits).
   pub methods: Vec<VirtualMethod>,
+  /// The inherited virtual methods the class overrides.
+  pub overrides: Vec<Ident>,
 }
 
 impl Parse for Ancestor {
@@ -89,9 +107,17 @@ impl Parse for Ancestor {
       Ok(ty)
     };
     let (handle, fields, data, dispatch) = (ty()?, ty()?, ty()?, ty()?);
+    let virtuals;
+    bracketed!(virtuals in content);
     let mut methods = Vec::new();
-    while !content.is_empty() {
-      methods.push(content.parse()?);
+    while !virtuals.is_empty() {
+      methods.push(virtuals.parse()?);
+    }
+    let overridden;
+    bracketed!(overridden in content);
+    let mut overrides = Vec::new();
+    while !overridden.is_empty() {
+      overrides.push(overridden.parse()?);
     }
     Ok(Self {
       handle,
@@ -99,6 +125,7 @@ impl Parse for Ancestor {
       data,
       dispatch,
       methods,
+      overrides,
     })
   }
 }
@@ -111,8 +138,21 @@ impl ToTokens for Ancestor {
       data,
       dispatch,
       methods,
+      overrides,
     } = self;
-    tokens.extend(quote! { { #handle; #fields; #data; #dispatch; #(#methods)* } });
+    tokens.extend(quote! { { #handle; #fields; #data; #dispatch; [#(#methods)*] [#(#overrides)*] } });
+  }
+}
+
+/// The name of a class, as written in errors, from its handle type (which may start with `$crate`).
+pub fn class_name(handle: &Type) -> String {
+  match handle {
+    Type::Path(path) => path
+      .path
+      .segments
+      .last()
+      .map_or_else(|| handle.to_token_stream().to_string(), |s| s.ident.to_string()),
+    other => other.to_token_stream().to_string(),
   }
 }
 

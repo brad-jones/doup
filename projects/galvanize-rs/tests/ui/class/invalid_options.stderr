@@ -1,4 +1,4 @@
-error: unknown class option, expected `open`, `extends = ...`, `runtime_strategy = ...`, `pointer_strategy = ...` or `crate = ...`
+error: unknown class option, expected `open`, `abstract`, `extends = ...`, `implements = ...`, `runtime_strategy = ...`, `pointer_strategy = ...` or `crate = ...`
  --> tests/ui/class/invalid_options.rs:3:9
   |
 3 | #[class(unknown = 1)]

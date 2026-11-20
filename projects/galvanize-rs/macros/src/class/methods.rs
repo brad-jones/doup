@@ -1,25 +1,35 @@
-//! The `#[class_methods]` block: ordinary, virtual and overriding methods.
+//! The `#[class_methods]` block: ordinary, virtual, abstract and overriding methods.
 
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
 use syn::{
-  Error, FnArg, Generics, Ident, ImplItem, ImplItemFn, ItemImpl, Pat, PathArguments, Result, ReturnType, Type,
+  Attribute, Error, FnArg, Generics, Ident, ImplItem, ImplItemFn, ItemImpl, Meta, Pat, Path, PathArguments, Result,
+  ReturnType, Signature, Token, Type, Visibility,
   fold::{self, Fold},
+  parse::{ParseStream, Parser},
   parse_quote,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
   Ordinary,
+  /// Declares a virtual method, which may be abstract.
   Virtual,
   Override,
 }
 
 pub struct Method {
   pub kind: Kind,
-  /// The method with its `class_virtual`/`class_override` marker removed.
+  /// The method with its `class_virtual`/`class_abstract`/`class_override` marker removed. An abstract
+  /// method's empty block is a placeholder, it has no body.
   pub item: ImplItemFn,
+  /// Whether this is a virtual method without a body.
+  pub is_abstract: bool,
+  /// The index, in the class's `implements`, of the trait this virtual method implements.
+  pub implements: Option<usize>,
+  /// Whether an override gets a `super_x` method, i.e. whether an ancestor implements the method.
+  pub has_super: bool,
 }
 
 impl Method {
@@ -30,11 +40,40 @@ impl Method {
   pub fn is_async(&self) -> bool {
     self.item.sig.asyncness.is_some()
   }
+
+  /// The `self` token of the method's receiver, which generated code must use to refer to it.
+  pub fn receiver(&self) -> Result<&Token![self]> {
+    self
+      .item
+      .sig
+      .receiver()
+      .map(|r| &r.self_token)
+      .ok_or_else(|| Error::new_spanned(&self.item.sig, "missing receiver"))
+  }
 }
 
-/// A virtual method declared by an ancestor: the index of the ancestor that declares it, and whether it's
-/// async.
-pub type Inherited = HashMap<String, (usize, bool)>;
+/// A virtual method declared by an ancestor.
+pub struct InheritedMethod {
+  /// The index of the ancestor that declares it.
+  pub index: usize,
+  /// The name of the ancestor that declares it, for errors.
+  pub class: String,
+  pub is_async: bool,
+  pub vis: Visibility,
+}
+
+/// The virtual methods declared by a class's ancestors, by name.
+pub type Inherited = HashMap<String, InheritedMethod>;
+
+/// What `collect` needs to know about the class.
+pub struct Context<'a> {
+  pub inherited: &'a Inherited,
+  /// The inherited abstract methods that no ancestor implements.
+  pub unimplemented: &'a HashSet<String>,
+  /// The traits named by the class's `implements` option.
+  pub implements: &'a [Path],
+  pub is_abstract: bool,
+}
 
 /// Checks the methods block is a plain inherent impl of the class.
 pub fn validate_impl(methods: &ItemImpl, own: &Type, generics: &Generics) -> Result<()> {
@@ -77,11 +116,11 @@ pub fn validate_impl(methods: &ItemImpl, own: &Type, generics: &Generics) -> Res
 
 /// Collects the methods of a `#[class_methods]` block, checking them against the names the class
 /// generates (`reserved`) and the virtual methods its ancestors declare.
-pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, inherited: &Inherited) -> Result<Vec<Method>> {
+pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Vec<Method>> {
   let mut methods = Vec::new();
   let mut errors: Option<Error> = None;
   for item in block.items {
-    match collect_one(item, reserved, inherited) {
+    match collect_one(item, reserved, context) {
       Ok(method) => methods.push(method),
       Err(e) => match errors.as_mut() {
         Some(errors) => errors.combine(e),
@@ -93,7 +132,7 @@ pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, inherited: &Inhe
     return Err(errors);
   }
   for method in &methods {
-    if method.kind == Kind::Override && reserved.contains(&format!("super_{}", method.name())) {
+    if method.has_super && reserved.contains(&format!("super_{}", method.name())) {
       return Err(Error::new_spanned(
         method.name(),
         format!("`super_{}` conflicts with another member", method.name()),
@@ -103,64 +142,183 @@ pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, inherited: &Inhe
   Ok(methods)
 }
 
-fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, inherited: &Inherited) -> Result<Method> {
-  let ImplItem::Fn(mut item) = item else {
-    return Err(Error::new_spanned(item, "#[class_methods] only supports methods"));
+/// A method's `#[class_virtual]`, `#[class_abstract]` or `#[class_override]` marker.
+struct Marker {
+  kind: Kind,
+  is_abstract: bool,
+  /// The trait named by `#[class_virtual(Trait)]` or `#[class_abstract(Trait)]`.
+  implements: Option<Path>,
+}
+
+fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Method> {
+  let (mut item, has_body) = match item {
+    ImplItem::Fn(item) => (item, true),
+    ImplItem::Verbatim(tokens) => (parse_bodyless(tokens)?, false),
+    other => return Err(Error::new_spanned(other, "#[class_methods] only supports methods")),
   };
-  let kind = method_kind(&mut item)?;
+  let marker = take_marker(&mut item)?;
   let label = item.sig.ident.to_string();
+  let inherited = context.inherited.get(&label);
+  // A method named after an inherited virtual method overrides it, so it can't shadow it by accident. As in
+  // Scala, replacing an implementation must be marked, while implementing an abstract method needn't be
+  // (a misspelt implementation leaves the abstract method unimplemented, which is an error anyway).
+  let kind = match (marker.kind, inherited) {
+    (Kind::Ordinary, Some(_)) if context.unimplemented.contains(&label) => Kind::Override,
+    (Kind::Ordinary, Some(declared)) => {
+      return Err(Error::new_spanned(
+        &item.sig.ident,
+        format!(
+          "`{label}` would override `{}::{label}`, mark it #[class_override] or rename it",
+          declared.class
+        ),
+      ));
+    }
+    (kind, _) => kind,
+  };
+  if !has_body && !marker.is_abstract {
+    return Err(Error::new_spanned(
+      &item.sig,
+      "only #[class_abstract] methods can leave out their body",
+    ));
+  }
+  if has_body && marker.is_abstract {
+    return Err(Error::new_spanned(
+      &item.block,
+      "an abstract method has no body, end its signature with `;`",
+    ));
+  }
+  if marker.is_abstract && !context.is_abstract {
+    return Err(Error::new_spanned(
+      &item.sig.ident,
+      "only abstract classes can declare abstract methods, declare the class with #[class(abstract)]",
+    ));
+  }
   if label.starts_with("__") || !reserved.insert(label.clone()) {
     return Err(Error::new_spanned(
       &item.sig.ident,
       "this method's name conflicts with a member generated by #[class]",
     ));
   }
-  if kind != Kind::Ordinary {
-    check_virtual_signature(&item)?;
+  if kind == Kind::Ordinary {
+    return Ok(Method {
+      kind,
+      item,
+      is_abstract: false,
+      implements: None,
+      has_super: false,
+    });
   }
-  match (kind, inherited.get(&label)) {
-    (Kind::Virtual, Some(_)) => Err(Error::new_spanned(
-      &item.sig.ident,
-      "an ancestor already declares this virtual method, use #[class_override]",
-    )),
-    (Kind::Override, None) => Err(Error::new_spanned(
-      &item.sig.ident,
-      "no ancestor declares a virtual method with this name",
-    )),
-    (Kind::Override, Some((_, is_async))) if *is_async != item.sig.asyncness.is_some() => Err(Error::new_spanned(
-      &item.sig,
-      "an override must match whether the inherited method is async",
-    )),
-    _ => Ok(Method { kind, item }),
-  }
+  check_dispatchable(&mut item)?;
+  check_virtual_signature(&item)?;
+  let implements = match (kind, inherited) {
+    (Kind::Virtual, Some(_)) => {
+      return Err(Error::new_spanned(
+        &item.sig.ident,
+        "an ancestor already declares this virtual method, leave out the marker to override it",
+      ));
+    }
+    (Kind::Override, None) => {
+      return Err(Error::new_spanned(
+        &item.sig.ident,
+        "no ancestor declares a virtual method with this name",
+      ));
+    }
+    (Kind::Override, Some(declared)) if declared.is_async != item.sig.asyncness.is_some() => {
+      return Err(Error::new_spanned(
+        &item.sig,
+        "an override must match whether the inherited method is async",
+      ));
+    }
+    (Kind::Override, Some(declared)) => {
+      check_override_visibility(&item, &declared.vis)?;
+      None
+    }
+    _ => implemented_trait(
+      &item,
+      marker.implements.as_ref(),
+      marker.is_abstract,
+      context.implements,
+    )?,
+  };
+  Ok(Method {
+    kind,
+    has_super: kind == Kind::Override && !context.unimplemented.contains(&label),
+    item,
+    is_abstract: marker.is_abstract,
+    implements,
+  })
 }
 
-/// Removes a method's `#[class_virtual]` or `#[class_override]` marker and checks the signature a
-/// virtual method needs.
-fn method_kind(method: &mut ImplItemFn) -> Result<Kind> {
-  let mut kind = Kind::Ordinary;
+/// Parses a method without a body, `fn name(&self);`, which `syn` leaves unparsed.
+fn parse_bodyless(tokens: TokenStream) -> Result<ImplItemFn> {
+  let parser = |input: ParseStream<'_>| {
+    let attrs = input.call(Attribute::parse_outer)?;
+    let vis = input.parse()?;
+    let sig: Signature = input.parse()?;
+    input.parse::<Token![;]>()?;
+    Ok(ImplItemFn {
+      attrs,
+      vis,
+      defaultness: None,
+      sig,
+      block: parse_quote!({}),
+    })
+  };
+  parser
+    .parse2(tokens.clone())
+    .map_err(|_| Error::new_spanned(tokens, "#[class_methods] only supports methods"))
+}
+
+/// Removes a method's `#[class_virtual]`, `#[class_abstract]` or `#[class_override]` marker.
+fn take_marker(method: &mut ImplItemFn) -> Result<Marker> {
+  let mut marker = Marker {
+    kind: Kind::Ordinary,
+    is_abstract: false,
+    implements: None,
+  };
+  let mut found = false;
   let mut retained = Vec::new();
   for attr in &method.attrs {
-    let next = if attr.path().is_ident("class_virtual") {
-      Kind::Virtual
+    let (kind, is_abstract) = if attr.path().is_ident("class_virtual") {
+      (Kind::Virtual, false)
+    } else if attr.path().is_ident("class_abstract") {
+      (Kind::Virtual, true)
     } else if attr.path().is_ident("class_override") {
-      Kind::Override
+      (Kind::Override, false)
     } else {
       retained.push(attr.clone());
       continue;
     };
-    if kind != Kind::Ordinary || !matches!(attr.meta, syn::Meta::Path(_)) {
+    let implements = match &attr.meta {
+      Meta::Path(_) => None,
+      Meta::List(list) if kind == Kind::Virtual => Some(list.parse_args::<Path>().map_err(|_| {
+        Error::new_spanned(
+          attr,
+          "expected the trait this method implements, e.g. #[class_virtual(Trait)]",
+        )
+      })?),
+      _ => None,
+    };
+    let bare_override = kind == Kind::Override && !matches!(attr.meta, Meta::Path(_));
+    if found || bare_override || matches!(attr.meta, Meta::NameValue(_)) {
       return Err(Error::new_spanned(
         attr,
-        "use a single, bare #[class_virtual] or #[class_override]",
+        "use a single #[class_virtual], #[class_abstract] or a bare #[class_override]",
       ));
     }
-    kind = next;
+    found = true;
+    marker = Marker {
+      kind,
+      is_abstract,
+      implements,
+    };
   }
   method.attrs = retained;
-  if kind == Kind::Ordinary {
-    return Ok(kind);
-  }
+  Ok(marker)
+}
+
+/// Checks the signature a virtual method or override needs to be dispatched, and marks it `#[inline]`.
+fn check_dispatchable(method: &mut ImplItemFn) -> Result<()> {
   if !method.attrs.iter().any(|attr| attr.path().is_ident("inline")) {
     method.attrs.push(parse_quote!(#[inline]));
   }
@@ -181,14 +339,77 @@ fn method_kind(method: &mut ImplItemFn) -> Result<Kind> {
       "virtual methods and overrides need a safe, non-generic `&self` signature",
     ));
   }
-  if !matches!(method.vis, syn::Visibility::Public(_)) {
+  arguments(method)?;
+  Ok(())
+}
+
+/// Requires an override to repeat the visibility of the method it overrides.
+fn check_override_visibility(method: &ImplItemFn, declared: &Visibility) -> Result<()> {
+  let written = method.vis.to_token_stream().to_string();
+  let expected = declared.to_token_stream().to_string();
+  if written == expected {
+    return Ok(());
+  }
+  let message = if expected.is_empty() {
+    "an override must have the same visibility as the method it overrides, which has none".to_string()
+  } else {
+    format!("an override must have the same visibility as the method it overrides, `{expected}`")
+  };
+  if matches!(method.vis, Visibility::Inherited) {
+    Err(Error::new_spanned(&method.sig.ident, message))
+  } else {
+    Err(Error::new_spanned(&method.vis, message))
+  }
+}
+
+/// Works out which of the class's `implements` traits a virtual method implements, if any.
+///
+/// A method naming a trait implements it. Otherwise, a method without a visibility implements the class's
+/// only trait, as methods in a trait impl don't take a visibility either.
+fn implemented_trait(
+  method: &ImplItemFn,
+  named: Option<&Path>,
+  is_abstract: bool,
+  implements: &[Path],
+) -> Result<Option<usize>> {
+  let marker = if is_abstract { "class_abstract" } else { "class_virtual" };
+  let Some(named) = named else {
+    return match (&method.vis, implements.len()) {
+      (Visibility::Inherited, 1) => Ok(Some(0)),
+      (Visibility::Inherited, n) if n > 1 => Err(Error::new_spanned(
+        &method.sig.ident,
+        format!(
+          "the class implements several traits, name the one this method implements, e.g. #[{marker}({})]",
+          implements[0].to_token_stream()
+        ),
+      )),
+      _ => Ok(None),
+    };
+  };
+  if !matches!(method.vis, Visibility::Inherited) {
     return Err(Error::new_spanned(
-      &method.sig.ident,
-      "virtual methods and overrides must be `pub`",
+      &method.vis,
+      "a method implementing a trait doesn't take a visibility, as in a trait impl",
     ));
   }
-  arguments(method)?;
-  Ok(kind)
+  let text = named.to_token_stream().to_string();
+  let exact = implements.iter().position(|p| p.to_token_stream().to_string() == text);
+  // A bare name also matches a trait listed with a path or type arguments, if only one does.
+  let by_name = || {
+    let ident = named.get_ident()?;
+    let mut matches = implements
+      .iter()
+      .enumerate()
+      .filter(|(_, p)| p.segments.last().is_some_and(|s| s.ident == *ident));
+    let (index, _) = matches.next()?;
+    matches.next().is_none().then_some(index)
+  };
+  exact.or_else(by_name).map(Some).ok_or_else(|| {
+    Error::new_spanned(
+      named,
+      format!("`{text}` isn't one of the traits in this class's `implements` option"),
+    )
+  })
 }
 
 /// Rejects parameter and return types that a dispatch table can't represent.

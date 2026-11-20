@@ -82,7 +82,7 @@ use proc_macro::TokenStream;
 ///
 /// The handle also gets:
 ///
-/// * `from_data` (private), see above.
+/// * `from_data` (private), see above, unless the class is `abstract`.
 /// * `ptr_eq(&self, other)`, which is `true` when both handles refer to the same object, even when they
 ///   view it as different classes.
 /// * `upcast`, `is` and `downcast`, see [Inheritance](#inheritance).
@@ -95,7 +95,10 @@ use proc_macro::TokenStream;
 /// On the struct, `#[class(...)]` takes comma separated options:
 ///
 /// * `open`: allows other classes to extend this one. Without it a class is final.
+/// * `abstract`: makes the class abstract, see [Abstract classes](#abstract-classes). Implies `open`.
 /// * `extends = Parent`: makes this class a subclass of `Parent`, see [Inheritance](#inheritance).
+/// * `implements = Trait` or `implements = (TraitA, TraitB)`: implements traits with the class's virtual
+///   methods, see [Interfaces](#interfaces).
 /// * `runtime_strategy = SafeRuntimeStrategy | UnsafeRuntimeStrategy`: how the hierarchy is implemented,
 ///   see [Runtime strategies](#runtime-strategies). Subclasses inherit their parent's.
 /// * `pointer_strategy = SomePointerStrategy`: the `PointerStrategy` used for every field.
@@ -154,9 +157,14 @@ use proc_macro::TokenStream;
 ///   the object as.
 ///
 /// Mark methods in [`macro@class_methods`] with `#[class_virtual]` to make them overridable, and with
-/// `#[class_override]` to override an inherited one. An override `x` also gets a `super_x` method, which
-/// calls the parent's implementation. Calls are late-bound, so a virtual call made through any view, or
-/// from inside a parent's method, runs the most-derived override.
+/// `#[class_override]` to override an inherited one, with the same signature and visibility. An override
+/// `x` also gets a `super_x` method, which calls the parent's implementation. Calls are late-bound, so a
+/// virtual call made through any view, or from inside a parent's method, runs the most-derived override.
+///
+/// As in Scala, a method named after an inherited virtual method can't shadow it: without
+/// `#[class_override]` it's an error, unless it implements an abstract method (see
+/// [Abstract classes](#abstract-classes)). So adding a virtual method to a class can't silently change
+/// what a subclass's method of the same name does.
 ///
 /// ```
 /// use galvanize_rs::{Str, class, class_methods, sf};
@@ -214,6 +222,80 @@ use proc_macro::TokenStream;
 ///
 /// Virtual methods may be `async`, returning `Send` futures, and overrides must match. Each call to an
 /// async virtual method boxes its future.
+///
+/// # Abstract classes
+///
+/// A class declared `#[class(abstract)]` can't be instantiated, as it doesn't get `from_data`, but its
+/// `XData` still initializes subclasses. It may declare abstract methods, virtual methods without a body,
+/// with `#[class_abstract]`. A class that isn't abstract must implement every abstract method it inherits
+/// that no ancestor implements, which is checked at compile time. Implementing one doesn't need
+/// `#[class_override]`, as there's no implementation to replace (and a misspelt one leaves the abstract
+/// method unimplemented), nor does it get a `super_x`, as there's no implementation to call.
+///
+/// # Interfaces
+///
+/// `implements = Trait` implements `Trait` for the class, so a trait can be an interface the class
+/// fulfils. A proc macro can't see the trait's methods, so the class's virtual and abstract methods
+/// declared *without a visibility*, like the methods of a trait impl, are the ones that implement it. With
+/// several traits, each of those names its trait: `#[class_virtual(TraitA)]`. The trait's methods that the
+/// class doesn't declare keep their defaults, and rustc checks the impl as usual.
+///
+/// Each method is still a method of the class too, callable in its module, and its doc comment documents
+/// the trait impl, which otherwise shows the trait's docs. Use `pub(self)` for a private virtual method
+/// that isn't part of the trait.
+///
+/// Subclasses don't implement the trait themselves, as the macro can't see its signatures. Method calls
+/// such as `square.area()` still reach it through the ancestor that does, and `&*square` or
+/// `square.upcast()` gives that ancestor's handle for code expecting an `impl Trait` or `dyn Trait`.
+/// Overrides of trait methods have no visibility either, so their wrapper on the subclass is private.
+///
+/// ```
+/// use galvanize_rs::{class, class_methods};
+///
+/// pub trait Shape {
+///   /// The area of the shape.
+///   fn area(&self) -> f64;
+///
+///   fn describe(&self) -> String {
+///     format!("area {}", self.area())
+///   }
+/// }
+///
+/// #[class(abstract, implements = Shape)]
+/// pub struct Polygon {
+///   pub label: String,
+/// }
+///
+/// #[class_methods]
+/// impl Polygon {
+///   #[class_abstract]
+///   fn area(&self) -> f64;
+/// }
+///
+/// #[class(extends = Polygon)]
+/// pub struct Square {
+///   pub side: f64,
+/// }
+///
+/// #[class_methods]
+/// impl Square {
+///   pub fn new(side: f64) -> Self {
+///     Self::from_data(SquareData { base: PolygonData { label: "square".into() }, side })
+///   }
+///
+///   /// The side, squared.
+///   fn area(&self) -> f64 {
+///     self.side() * self.side()
+///   }
+/// }
+///
+/// # fn main() {
+/// let square = Square::new(2.0);
+/// let shapes: Vec<Box<dyn Shape>> = vec![Box::new(square.upcast::<Polygon, _>())];
+/// assert_eq!(shapes[0].describe(), "area 4");
+/// assert_eq!(square.area(), 4.0);
+/// # }
+/// ```
 ///
 /// # Runtime strategies
 ///
@@ -280,8 +362,8 @@ use proc_macro::TokenStream;
 ///   struct.
 /// * Fields can't be named `base`, `from_data`, `ptr_eq`, `upcast`, `is` or `downcast`, or start with
 ///   `__`.
-/// * There are no abstract methods and no equivalent of `protected`; private items are only accessible
-///   in their own module, as usual.
+/// * There's no equivalent of `protected`; private items are only accessible in their own module, as
+///   usual.
 /// * `Debug` doesn't detect cycles; printing an object graph that refers back to itself recurses forever.
 ///   Objects that refer to each other strongly are never freed, as with any reference counting.
 #[proc_macro_attribute]
@@ -300,11 +382,20 @@ pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Within it, mark methods with:
 ///
 /// * `#[class_virtual]` to declare a virtual method, which subclasses may override.
-/// * `#[class_override]` to override a virtual method declared by any ancestor. Its signature, including
-///   whether it's `async`, must match. It gets a `super_x` method calling the parent's implementation.
+/// * `#[class_abstract]` to declare an abstract method, a virtual method without a body
+///   (`fn x(&self) -> R;`), in an abstract class.
+/// * `#[class_virtual(Trait)]` or `#[class_abstract(Trait)]` to name the trait a method implements, when
+///   the class `implements` several.
 ///
-/// Virtual methods and overrides must be `pub`, take `&self`, and not be generic or use `Self` or
-/// `impl Trait` in their signature. Their parameters must be plain identifiers.
+/// * `#[class_override]` to override a virtual method declared by any ancestor. Its signature, including
+///   whether it's `async`, and its visibility must match. It gets a `super_x` method calling the parent's
+///   implementation.
+///
+/// A method implementing an abstract method that no ancestor implements is an override without the
+/// marker, and gets no `super_x`. Any other method named after an inherited virtual method is an error.
+///
+/// Virtual methods and overrides must take `&self`, and not be generic or use `Self` or `impl Trait` in
+/// their signature. Their parameters must be plain identifiers.
 ///
 /// See [`macro@class`] for an example.
 #[proc_macro_attribute]

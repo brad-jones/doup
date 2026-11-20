@@ -6,12 +6,14 @@
 //! pointing at the same allocation; a final class's handle holds an `Arc` of its concrete storage.
 //!
 //! A virtual call dispatches on the trait object. A method a class doesn't override forwards to its parent
-//! storage's implementation, until it reaches the class that declared it. An override reconstructs its
-//! class's typed handle with a checked downcast, then runs the user's body on it. `super_x` calls the
-//! parent storage's implementation directly, passing the original handle so calls it makes stay late-bound.
+//! storage's implementation, until it reaches the class that declared it (where an abstract method's
+//! default is unreachable, as concrete classes must override it). An override reconstructs its class's
+//! typed handle with a checked downcast, then runs the user's body on it. `super_x` calls the parent
+//! storage's implementation directly, passing the original handle so calls it makes stay late-bound.
 
 use super::common;
 use super::descriptor::Ancestor;
+use super::descriptor::class_name;
 use super::methods::{FutureLifetime, Kind, Method, arguments};
 use super::{Model, Type};
 use proc_macro2::TokenStream;
@@ -41,6 +43,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       data: model.data_ty(),
       dispatch: own_object.clone(),
       methods: model.own_virtuals(),
+      overrides: model.own_overrides(),
     }])
     .collect();
   let root = &chain[0].dispatch;
@@ -67,7 +70,10 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       let body_name = format_ident!("__body_{method_name}");
       let args = arguments(&method.item)?;
       let signature = object_signature(method, &own);
-      let body = if method.is_async() {
+      let body = if method.is_abstract {
+        let message = format!("`{}::{method_name}` is abstract", class_name(&own));
+        quote!(::core::unreachable!(#message))
+      } else if method.is_async() {
         quote!(::std::boxed::Box::pin(__this.#body_name(#(#args),*)))
       } else {
         quote!(__this.#body_name(#(#args),*))
@@ -90,6 +96,16 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     .collect::<Result<Vec<_>>>()?;
 
   let handle_methods = handle_methods(model, &own_object)?;
+  let trait_impls = common::trait_impls(model)?;
+  let data_ty = model.data_ty();
+  let from_data = (!model.is_abstract).then(|| {
+    quote! {
+      #[inline]
+      fn __from_data(data: #data_ty) -> Self {
+        Self::__from_obj(::std::sync::Arc::new(Self::__build(data)))
+      }
+    }
+  });
   let storage_fields = common::storage_fields(model);
   let storage_inits = common::storage_inits(model);
   let obj_type = if *open {
@@ -125,7 +141,6 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     quote!(::std::sync::Arc::as_ptr(&self.__inner.__obj).cast::<()>()),
   );
   let descriptor = common::descriptor(model, &own_fields, &own_object);
-  let data_ty = model.data_ty();
 
   Ok(quote! {
     #[doc(hidden)]
@@ -162,10 +177,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
         #fields_name { #init_base #(#storage_inits)* }
       }
 
-      #[inline]
-      fn __from_data(data: #data_ty) -> Self {
-        Self::__from_obj(::std::sync::Arc::new(Self::__build(data)))
-      }
+      #from_data
 
       #[inline]
       fn __fields(&self) -> &#own_fields {
@@ -202,6 +214,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
     #deref
     #shared
+    #trait_impls
     #descriptor
   })
 }
@@ -303,7 +316,8 @@ fn object_impl(model: &Model, chain: &[Ancestor], index: usize, ancestor: &Ances
   })
 }
 
-/// The user's methods, plus a public wrapper for each virtual method and a `super_x` for each override.
+/// The user's methods, plus a wrapper for each virtual method and override, which dispatches to the
+/// object's implementation, and a `super_x` for each override of an implemented method.
 fn handle_methods(model: &Model, own_object: &Type) -> Result<Vec<TokenStream>> {
   let mut out = Vec::new();
   for method in &model.methods {
@@ -313,31 +327,34 @@ fn handle_methods(model: &Model, own_object: &Type) -> Result<Vec<TokenStream>> 
       continue;
     }
     let method_name = method.name();
-    let mut body = item.clone();
-    body.sig.ident = format_ident!("__body_{method_name}");
-    body.vis = syn::Visibility::Inherited;
-    body.attrs.retain(|a| !a.path().is_ident("doc"));
-    out.push(quote!(#body));
+    if !method.is_abstract {
+      let mut body = item.clone();
+      body.sig.ident = format_ident!("__body_{method_name}");
+      body.vis = syn::Visibility::Inherited;
+      body.attrs.retain(|a| !a.path().is_ident("doc"));
+      out.push(quote!(#body));
+    }
     let args = arguments(item)?;
     let await_call = method.is_async().then(|| quote!(.await));
-    let receiver = &item
-      .sig
-      .receiver()
-      .ok_or_else(|| Error::new_spanned(item, "missing receiver"))?
-      .self_token;
-    if method.kind == Kind::Virtual {
-      let sig = &item.sig;
-      let attrs = &item.attrs;
-      out.push(quote! {
-        #(#attrs)*
-        pub #sig {
-          <_ as #own_object>::#method_name(::core::ops::Deref::deref(&#receiver.__inner.__obj), #receiver, #(#args),*) #await_call
-        }
-      });
+    let receiver = method.receiver()?;
+    let (declaring, allow) = if method.kind == Kind::Virtual {
+      (own_object, None)
     } else {
+      // An override's wrapper documents it, and is only called directly in its own module when private.
+      let declaring = &model.ancestors[model.declaring_ancestor(method)].dispatch;
+      (declaring, Some(quote!(#[allow(dead_code)])))
+    };
+    let (vis, sig, attrs) = (&item.vis, &item.sig, &item.attrs);
+    out.push(quote! {
+      #(#attrs)*
+      #allow
+      #vis #sig {
+        <_ as #declaring>::#method_name(::core::ops::Deref::deref(&#receiver.__inner.__obj), #receiver, #(#args),*) #await_call
+      }
+    });
+    if method.has_super {
       let mut sig = item.sig.clone();
       sig.ident = format_ident!("super_{method_name}");
-      let declaring = &model.ancestors[model.declaring_ancestor(method)].dispatch;
       let parent_fields = &model
         .ancestors
         .last()
@@ -347,6 +364,7 @@ fn handle_methods(model: &Model, own_object: &Type) -> Result<Vec<TokenStream>> 
       out.push(quote! {
         #[doc = #doc]
         #[inline]
+        #[allow(dead_code)]
         #sig {
           <#parent_fields as #declaring>::#method_name(
             &<_ as #own_object>::__fields(::core::ops::Deref::deref(&#receiver.__inner.__obj)).base, #receiver, #(#args),*

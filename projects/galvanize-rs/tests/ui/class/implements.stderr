@@ -1,0 +1,53 @@
+error: the class implements several traits, name the one this method implements, e.g. #[class_virtual(First)]
+  --> tests/ui/class/implements.rs:17:6
+   |
+17 |   fn first(&self) -> u64 {
+   |      ^^^^^
+
+error: `Second` isn't one of the traits in this class's `implements` option
+  --> tests/ui/class/implements.rs:27:19
+   |
+27 |   #[class_virtual(Second)]
+   |                   ^^^^^^
+
+error: a method implementing a trait doesn't take a visibility, as in a trait impl
+  --> tests/ui/class/implements.rs:39:3
+   |
+39 |   pub fn first(&self) -> u64 {
+   |   ^^^
+
+error: use a single #[class_virtual], #[class_abstract] or a bare #[class_override]
+  --> tests/ui/class/implements.rs:49:3
+   |
+49 |   #[class_override(First)]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: this trait is already listed
+  --> tests/ui/class/implements.rs:55:30
+   |
+55 | #[class(implements = (First, First))]
+   |                              ^^^^^
+
+error: name at least one trait
+  --> tests/ui/class/implements.rs:61:9
+   |
+61 | #[class(implements = ())]
+   |         ^^^^^^^^^^^^^^^
+
+error[E0407]: method `third` is not a member of trait `First`
+  --> tests/ui/class/implements.rs:79:3
+   |
+79 |   fn third(&self) -> u64 {
+   |   ^^^^^^^^ not a member of trait `First`
+
+error[E0046]: not all trait items implemented, missing: `second`
+  --> tests/ui/class/implements.rs:84:22
+   |
+ 8 |   fn second(&self) -> u64;
+   |   ------------------------ `second` from trait
+...
+84 | #[class(implements = Second)]
+   |                      ^^^^^^ missing `second` in implementation
+...
+87 | #[class_methods]
+   | ---------------- in this attribute macro expansion
