@@ -182,15 +182,15 @@ pub mod __private {
   pub const fn assert_safe_runtime<R: IsSafeRuntime>() {}
   pub const fn assert_unsafe_runtime<R: IsUnsafeRuntime>() {}
 
-  /// Implemented by `#[class_methods]` for the marker type `#[class]` declares.
+  /// Implemented by `#[class_methods]` for the marker type `#[class]` declares, for the class's type
+  /// parameters `P`. `Inner` is the hidden handle that the class wraps.
   #[diagnostic::on_unimplemented(
     message = "every #[class] needs a #[class_methods] block after it, in the same module",
     label = "add `#[class_methods] impl ... {{}}` after this struct, even if it's empty"
   )]
-  pub trait HasClassMethods {}
-
-  /// Fails to compile unless `#[class_methods]` has run for the marker `M`.
-  pub const fn require_class_methods<M: HasClassMethods>() {}
+  pub trait HasClassMethods<P> {
+    type Inner;
+  }
 
   /// Fails to compile unless `C` may be extended.
   pub fn require_open<C: OpenClass>() {}

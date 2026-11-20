@@ -33,20 +33,34 @@ fn helper_name(class: &Ident) -> Ident {
   format_ident!("__class_methods_for_{}", class)
 }
 
-/// A marker type that only implements `HasClassMethods` once `#[class_methods]` has run, so a missing
-/// methods block is a clear error rather than a silently missing class.
+/// A marker type that only implements `HasClassMethods` once `#[class_methods]` has run, which supplies
+/// the handle's contents. A missing methods block is then one clear error.
+///
+/// It doesn't take the class's span, so tools such as rust-analyzer resolve the struct's name to the
+/// class rather than to this.
 fn marker_name(class: &Ident) -> Ident {
-  format_ident!("__ClassMethodsOf{}", class, span = class.span())
+  format_ident!("__ClassMethodsOf{}", class)
+}
+
+/// The hidden struct the runtime strategy's generator defines, which the class wraps.
+fn handle_name(class: &Ident) -> Ident {
+  format_ident!("__{}Handle", class)
+}
+
+/// The type parameters of a class, as the tuple `HasClassMethods` is implemented for.
+fn params_tuple(generics: &ClassGenerics) -> TokenStream {
+  let params = &generics.params;
+  quote!((#(#params,)*))
 }
 
 pub fn class(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
   let item: ItemStruct = syn::parse2(item)?;
   let helper = helper_name(&item.ident);
-  let options = match parse_class_options(attr.clone()).and_then(|options| {
-    validate_declaration(&options, &item)?;
-    Ok(options)
+  let (options, generics) = match parse_class_options(attr.clone()).and_then(|options| {
+    let generics = validate_declaration(&options, &item)?;
+    Ok((options, generics))
   }) {
-    Ok(options) => options,
+    Ok(declaration) => declaration,
     Err(error) => {
       let error = error.into_compile_error();
       // Swallow the methods block, so the error isn't followed by others caused by the missing class.
@@ -60,6 +74,13 @@ pub fn class(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
   };
   let krate = &options.krate;
   let marker = marker_name(&item.ident);
+  let ItemStruct { attrs, vis, ident, .. } = &item;
+  let docs = attrs.iter().filter(|a| a.path().is_ident("doc"));
+  let full = &generics.full;
+  let wc = &full.where_clause;
+  let params = params_tuple(&generics);
+  // The class itself is declared here, so its name and docs belong to this struct. Its contents depend on
+  // the runtime strategy, which a subclass only learns from its parent's descriptor.
   Ok(quote! {
     macro_rules! #helper {
       ($methods:item) => {
@@ -69,7 +90,12 @@ pub fn class(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
 
     #[doc(hidden)]
     struct #marker;
-    const _: () = #krate::__private::require_class_methods::<#marker>();
+
+    #(#docs)*
+    #[repr(transparent)]
+    #vis struct #ident #full #wc {
+      __inner: <#marker as #krate::__private::HasClassMethods<#params>>::Inner,
+    }
   })
 }
 
@@ -100,6 +126,10 @@ pub fn complete(input: TokenStream) -> Result<TokenStream> {
   let options = parse_class_options(input.attr.clone())?;
   let krate = &options.krate;
   let marker = marker_name(&input.item.ident);
+  let handle = handle_name(&input.item.ident);
+  let generics = validate_declaration(&options, &input.item)?;
+  let (ig, tg, wc) = generics.full.split_for_impl();
+  let params = params_tuple(&generics);
   let class = match &options.extends {
     None => Model::new(input, Vec::new(), None).and_then(generate),
     Some(Type::Path(parent)) if parent.qself.is_none() => {
@@ -119,7 +149,9 @@ pub fn complete(input: TokenStream) -> Result<TokenStream> {
   };
   let class = class.unwrap_or_else(Error::into_compile_error);
   Ok(quote! {
-    impl #krate::__private::HasClassMethods for #marker {}
+    impl #ig #krate::__private::HasClassMethods<#params> for #marker #wc {
+      type Inner = #handle #tg;
+    }
     #class
   })
 }
@@ -219,7 +251,7 @@ fn require_open(options: &ClassOptions, item: &ItemStruct, parent: &syn::TypePat
 
 /// Reports the errors in a class's struct and options straight away, rather than once its methods block
 /// supplies the rest.
-fn validate_declaration(options: &ClassOptions, item: &ItemStruct) -> Result<()> {
+fn validate_declaration(options: &ClassOptions, item: &ItemStruct) -> Result<ClassGenerics> {
   validate_struct(item)?;
   if let Some(extends) = &options.extends {
     validate_extends(extends, &item.generics)?;
@@ -230,8 +262,7 @@ fn validate_declaration(options: &ClassOptions, item: &ItemStruct) -> Result<()>
     ty_generics: item.generics.split_for_impl().1.to_token_stream(),
   };
   let fields = fields::take_fields(&mut item, options, &self_ty)?;
-  generics::class_generics(&item.generics, &fields, options.extends.as_ref())?;
-  Ok(())
+  generics::class_generics(&item.generics, &fields, options.extends.as_ref())
 }
 
 /// Rejects parents that can never be a class, which would otherwise give confusing errors.
@@ -257,8 +288,6 @@ pub struct Model {
   krate: Path,
   vis: Visibility,
   name: Ident,
-  /// Doc comments, which document the handle.
-  doc_attrs: Vec<Attribute>,
   /// The struct's other attributes, which apply to `XData`.
   data_attrs: Vec<Attribute>,
   open: bool,
@@ -324,12 +353,12 @@ impl Model {
     }
     let methods = methods::collect(input.methods, &mut reserved, &inherited)?;
 
-    let (doc_attrs, data_attrs) = item.attrs.into_iter().partition(|a| a.path().is_ident("doc"));
+    // Doc comments document the class, which `#[class]` already declared.
+    let data_attrs = item.attrs.into_iter().filter(|a| !a.path().is_ident("doc")).collect();
     Ok(Self {
       krate,
       vis: item.vis,
       name,
-      doc_attrs,
       data_attrs,
       open,
       parent: extends,
@@ -348,6 +377,10 @@ impl Model {
     let name = &self.name;
     let tg = self.generics.full.split_for_impl().1;
     parse_quote!(#name #tg)
+  }
+
+  fn handle_name(&self) -> Ident {
+    handle_name(&self.name)
   }
 
   fn data_name(&self) -> Ident {

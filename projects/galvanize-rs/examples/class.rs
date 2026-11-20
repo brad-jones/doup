@@ -5,10 +5,10 @@ use galvanize_rs::{ArcSwapStrategy, List, Str, class, class_methods, sf};
 /// A person and the cities they have visited.
 #[class]
 pub struct Person {
-  // A public field gets a public getter, setter and updater.
+  /// A public field gets a public getter, setter and updater.
   pub name: Str,
 
-  // A private field gets them too, they're just private.
+  /// A private field gets them too, they're just private.
   cities: List<Str>,
 }
 
@@ -40,7 +40,7 @@ impl Person {
 pub struct Team {
   pub name: Str,
 
-  // Anyone can read the leader, but only `Team` can replace them.
+  /// Anyone can read the leader, but only `Team` can replace them.
   #[class_prop(readonly)]
   pub leader: Person,
 }

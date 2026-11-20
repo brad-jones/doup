@@ -59,15 +59,11 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
   let private = quote!(#krate::__private);
   let rt = quote!(#private::unsafe_runtime);
   let Model {
-    vis,
-    name,
-    doc_attrs,
-    ancestors,
-    parent,
-    ..
+    vis, ancestors, parent, ..
   } = model;
   let (fields_name, own_fields) = model.hidden_ty("Fields");
   let (table_name, own_table) = model.hidden_ty("VTable");
+  let handle_name = model.handle_name();
   let full = &model.generics.full;
   let (ig, _, wc) = full.split_for_impl();
   let own = model.own();
@@ -134,7 +130,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
         #(#attrs)*
         pub #sig {
           // SAFETY: the slot comes from this object's own table.
-          unsafe { (#self_token.__handle.table().#method_name)(#self_token, #(#args),*) } #await_call
+          unsafe { (#self_token.__inner.__handle.table().#method_name)(#self_token, #(#args),*) } #await_call
         }
       });
     } else {
@@ -146,7 +142,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       overrides.push(quote!(#path.#method_name = Self::#thunk_name;));
       let mut sig = item.sig.clone();
       sig.ident = format_ident!("super_{method_name}");
-      let mut super_path = quote!(#self_token.__handle.table().parent);
+      let mut super_path = quote!(#self_token.__inner.__handle.table().parent);
       for _ in index + 1..ancestors.len() {
         super_path = quote!(#super_path.base);
       }
@@ -205,7 +201,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     }
   });
   let data_ty = model.data_ty();
-  let shared = common::shared_items(model, quote!(self.__handle.identity()));
+  let shared = common::shared_items(model, quote!(self.__inner.__handle.identity()));
   let descriptor = common::descriptor(model, &own_fields, &own_table);
 
   Ok(quote! {
@@ -231,10 +227,10 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       }
     }
 
-    #(#doc_attrs)*
+    #[doc(hidden)]
     #[repr(transparent)]
-    #vis struct #name #full #wc {
-      __handle: #rt::Handle<Self>,
+    #vis struct #handle_name #full #wc {
+      __handle: #rt::Handle<#own>,
       __invariant: #marker,
     }
 
@@ -242,7 +238,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     impl #ig ::core::clone::Clone for #own #wc {
       #[inline]
       fn clone(&self) -> Self {
-        Self { __handle: ::core::clone::Clone::clone(&self.__handle), __invariant: ::core::marker::PhantomData }
+        Self { __inner: #handle_name { __handle: ::core::clone::Clone::clone(&self.__inner.__handle), __invariant: ::core::marker::PhantomData } }
       }
     }
 
@@ -254,12 +250,12 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
       #[inline]
       fn handle(&self) -> &#rt::Handle<Self> {
-        &self.__handle
+        &self.__inner.__handle
       }
 
       #[inline]
       fn from_handle(handle: #rt::Handle<Self>) -> Self {
-        Self { __handle: handle, __invariant: ::core::marker::PhantomData }
+        Self { __inner: #handle_name { __handle: handle, __invariant: ::core::marker::PhantomData } }
       }
 
       fn is_class(id: ::core::any::TypeId) -> bool {
@@ -292,19 +288,19 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
       #[inline]
       fn __fields(&self) -> &#own_fields {
-        self.__handle.fields()
+        self.__inner.__handle.fields()
       }
 
       /// Returns `true` if the object is a `T`, or a subclass of `T`.
       #[inline]
       pub fn is<__T: #private::Class>(&self) -> bool {
-        self.__handle.is::<__T>()
+        self.__inner.__handle.is::<__T>()
       }
 
       /// Returns a handle to the same object viewed as a `T`, if it is one.
       #[inline]
       pub fn downcast<__T: #rt::Class>(&self) -> ::core::option::Option<__T> {
-        self.__handle.downcast::<__T>()
+        self.__inner.__handle.downcast::<__T>()
       }
 
       #(#handle_methods)*

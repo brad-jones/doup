@@ -22,15 +22,11 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
   let krate = &model.krate;
   let private = quote!(#krate::__private);
   let Model {
-    vis,
-    name,
-    doc_attrs,
-    ancestors,
-    open,
-    ..
+    vis, ancestors, open, ..
   } = model;
   let (fields_name, own_fields) = model.hidden_ty("Fields");
   let (object_name, own_object) = model.hidden_ty("Object");
+  let handle_name = model.handle_name();
   let full = &model.generics.full;
   let (ig, _, wc) = full.split_for_impl();
   let own = model.own();
@@ -111,7 +107,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
   // Binding the clone first lets it coerce to the parent's trait object at the call.
   let from_base =
     parent_handle.map(|p| quote!(__base: <#p>::__from_obj({ let obj = ::std::sync::Arc::clone(&obj); obj }),));
-  let clone_base = parent_handle.map(|_| quote!(__base: ::core::clone::Clone::clone(&self.__base),));
+  let clone_base = parent_handle.map(|_| quote!(__base: ::core::clone::Clone::clone(&self.__inner.__base),));
   let deref = parent_handle.map(|p| {
     quote! {
       /// Gives access to the parent class's fields and methods.
@@ -119,12 +115,15 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
         type Target = #p;
         #[inline]
         fn deref(&self) -> &#p {
-          &self.__base
+          &self.__inner.__base
         }
       }
     }
   });
-  let shared = common::shared_items(model, quote!(::std::sync::Arc::as_ptr(&self.__obj).cast::<()>()));
+  let shared = common::shared_items(
+    model,
+    quote!(::std::sync::Arc::as_ptr(&self.__inner.__obj).cast::<()>()),
+  );
   let descriptor = common::descriptor(model, &own_fields, &own_object);
   let data_ty = model.data_ty();
 
@@ -145,8 +144,8 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
     #(#object_impls)*
 
-    #(#doc_attrs)*
-    #vis struct #name #full #wc {
+    #[doc(hidden)]
+    #vis struct #handle_name #full #wc {
       __obj: ::std::sync::Arc<#obj_type>,
       #handle_base
     }
@@ -155,7 +154,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       #[doc(hidden)]
       #[inline]
       pub fn __from_obj(obj: ::std::sync::Arc<#obj_type>) -> Self {
-        Self { #from_base __obj: obj }
+        Self { __inner: #handle_name { #from_base __obj: obj } }
       }
 
       #[doc(hidden)]
@@ -170,13 +169,13 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
       #[inline]
       fn __fields(&self) -> &#own_fields {
-        <_ as #own_object>::__fields(::core::ops::Deref::deref(&self.__obj))
+        <_ as #own_object>::__fields(::core::ops::Deref::deref(&self.__inner.__obj))
       }
 
       /// Returns `true` if the object is a `T`, or a subclass of `T`.
       #[inline]
       pub fn is<__T: #private::Class>(&self) -> bool {
-        <_ as #root>::__is(::core::ops::Deref::deref(&self.__obj), ::core::any::TypeId::of::<__T>())
+        <_ as #root>::__is(::core::ops::Deref::deref(&self.__inner.__obj), ::core::any::TypeId::of::<__T>())
       }
 
       /// Returns a handle to the same object viewed as a `T`, if it is one.
@@ -186,7 +185,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
           return ::core::option::Option::None;
         }
         let mut result = ::core::option::Option::None::<__T>;
-        <_ as #root>::__cast(::std::sync::Arc::clone(&self.__obj), &mut result);
+        <_ as #root>::__cast(::std::sync::Arc::clone(&self.__inner.__obj), &mut result);
         result
       }
 
@@ -197,7 +196,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     impl #ig ::core::clone::Clone for #own #wc {
       #[inline]
       fn clone(&self) -> Self {
-        Self { __obj: ::std::sync::Arc::clone(&self.__obj), #clone_base }
+        Self { __inner: #handle_name { __obj: ::std::sync::Arc::clone(&self.__inner.__obj), #clone_base } }
       }
     }
 
@@ -332,7 +331,7 @@ fn handle_methods(model: &Model, own_object: &Type) -> Result<Vec<TokenStream>> 
       out.push(quote! {
         #(#attrs)*
         pub #sig {
-          <_ as #own_object>::#method_name(::core::ops::Deref::deref(&#receiver.__obj), #receiver, #(#args),*) #await_call
+          <_ as #own_object>::#method_name(::core::ops::Deref::deref(&#receiver.__inner.__obj), #receiver, #(#args),*) #await_call
         }
       });
     } else {
@@ -350,7 +349,7 @@ fn handle_methods(model: &Model, own_object: &Type) -> Result<Vec<TokenStream>> 
         #[inline]
         #sig {
           <#parent_fields as #declaring>::#method_name(
-            &<_ as #own_object>::__fields(::core::ops::Deref::deref(&#receiver.__obj)).base, #receiver, #(#args),*
+            &<_ as #own_object>::__fields(::core::ops::Deref::deref(&#receiver.__inner.__obj)).base, #receiver, #(#args),*
           ) #await_call
         }
       });
