@@ -144,6 +144,10 @@ pub trait Waterfowl: Flyer + Swimmer {
   }
 }
 
+// A blanket impl: every type that implements both `Flyer` and `Swimmer` (here, `Duck`) automatically
+// implements `Waterfowl` too, getting `migrate` for free. Without it, each such class would need its own
+// empty `impl Waterfowl for Duck {}`. The body is empty because `migrate` has a default and `Waterfowl`
+// has no required methods of its own.
 impl<T: Flyer + Swimmer> Waterfowl for T {}
 
 // ---------- implementing them ----------
