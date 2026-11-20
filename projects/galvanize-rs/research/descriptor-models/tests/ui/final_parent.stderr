@@ -1,8 +1,0 @@
-error: cannot extend a class without `open`
- --> tests/ui/final_parent.rs:3:19
-  |
-3 | #[class(extends = Puppy)]
-  |                   ^^^^^
-...
-6 | #[class_methods]
-  | ---------------- in this attribute macro expansion

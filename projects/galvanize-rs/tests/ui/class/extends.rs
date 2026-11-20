@@ -1,33 +1,45 @@
-use galvanize_rs::class;
+use galvanize_rs::{class, class_methods};
+use galvanize_rs_fixtures_safe::{Animal, Dog, Puppy};
 
-#[class]
-pub struct Base {
-  a: i64,
-}
-
-#[class(extends = Base, extends = Base)]
+#[class(extends = Animal, extends = Animal)]
 struct Duplicate {
   b: i64,
 }
 
 #[class(extends = Self)]
-struct OwnBase {
+struct OwnParent {
   b: i64,
 }
 
 #[class(extends = T)]
-struct ParamBase<T> {
+struct ParamParent<T> {
   b: T,
 }
 
-#[class(extends = Base)]
+#[class(extends = Animal)]
 struct ReservedBase {
   base: i64,
 }
 
-#[class]
-struct ReservedUpcast {
-  upcast: i64,
-}
+#[class_methods]
+impl ReservedBase {}
+
+#[class(extends = Dog, runtime_strategy = galvanize_rs::UnsafeRuntimeStrategy)]
+struct OtherRuntime {}
+
+#[class_methods]
+impl OtherRuntime {}
+
+#[class(extends = Puppy)]
+struct FinalParent {}
+
+#[class_methods]
+impl FinalParent {}
+
+#[class(extends = galvanize_rs_fixtures_safe::Boxed)]
+struct MissingArguments {}
+
+#[class_methods]
+impl MissingArguments {}
 
 fn main() {}

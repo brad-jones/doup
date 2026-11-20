@@ -1,0 +1,12 @@
+[package]
+name = "galvanize-rs-fixtures-safe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Classes using SafeRuntimeStrategy, and the class integration tests that extend them, for galvanize-rs."
+
+[dependencies]
+galvanize-rs = { path = "../.." }
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

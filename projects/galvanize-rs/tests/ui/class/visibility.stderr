@@ -1,35 +1,35 @@
 error[E0624]: method `set_id` is private
-  --> tests/ui/class/visibility.rs:24:7
+  --> tests/ui/class/visibility.rs:26:7
    |
- 4 |   #[class]
+ 5 |   #[class]
    |   -------- private method defined here
 ...
-24 |   foo.set_id("2");
+26 |   foo.set_id("2");
    |       ^^^^^^ private method
 
 error[E0624]: method `update_id` is private
-  --> tests/ui/class/visibility.rs:25:7
+  --> tests/ui/class/visibility.rs:27:7
    |
- 4 |   #[class]
+ 5 |   #[class]
    |   -------- private method defined here
 ...
-25 |   foo.update_id(|_| ());
+27 |   foo.update_id(|_| ());
    |       ^^^^^^^^^ private method
 
 error[E0624]: method `secret` is private
-  --> tests/ui/class/visibility.rs:26:7
+  --> tests/ui/class/visibility.rs:28:7
    |
- 4 |   #[class]
+ 5 |   #[class]
    |   -------- private method defined here
 ...
-26 |   foo.secret();
+28 |   foo.secret();
    |       ^^^^^^ private method
 
 error[E0624]: associated function `from_data` is private
-  --> tests/ui/class/visibility.rs:27:23
+  --> tests/ui/class/visibility.rs:29:23
    |
- 4 |   #[class]
+ 5 |   #[class]
    |   -------- private associated function defined here
 ...
-27 |   let _ = model::Foo::from_data;
+29 |   let _ = model::Foo::from_data;
    |                       ^^^^^^^^^ private associated function

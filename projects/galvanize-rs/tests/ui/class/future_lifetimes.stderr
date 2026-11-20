@@ -1,0 +1,59 @@
+error[E0597]: `prefix` does not live long enough
+ --> tests/ui/class/future_lifetimes.rs:7:25
+  |
+6 |     let prefix = String::from("temporary");
+  |         ------ binding `prefix` declared here
+7 |     future = safe.speak(&prefix);
+  |                         ^^^^^^^ borrowed value does not live long enough
+8 |   }
+  |   - `prefix` dropped here while still borrowed
+9 |   drop(future);
+  |        ------ borrow later used here
+
+error[E0505]: cannot move out of `safe` because it is borrowed
+  --> tests/ui/class/future_lifetimes.rs:11:8
+   |
+ 3 |   let safe = galvanize_rs_fixtures_safe::AsyncAnimal::new("root");
+   |       ---- binding `safe` declared here
+...
+10 |   let future = safe.speak("");
+   |                ---- borrow of `safe` occurs here
+11 |   drop(safe);
+   |        ^^^^ move out of `safe` occurs here
+12 |   drop(future);
+   |        ------ borrow later used here
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+10 |   let future = safe.clone().speak("");
+   |                    ++++++++
+
+error[E0597]: `prefix` does not live long enough
+  --> tests/ui/class/future_lifetimes.rs:18:28
+   |
+17 |     let prefix = String::from("temporary");
+   |         ------ binding `prefix` declared here
+18 |     future = unsafe_.speak(&prefix);
+   |                            ^^^^^^^ borrowed value does not live long enough
+19 |   }
+   |   - `prefix` dropped here while still borrowed
+20 |   drop(future);
+   |        ------ borrow later used here
+
+error[E0505]: cannot move out of `unsafe_` because it is borrowed
+  --> tests/ui/class/future_lifetimes.rs:22:8
+   |
+14 |   let unsafe_ = galvanize_rs_fixtures_unsafe::AsyncAnimal::new("root");
+   |       ------- binding `unsafe_` declared here
+...
+21 |   let future = unsafe_.speak("");
+   |                ------- borrow of `unsafe_` occurs here
+22 |   drop(unsafe_);
+   |        ^^^^^^^ move out of `unsafe_` occurs here
+23 |   drop(future);
+   |        ------ borrow later used here
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+21 |   let future = unsafe_.clone().speak("");
+   |                       ++++++++

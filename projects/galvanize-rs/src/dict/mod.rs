@@ -1,10 +1,10 @@
-use crate::pointers::{DefaultStrategy, MutablePointer, Strategy};
+use crate::pointers::{DefaultPointerStrategy, MutablePointer, PointerStrategy};
 use std::{borrow::Borrow, collections::BTreeMap, ops::RangeBounds};
 
 /// A shared, sorted map. Cloning yields another handle to the same map.
 ///
-/// The `S` [`Strategy`] picks the [`MutablePointer`] the data lives in and
-/// defaults to [`DefaultStrategy`]. Use [`Dict::with_strategy`] to pick another.
+/// The `S` [`PointerStrategy`] picks the [`MutablePointer`] the data lives in and
+/// defaults to [`DefaultPointerStrategy`]. Use [`Dict::with_strategy`] to pick another.
 /// Keys and values must be [`Clone`] because the pointers may need to copy the
 /// whole map. Values are stored by value, so accessors such as [`Dict::get`]
 /// and [`Dict::iter`] return clones rather than references.
@@ -15,16 +15,16 @@ use std::{borrow::Borrow, collections::BTreeMap, ops::RangeBounds};
 /// let a: Dict<String, i32> = Dict::new();
 /// let b: Dict<String, i32, ArcSwapStrategy> = Dict::with_strategy();
 /// ```
-pub struct Dict<K: Clone, V: Clone, S: Strategy = DefaultStrategy>(S::Ptr<BTreeMap<K, V>>);
+pub struct Dict<K: Clone, V: Clone, S: PointerStrategy = DefaultPointerStrategy>(S::Ptr<BTreeMap<K, V>>);
 
 impl<K: Ord + Clone, V: Clone> Dict<K, V> {
-  /// Creates an empty dict using the [`DefaultStrategy`].
+  /// Creates an empty dict using the [`DefaultPointerStrategy`].
   pub fn new() -> Self {
     Self::with_strategy()
   }
 }
 
-impl<K: Ord + Clone, V: Clone, S: Strategy> Dict<K, V, S> {
+impl<K: Ord + Clone, V: Clone, S: PointerStrategy> Dict<K, V, S> {
   /// Creates an empty dict using the strategy `S`.
   pub fn with_strategy() -> Self {
     Self(S::Ptr::new(BTreeMap::new()))
@@ -125,7 +125,7 @@ impl<K: Ord + Clone, V: Clone, S: Strategy> Dict<K, V, S> {
   }
 }
 
-impl<K: Ord + Clone, V: Clone, S: Strategy> Dict<K, V, S> {
+impl<K: Ord + Clone, V: Clone, S: PointerStrategy> Dict<K, V, S> {
   /// Returns clones of the stored key and value for `key`, or `None` if absent.
   pub fn get_key_value<Q>(&self, key: &Q) -> Option<(K, V)>
   where
@@ -200,7 +200,7 @@ impl<K: Ord + Clone, V: Clone, S: Strategy> Dict<K, V, S> {
 }
 
 /// Equivalent to [`Dict::with_strategy`].
-impl<K: Ord + Clone, V: Clone, S: Strategy> Default for Dict<K, V, S> {
+impl<K: Ord + Clone, V: Clone, S: PointerStrategy> Default for Dict<K, V, S> {
   fn default() -> Self {
     Self::with_strategy()
   }
@@ -208,14 +208,14 @@ impl<K: Ord + Clone, V: Clone, S: Strategy> Default for Dict<K, V, S> {
 
 /// Clones the handle, not the data; both handles refer to the same dict.
 /// Use [`Dict::deep_clone`] for an independent copy.
-impl<K: Clone, V: Clone, S: Strategy> Clone for Dict<K, V, S> {
+impl<K: Clone, V: Clone, S: PointerStrategy> Clone for Dict<K, V, S> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
   }
 }
 
 /// Formats a snapshot of the entries like a [`BTreeMap`].
-impl<K: Clone + std::fmt::Debug, V: Clone + std::fmt::Debug, S: Strategy> std::fmt::Debug for Dict<K, V, S> {
+impl<K: Clone + std::fmt::Debug, V: Clone + std::fmt::Debug, S: PointerStrategy> std::fmt::Debug for Dict<K, V, S> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     // Snapshot first so no lock is held while formatting entries, which may be
     // handles that refer back to this dict.
@@ -225,14 +225,14 @@ impl<K: Clone + std::fmt::Debug, V: Clone + std::fmt::Debug, S: Strategy> std::f
 
 /// Builds a dict from key-value pairs. Later pairs replace earlier ones with
 /// the same key.
-impl<K: Ord + Clone, V: Clone, S: Strategy> FromIterator<(K, V)> for Dict<K, V, S> {
+impl<K: Ord + Clone, V: Clone, S: PointerStrategy> FromIterator<(K, V)> for Dict<K, V, S> {
   fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
     Self(S::Ptr::new(iter.into_iter().collect()))
   }
 }
 
 /// Adds key-value pairs to the dict, replacing the values of existing keys.
-impl<K: Ord + Clone, V: Clone, S: Strategy> Extend<(K, V)> for Dict<K, V, S> {
+impl<K: Ord + Clone, V: Clone, S: PointerStrategy> Extend<(K, V)> for Dict<K, V, S> {
   fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     let items: Vec<_> = iter.into_iter().collect();
     self.0.write_with(|m| m.extend(items.iter().cloned()));
@@ -261,7 +261,7 @@ mod tests {
   use super::*;
   use crate::pointers::{ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy};
 
-  fn exercise<S: Strategy>() {
+  fn exercise<S: PointerStrategy>() {
     let dict: Dict<String, i32, S> = Dict::with_strategy();
     assert_eq!(dict.insert("a", 1), None);
     assert_eq!(dict.insert("a", 2), Some(1));

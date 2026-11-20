@@ -1,5 +1,0 @@
-error: no ancestor declares this virtual method
- --> tests/ui/unknown_override.rs:9:10
-  |
-9 |   pub fn speek(&self) -> String {
-  |          ^^^^^

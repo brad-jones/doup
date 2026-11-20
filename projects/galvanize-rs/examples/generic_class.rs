@@ -1,17 +1,19 @@
-use galvanize_rs::{ArcSwapStrategy, DefaultStrategy, Dict, List, Strategy, class};
+use galvanize_rs::{ArcSwapStrategy, DefaultPointerStrategy, Dict, List, PointerStrategy, class, class_methods};
 
 // ---------- Tree ----------
 
 /// A tree of values.
 ///
-/// `T` is bounded with `Clone` by the macro, and `Self` refers to `Tree<T>`.
+/// The macro bounds `T` with `Clone + Send + Sync + 'static`, and `Self` refers to `Tree<T>`.
 #[class]
 pub struct Tree<T> {
   pub value: T,
   children: List<Self>,
 }
 
-impl<T: Clone> Tree<T> {
+// The struct's bounds apply to the methods block, so it doesn't repeat them.
+#[class_methods]
+impl<T> Tree<T> {
   pub fn new(value: T) -> Self {
     Self::from_data(TreeData {
       value,
@@ -43,10 +45,10 @@ impl<T: Clone> Tree<T> {
 
 /// Remembers computed values by key.
 ///
-/// `S` picks the strategy of every field. It's only used by the strategies, so
-/// it doesn't need to be `Clone` and `CacheData` doesn't have it.
-#[class(strategy = S)]
-pub struct Cache<K: Ord, V, S: Strategy = DefaultStrategy> {
+/// `S` picks the pointer strategy of every field. It's only used by the
+/// strategies, so it doesn't need to be `Clone` and `CacheData` doesn't have it.
+#[class(pointer_strategy = S)]
+pub struct Cache<K: Ord, V, S: PointerStrategy = DefaultPointerStrategy> {
   entries: Dict<K, V>,
   #[class_prop(readonly)]
   pub hits: usize,
@@ -54,7 +56,8 @@ pub struct Cache<K: Ord, V, S: Strategy = DefaultStrategy> {
   pub misses: usize,
 }
 
-impl<K: Ord + Clone, V: Clone, S: Strategy> Cache<K, V, S> {
+#[class_methods]
+impl<K, V, S> Cache<K, V, S> {
   pub fn new() -> Self {
     Self::from_data(CacheData {
       entries: Dict::new(),
@@ -75,7 +78,13 @@ impl<K: Ord + Clone, V: Clone, S: Strategy> Cache<K, V, S> {
   }
 }
 
-impl<K: Ord + Clone, V: Clone, S: Strategy> Default for Cache<K, V, S> {
+// Other impls must repeat the bounds the macro adds.
+impl<K, V, S> Default for Cache<K, V, S>
+where
+  K: Ord + Clone + Send + Sync + 'static,
+  V: Clone + Send + Sync + 'static,
+  S: PointerStrategy + 'static,
+{
   fn default() -> Self {
     Self::new()
   }
@@ -95,7 +104,7 @@ fn main() {
   root.for_each(&mut |p| paths.push(*p));
   println!("{} nodes: {}", root.size(), paths.join(", "));
 
-  // Uses the default strategy.
+  // Uses the default pointer strategy.
   let lengths: Cache<&str, usize> = Cache::new();
   for word in ["class", "generic", "class"] {
     lengths.get_or_compute(word, || word.len());

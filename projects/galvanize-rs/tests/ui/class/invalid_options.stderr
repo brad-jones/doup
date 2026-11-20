@@ -1,65 +1,77 @@
-error: unknown class option, expected `extends = ...`, `strategy = ...` or `crate = ...`
+error: unknown class option, expected `open`, `extends = ...`, `runtime_strategy = ...`, `pointer_strategy = ...` or `crate = ...`
  --> tests/ui/class/invalid_options.rs:3:9
   |
 3 | #[class(unknown = 1)]
   |         ^^^^^^^
 
-error: unknown field option, expected `readonly` or `strategy = ...`
-  --> tests/ui/class/invalid_options.rs:10:16
+error: `strategy` was renamed to `pointer_strategy`
+ --> tests/ui/class/invalid_options.rs:8:9
+  |
+8 | #[class(strategy = galvanize_rs::ArcSwapStrategy)]
+  |         ^^^^^^^^
+
+error: expected `SafeRuntimeStrategy`, `UnsafeRuntimeStrategy` or `DefaultRuntimeStrategy` (aliases aren't supported)
+  --> tests/ui/class/invalid_options.rs:13:28
    |
-10 |   #[class_prop(writeonly)]
+13 | #[class(runtime_strategy = FastRuntimeStrategy)]
+   |                            ^^^^^^^^^^^^^^^^^^^
+
+error: duplicate option
+  --> tests/ui/class/invalid_options.rs:18:15
+   |
+18 | #[class(open, open)]
+   |               ^^^^
+
+error: unknown field option, expected `readonly` or `pointer_strategy = ...`
+  --> tests/ui/class/invalid_options.rs:25:16
+   |
+25 |   #[class_prop(writeonly)]
    |                ^^^^^^^^^
 
-error: `readonly` has no effect on a private field, its setter is already private
-  --> tests/ui/class/invalid_options.rs:16:16
+error: `strategy` was renamed to `pointer_strategy`
+  --> tests/ui/class/invalid_options.rs:31:16
    |
-16 |   #[class_prop(readonly)]
+31 |   #[class_prop(strategy = galvanize_rs::ArcSwapStrategy)]
+   |                ^^^^^^^^
+
+error: `readonly` has no effect on a private field, its setter is already private
+  --> tests/ui/class/invalid_options.rs:37:16
+   |
+37 |   #[class_prop(readonly)]
    |                ^^^^^^^^
 
 error: duplicate option
-  --> tests/ui/class/invalid_options.rs:23:3
+  --> tests/ui/class/invalid_options.rs:44:3
    |
-23 |   #[class_prop(readonly)]
+44 |   #[class_prop(readonly)]
    |   ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: #[class] can't be used on a field, use #[class_prop(...)] instead
-  --> tests/ui/class/invalid_options.rs:29:3
+  --> tests/ui/class/invalid_options.rs:50:3
    |
-29 |   #[class(readonly)]
+50 |   #[class(readonly)]
    |   ^^^^^^^^^^^^^^^^^^
 
-error: `'a` isn't used by any field, strategy or base class
-  --> tests/ui/class/invalid_options.rs:34:20
-   |
-34 | struct UnusedParam<'a, T, const N: usize> {
-   |                    ^^
-
-error: `T` isn't used by any field, strategy or base class
-  --> tests/ui/class/invalid_options.rs:34:24
-   |
-34 | struct UnusedParam<'a, T, const N: usize> {
-   |                        ^
-
-error: `N` isn't used by any field, strategy or base class
-  --> tests/ui/class/invalid_options.rs:34:27
-   |
-34 | struct UnusedParam<'a, T, const N: usize> {
-   |                           ^^^^^^^^^^^^^^
-
-error: `T` isn't used by any field, strategy or base class
-  --> tests/ui/class/invalid_options.rs:39:28
-   |
-39 | struct OnlyUsedRecursively<T> {
-   |                            ^
-
 error: #[class] requires a struct with named fields
-  --> tests/ui/class/invalid_options.rs:44:8
+  --> tests/ui/class/invalid_options.rs:55:8
    |
-44 | struct Tuple(String);
+55 | struct Tuple(String);
    |        ^^^^^
 
 error: `ptr_eq` is reserved by #[class], rename the field
-  --> tests/ui/class/invalid_options.rs:48:3
+  --> tests/ui/class/invalid_options.rs:59:3
    |
-48 |   ptr_eq: String,
+59 |   ptr_eq: String,
    |   ^^^^^^
+
+error: `__hidden` is reserved by #[class], rename the field
+  --> tests/ui/class/invalid_options.rs:60:3
+   |
+60 |   __hidden: String,
+   |   ^^^^^^^^
+
+error: #[class_methods] doesn't take any options
+  --> tests/ui/class/invalid_options.rs:63:17
+   |
+63 | #[class_methods(open)]
+   |                 ^^^^

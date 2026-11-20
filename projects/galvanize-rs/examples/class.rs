@@ -1,4 +1,4 @@
-use galvanize_rs::{ArcSwapStrategy, List, Str, class, sf};
+use galvanize_rs::{ArcSwapStrategy, List, Str, class, class_methods, sf};
 
 // ---------- Person ----------
 
@@ -12,6 +12,8 @@ pub struct Person {
   cities: List<Str>,
 }
 
+// Every class needs one `#[class_methods]` block, which holds its methods (and can be empty).
+#[class_methods]
 impl Person {
   pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>) -> Self {
     Self::from_data(PersonData {
@@ -34,7 +36,7 @@ impl Person {
 /// A team and the person who leads it.
 ///
 /// Stores every field in an `ArcSwapPointer` instead of the default.
-#[class(strategy = ArcSwapStrategy)]
+#[class(pointer_strategy = ArcSwapStrategy)]
 pub struct Team {
   pub name: Str,
 
@@ -43,6 +45,7 @@ pub struct Team {
   pub leader: Person,
 }
 
+#[class_methods]
 impl Team {
   pub fn new(name: impl Into<Str>, leader: impl Into<Person>) -> Self {
     Self::from_data(TeamData {

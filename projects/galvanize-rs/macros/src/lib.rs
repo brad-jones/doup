@@ -1,29 +1,30 @@
 //! Procedural macros for `galvanize-rs`.
 //!
-//! Don't depend on this crate directly. Use the re-exports from `galvanize-rs`,
-//! since the generated code refers to items in that crate.
+//! Don't depend on this crate directly. Use the re-exports from `galvanize-rs`, since the generated code
+//! refers to items in that crate.
 
 mod class;
 
 use proc_macro::TokenStream;
 
-/// Turns a struct into a class-like, shared handle type.
+/// Turns a struct into a class: a shared handle type with accessors, inheritance and virtual methods.
 ///
-/// The struct you write describes the class's fields. For a struct named
-/// `Person`, the macro replaces it with:
+/// The struct you write describes the class's fields. Every `#[class]` must be followed, in the same
+/// module, by exactly one [`macro@class_methods`] block, which may be empty. For a struct named `Person`
+/// the macros replace it with:
 ///
-/// * the handle `Person` (same name and visibility as your struct). It's a cheap
-///   `Arc` clone that refers to the *same* object, like an object reference in
-///   Python, Go, C# or Java. It is `Send + Sync` when the field types are.
-/// * `PersonData`, a plain struct with your fields, which you pass to the private
-///   `Person::from_data` constructor. This keeps your own constructor the only
-///   way to create the class from outside its module.
+/// * the handle `Person` (same name and visibility as your struct). Cloning it is cheap and gives another
+///   reference to the *same* object, like an object reference in Python, Go, C# or Java. It is
+///   `Send + Sync`.
+/// * `PersonData`, a plain struct with your fields, which you pass to the private `Person::from_data`
+///   constructor. This keeps your own constructor the only way to create the class from outside its
+///   module.
 ///
-/// Each field is stored in its own `MutablePointer`, chosen by a `Strategy`
-/// that defaults to `DefaultStrategy`.
+/// Each field is stored in its own `MutablePointer`, chosen by a `PointerStrategy` (its `SyncPtr`) that
+/// defaults to `DefaultPointerStrategy`.
 ///
 /// ```
-/// use galvanize_rs::{List, Str, class, sf};
+/// use galvanize_rs::{List, Str, class, class_methods, sf};
 ///
 /// #[class]
 /// pub struct Person {
@@ -32,6 +33,7 @@ use proc_macro::TokenStream;
 ///   cities: List<Str>,
 /// }
 ///
+/// #[class_methods]
 /// impl Person {
 ///   pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>) -> Self {
 ///     Self::from_data(PersonData {
@@ -49,6 +51,7 @@ use proc_macro::TokenStream;
 ///   }
 /// }
 ///
+/// # fn main() {
 /// let person = Person::new("Ada", "Lovelace");
 /// let same = person.clone(); // another reference to the same object
 /// same.set_name("Grace Hopper");
@@ -57,141 +60,125 @@ use proc_macro::TokenStream;
 /// assert_eq!(person.name(), "Grace Hopper");
 /// assert_eq!(person.visited(), 1);
 /// assert_eq!(person, same); // classes compare by identity
+/// # }
 /// ```
 ///
 /// # Generated methods
 ///
 /// For every field `x: T` the handle gets:
 ///
-/// * `x(&self) -> T` returns a clone of the value. For handle types (`Str`,
-///   `List`, `Dict`, other classes) that's the *same* shared object, so
-///   `person.cities().push(..)` modifies `person`. Other types are copied, so
-///   keep field types cheap to clone and avoid e.g. `Vec`.
+/// * `x(&self) -> T` returns a clone of the value. For handle types (`Str`, `List`, `Dict`, other classes)
+///   that's the *same* shared object, so `person.cities().push(..)` modifies `person`. Other types are
+///   copied, so keep field types cheap to clone and avoid e.g. `Vec`.
 /// * `set_x(&self, value: impl Into<T>)` replaces the value.
-/// * `update_x(&self, f: impl FnMut(&mut T) -> R) -> R` modifies the value
-///   in place, atomically with respect to other accessors of `x`. `f` may be
-///   called more than once (see `MutablePointer::write_with`).
+/// * `update_x(&self, f: impl FnMut(&mut T) -> R) -> R` modifies the value in place, atomically with
+///   respect to other accessors of `x`. `f` may be called more than once (see
+///   `MutablePointer::write_with`).
 ///
-/// The getter has the field's visibility, and so do the setter and updater
-/// unless the field is marked `#[class_prop(readonly)]`.
+/// The getter has the field's visibility, and so do the setter and updater unless the field is marked
+/// `#[class_prop(readonly)]`. Each field has its own pointer, so `f` passed to `update_x` may safely call
+/// accessors of *other* fields. Calling accessors of `x` itself from inside `update_x` deadlocks with the
+/// locking pointer strategies.
 ///
-/// The handle also gets `from_data` (private), `ptr_eq`, `upcast` (see
-/// [Inheritance](#inheritance)), and implementations
-/// of `Clone`, `PartialEq`, `Eq` and `Hash` (all by identity), `Debug` (prints
-/// the field values) and `From<&Person>` (clones the handle). As `Hash` and
-/// `Eq` ignore the field values, classes are sound `HashMap`/`HashSet` keys;
-/// clippy's `mutable_key_type` lint doesn't know that and may need allowing.
+/// The handle also gets:
 ///
-/// Each field has its own pointer, so `f` passed to `update_x` may safely call
-/// accessors of *other* fields. Calling accessors of `x` itself from inside
-/// `update_x` deadlocks with the locking strategies.
+/// * `from_data` (private), see above.
+/// * `ptr_eq(&self, other)`, which is `true` when both handles refer to the same object, even when they
+///   view it as different classes.
+/// * `upcast`, `is` and `downcast`, see [Inheritance](#inheritance).
+/// * `Clone`, `PartialEq`, `Eq` and `Hash` (all by identity), `Debug` (prints the field values) and
+///   `From<&Person>` (clones the handle). As `Hash` and `Eq` ignore the field values, classes are sound
+///   `HashMap`/`HashSet` keys; clippy's `mutable_key_type` lint doesn't know that and may need allowing.
 ///
 /// # Options
 ///
 /// On the struct, `#[class(...)]` takes comma separated options:
 ///
-/// * `extends = SomeClass`: makes this class a subclass of another `#[class]`,
-///   see [Inheritance](#inheritance).
-/// * `strategy = SomeStrategy`: the `Strategy` used for every field.
-/// * `crate = some::path`: the path to `galvanize_rs`, if it has been renamed
-///   or re-exported.
+/// * `open`: allows other classes to extend this one. Without it a class is final.
+/// * `extends = Parent`: makes this class a subclass of `Parent`, see [Inheritance](#inheritance).
+/// * `runtime_strategy = SafeRuntimeStrategy | UnsafeRuntimeStrategy`: how the hierarchy is implemented,
+///   see [Runtime strategies](#runtime-strategies). Subclasses inherit their parent's.
+/// * `pointer_strategy = SomePointerStrategy`: the `PointerStrategy` used for every field.
+/// * `crate = some::path`: the path to `galvanize_rs`, if it has been renamed or re-exported.
 ///
 /// On a field, `#[class_prop(...)]` takes comma separated options:
 ///
-/// * `readonly`: makes `set_x` and `update_x` private. The field still can't
-///   be reassigned from outside the module, but a handle-typed field (such as a
-///   `List`) can still be modified through its getter.
-/// * `strategy = SomeStrategy`: overrides the class's strategy for this field.
+/// * `readonly`: makes `set_x` and `update_x` private. The field still can't be reassigned from outside
+///   the module, but a handle-typed field (such as a `List`) can still be modified through its getter.
+/// * `pointer_strategy = SomePointerStrategy`: overrides the class's pointer strategy for this field.
 ///
 /// `class_prop` is read and removed by `#[class]`, so it doesn't need importing.
 ///
 /// ```
-/// use galvanize_rs::{ArcMutexStrategy, ArcSwapStrategy, Str, class};
+/// use galvanize_rs::{ArcMutexStrategy, ArcSwapStrategy, Str, class, class_methods};
 ///
-/// #[class(strategy = ArcSwapStrategy)]
+/// #[class(pointer_strategy = ArcSwapStrategy)]
 /// pub struct Counter {
 ///   #[class_prop(readonly)]
 ///   pub label: Str,
-///   #[class_prop(strategy = ArcMutexStrategy)]
+///   #[class_prop(pointer_strategy = ArcMutexStrategy)]
 ///   pub count: i64,
 /// }
 ///
+/// #[class_methods]
 /// impl Counter {
 ///   pub fn new(label: &str) -> Self {
 ///     Self::from_data(CounterData { label: label.into(), count: 0 })
 ///   }
 /// }
 ///
+/// # fn main() {
 /// let c = Counter::new("hits");
 /// c.update_count(|n| *n += 1);
 /// assert_eq!(c.count(), 1);
-/// ```
-///
-/// # Generics
-///
-/// Classes may have type, lifetime and const parameters. Like `#[derive]`, the
-/// macro bounds each type parameter used by a field type with `Clone`, so you
-/// write `Node<T>` rather than `Node<T: Clone>`, but impls of the class must
-/// still repeat the bound. `Debug` is only implemented when those parameters
-/// are `Debug`.
-///
-/// `Self` in a field type refers to the class (here `Node<T>`). A parameter
-/// that only appears in a strategy (such as `S` below) isn't bounded with
-/// `Clone`, and `NodeData` doesn't have it.
-///
-/// ```
-/// use galvanize_rs::{DefaultStrategy, Strategy, class};
-///
-/// #[class(strategy = S)]
-/// pub struct Node<T, S: Strategy = DefaultStrategy> {
-///   pub value: T,
-///   pub next: Option<Self>,
-/// }
-///
-/// impl<T: Clone, S: Strategy> Node<T, S> {
-///   pub fn new(value: T, next: Option<Self>) -> Self {
-///     Self::from_data(NodeData { value, next })
-///   }
-/// }
-///
-/// let list: Node<i64> = Node::new(1, Some(Node::new(2, None)));
-/// list.next().unwrap().set_value(3);
-/// assert_eq!(format!("{list:?}"), "Node { value: 1, next: Some(Node { value: 3, next: None }) }");
+/// # }
 /// ```
 ///
 /// # Inheritance
 ///
-/// `#[class(extends = Base)]` makes a class a subclass of `Base`, which must
-/// itself be a `#[class]`. The subclass object holds a handle to a `Base`
-/// object, its *base*, and:
+/// A class declared `#[class(open)]` can be extended with `#[class(extends = Parent)]`. Only the
+/// immediate parent is named. A subclass is final unless it's also `open`.
 ///
-/// * `XData` gets a `base: Base` field, which the constructor usually fills
-///   using `Base`'s own constructor, like calling `super().__init__()`.
-/// * the handle dereferences to `Base`, so `Base`'s accessors and methods can
-///   be called on it, and `&X` coerces to `&Base`. This chains, so a subclass
-///   of `X` can use `Base`'s methods too.
-/// * `base(&self) -> Base` returns the handle of the base, and so do
-///   `From<X>` and `From<&X>` for `Base`.
-/// * `upcast` converts to the class itself or any class it (transitively)
-///   extends, e.g. `let animal: Animal = puppy.upcast();`. To accept any
-///   subclass of `Base` by value, take an `impl Extends<Base, I>`.
-/// * `Debug` prints the fields of the base classes first, then its own.
+/// * The object is a single object: a `Dog` *is* an `Animal`, with one identity, not an `Animal` wrapped
+///   in a `Dog`.
+/// * `DogData` gets a `base: AnimalData` field, which the constructor usually fills using a function of
+///   the parent, like calling `super().__init__()`.
+/// * The handle dereferences to the parent, so the parent's accessors and methods can be called on it,
+///   and `&Dog` coerces to `&Animal`. This chains through every ancestor.
+/// * `upcast` returns a handle viewing the object as the class itself or any ancestor, e.g.
+///   `let animal: Animal = puppy.upcast();`, and so do `From<Dog>` and `From<&Dog>` for each ancestor.
+///   To accept any subclass of `Animal` by value, take an `impl Extends<Animal, I>`.
+/// * `is::<T>()` tests whether the object is a `T` or a subclass of `T`, and `downcast::<T>()` returns a
+///   handle viewing it as a `T` if it is one.
+/// * `Debug` prints the fields of the ancestors first, then the class's own, of the class the handle views
+///   the object as.
+///
+/// Mark methods in [`macro@class_methods`] with `#[class_virtual]` to make them overridable, and with
+/// `#[class_override]` to override an inherited one. An override `x` also gets a `super_x` method, which
+/// calls the parent's implementation. Calls are late-bound, so a virtual call made through any view, or
+/// from inside a parent's method, runs the most-derived override.
 ///
 /// ```
-/// use galvanize_rs::{Str, class};
+/// use galvanize_rs::{Str, class, class_methods, sf};
 ///
-/// #[class]
+/// #[class(open)]
 /// pub struct Animal {
 ///   pub name: Str,
 /// }
 ///
+/// #[class_methods]
 /// impl Animal {
-///   pub fn new(name: &str) -> Self {
-///     Self::from_data(AnimalData { name: name.into() })
+///   pub fn init(name: &str) -> AnimalData {
+///     AnimalData { name: name.into() }
 ///   }
 ///
-///   pub fn greet(&self) -> Str {
-///     galvanize_rs::sf!("Hi, I'm {}", self.name())
+///   #[class_virtual]
+///   pub fn speak(&self) -> Str {
+///     "...".into()
+///   }
+///
+///   pub fn describe(&self) -> Str {
+///     sf!("{} says {}", self.name(), self.speak())
 ///   }
 /// }
 ///
@@ -200,63 +187,145 @@ use proc_macro::TokenStream;
 ///   pub good: bool,
 /// }
 ///
+/// #[class_methods]
 /// impl Dog {
 ///   pub fn new(name: &str) -> Self {
-///     Self::from_data(DogData { base: Animal::new(name), good: true })
+///     Self::from_data(DogData { base: Animal::init(name), good: true })
+///   }
+///
+///   #[class_override]
+///   pub fn speak(&self) -> Str {
+///     sf!("Woof (not {})", self.super_speak())
 ///   }
 /// }
 ///
-/// fn introduce(animal: &Animal) -> Str {
-///   animal.greet()
-/// }
-///
+/// # fn main() {
 /// let dog = Dog::new("Rex");
 /// dog.set_name("Max"); // inherited from `Animal`
-/// assert_eq!(introduce(&dog), "Hi, I'm Max");
 ///
 /// let animal: Animal = dog.upcast();
-/// assert!(animal.ptr_eq(&dog.base()));
+/// assert_eq!(animal.describe(), "Max says Woof (not ...)"); // late-bound
+/// assert!(animal.ptr_eq(&dog));
+/// assert!(animal.is::<Dog>());
+/// assert!(animal.downcast::<Dog>().unwrap().good());
 /// assert_eq!(format!("{dog:?}"), r#"Dog { name: "Max", good: true }"#);
+/// # }
 /// ```
 ///
-/// This is composition rather than a single object, so:
+/// Virtual methods may be `async`, returning `Send` futures, and overrides must match. Each call to an
+/// async virtual method boxes its future.
 ///
-/// * a method or accessor on the subclass with the same name as one on the
-///   base *shadows* it, but doesn't override it. Calling it through a `Base`
-///   or `&Base` still runs `Base`'s version. Use a trait for dynamic dispatch.
-/// * there is no downcasting from a `Base` back to the subclass.
-/// * `ptr_eq`, `==` and `Hash` compare the subclass objects. Several
-///   subclass objects may share one base, if it's passed to each of them.
-/// * the base's private items are only accessible in its own module, as usual.
-///   There's no equivalent of `protected`.
-/// * base methods that take `self` by value can't be called through `Deref`,
-///   call them on `x.base()` instead.
-/// * a generic base, such as `extends = Boxed<T>`, bounds the type parameters
-///   it uses with `Clone`, like a field type does.
+/// # Runtime strategies
+///
+/// Both strategies generate the same API from the same declarations, so a hierarchy can switch between
+/// them by changing its root's `runtime_strategy` alone:
+///
+/// * `SafeRuntimeStrategy` (the default) generates no `unsafe` code. Handles grow by a word or two per
+///   level of the hierarchy, and every call to an override clones and drops an `Arc`, which contends when
+///   many threads call methods on the same object.
+/// * `UnsafeRuntimeStrategy` uses a small `unsafe` kernel with C++-style layouts and vtables, which is
+///   tested under Miri. Handles are four words at any depth, and virtual calls cost about a nanosecond
+///   without writing to shared state.
+///
+/// # Generics
+///
+/// Classes may have type parameters, but not lifetime or const parameters. Type parameters used by
+/// fields or the parent are bounded with `Clone + Send + Sync + 'static`, and those only used by a
+/// pointer strategy with `'static`, so you write `Node<T>` rather than `Node<T: Clone + ..>`. `Debug` is
+/// only implemented when the field type parameters are `Debug`. A subclass must give every one of its
+/// parent's type parameters, e.g. `extends = Boxed<T>`.
+///
+/// Other `impl` blocks of a generic class must repeat the bounds the macro adds.
+///
+/// `Self` in a field type refers to the class (here `Node<T>`). A parameter that only appears in a
+/// pointer strategy (such as `S` below) isn't in `NodeData`.
+///
+/// ```
+/// use galvanize_rs::{DefaultPointerStrategy, PointerStrategy, class, class_methods};
+///
+/// #[class(pointer_strategy = S)]
+/// pub struct Node<T, S: PointerStrategy = DefaultPointerStrategy> {
+///   pub value: T,
+///   pub next: Option<Self>,
+/// }
+///
+/// #[class_methods]
+/// impl<T, S> Node<T, S> {
+///   pub fn new(value: T, next: Option<Self>) -> Self {
+///     Self::from_data(NodeData { value, next })
+///   }
+/// }
+///
+/// # fn main() {
+/// let list: Node<i64> = Node::new(1, Some(Node::new(2, None)));
+/// list.next().unwrap().set_value(3);
+/// assert_eq!(format!("{list:?}"), "Node { value: 1, next: Some(Node { value: 3, next: None }) }");
+/// # }
+/// ```
 ///
 /// # Attributes
 ///
-/// Doc comments on the struct document the handle. Any other attributes on the
-/// struct (such as `#[derive(Default)]`) are applied to `PersonData`, as are the
-/// attributes on fields. Field doc comments also document the getter.
+/// Doc comments on the struct document the handle. Any other attributes on the struct (such as
+/// `#[derive(Default)]`) are applied to `PersonData`, as are the attributes on fields. Field doc comments
+/// also document the getter.
 ///
 /// # Limitations
 ///
-/// * Only structs with named fields are supported.
-/// * Every generic parameter must be used by a field type, strategy or the base
-///   class; using it only through `Self` doesn't count.
-/// * Bounds such as `S: Strategy` aren't inferred, write them on the struct.
-/// * Like `#[derive]`, the `Clone` bound is on the type parameters rather than
-///   the field types, so e.g. an `Arc<T>` field still requires `T: Clone`.
-/// * Fields can't be named `from_data`, `ptr_eq` or `upcast`, nor `base` in a
-///   subclass.
-/// * Every field type must implement `Clone` and `Debug`.
-/// * `Debug` doesn't detect cycles; printing an object graph that refers back
-///   to itself recurses forever.
-///
+/// * An `open` class must be declared at the root of its crate, as its descriptor (which subclasses read
+///   at compile time) is exported from there. Final classes can be declared anywhere.
+/// * Only structs with named fields are supported, and every field type must implement `Clone`, `Send`,
+///   `Sync` and `Debug`, and be `'static`.
+/// * Every type parameter must be used by a field type, pointer strategy or the parent; using it only
+///   through `Self` doesn't count. Bounds such as `S: PointerStrategy` aren't inferred, write them on the
+///   struct.
+/// * Fields can't be named `base`, `from_data`, `ptr_eq`, `upcast`, `is` or `downcast`, or start with
+///   `__`.
+/// * There are no abstract methods and no equivalent of `protected`; private items are only accessible
+///   in their own module, as usual.
+/// * `Debug` doesn't detect cycles; printing an object graph that refers back to itself recurses forever.
+///   Objects that refer to each other strongly are never freed, as with any reference counting.
 #[proc_macro_attribute]
 pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
-  class::expand(attr.into(), item.into())
+  class::class(attr.into(), item.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+/// Supplies the methods of the [`macro@class`] declared just before it, in the same module.
+///
+/// Every `#[class]` needs exactly one `#[class_methods]` block, even an empty one (`impl Name {}`). It must
+/// be an inherent impl of the class with the struct's type parameters and no bounds; the struct's bounds
+/// apply to it. Other, ordinary `impl` blocks can be added as usual.
+///
+/// Within it, mark methods with:
+///
+/// * `#[class_virtual]` to declare a virtual method, which subclasses may override.
+/// * `#[class_override]` to override a virtual method declared by any ancestor. Its signature, including
+///   whether it's `async`, must match. It gets a `super_x` method calling the parent's implementation.
+///
+/// Virtual methods and overrides must be `pub`, take `&self`, and not be generic or use `Self` or
+/// `impl Trait` in their signature. Their parameters must be plain identifiers.
+///
+/// See [`macro@class`] for an example.
+#[proc_macro_attribute]
+pub fn class_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
+  class::class_methods(attr.into(), item.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn __complete(input: TokenStream) -> TokenStream {
+  class::complete(input.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn __inherit(input: TokenStream) -> TokenStream {
+  class::inherit(input.into())
     .unwrap_or_else(syn::Error::into_compile_error)
     .into()
 }

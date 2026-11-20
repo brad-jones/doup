@@ -1,0 +1,13 @@
+[package]
+name = "galvanize-rs-fixtures-unsafe"
+version = "0.0.0"
+build = "build.rs"
+edition = "2024"
+publish = false
+description = "Classes using UnsafeRuntimeStrategy, and the class integration tests that extend them, for galvanize-rs."
+
+[dependencies]
+galvanize-rs = { path = "../.." }
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }

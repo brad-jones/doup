@@ -1,9 +1,9 @@
-use crate::pointers::{DefaultStrategy, MutablePointer, Strategy};
+use crate::pointers::{DefaultPointerStrategy, MutablePointer, PointerStrategy};
 
 /// A shared, growable list. Cloning yields another handle to the same list.
 ///
-/// The `S` [`Strategy`] picks the [`MutablePointer`] the data lives in and
-/// defaults to [`DefaultStrategy`]. Use [`List::with_strategy`] to pick another.
+/// The `S` [`PointerStrategy`] picks the [`MutablePointer`] the data lives in and
+/// defaults to [`DefaultPointerStrategy`]. Use [`List::with_strategy`] to pick another.
 ///
 /// Elements are stored by value and must be [`Clone`]: accessors such as
 /// [`List::get`] and [`List::iter`] return clones rather than references.
@@ -14,16 +14,16 @@ use crate::pointers::{DefaultStrategy, MutablePointer, Strategy};
 /// let a: List<i32> = List::new();
 /// let b: List<i32, ArcSwapStrategy> = List::with_strategy();
 /// ```
-pub struct List<T: Clone, S: Strategy = DefaultStrategy>(S::Ptr<Vec<T>>);
+pub struct List<T: Clone, S: PointerStrategy = DefaultPointerStrategy>(S::Ptr<Vec<T>>);
 
 impl<T: Clone> List<T> {
-  /// Creates an empty list using the [`DefaultStrategy`].
+  /// Creates an empty list using the [`DefaultPointerStrategy`].
   pub fn new() -> Self {
     Self::with_strategy()
   }
 }
 
-impl<T: Clone, S: Strategy> List<T, S> {
+impl<T: Clone, S: PointerStrategy> List<T, S> {
   /// Creates an empty list using the strategy `S`.
   pub fn with_strategy() -> Self {
     Self(S::Ptr::new(Vec::new()))
@@ -124,7 +124,7 @@ impl<T: Clone, S: Strategy> List<T, S> {
 }
 
 /// Equivalent to [`List::with_strategy`].
-impl<T: Clone, S: Strategy> Default for List<T, S> {
+impl<T: Clone, S: PointerStrategy> Default for List<T, S> {
   fn default() -> Self {
     Self::with_strategy()
   }
@@ -132,14 +132,14 @@ impl<T: Clone, S: Strategy> Default for List<T, S> {
 
 /// Clones the handle, not the data; both handles refer to the same list.
 /// Use [`List::deep_clone`] for an independent copy.
-impl<T: Clone, S: Strategy> Clone for List<T, S> {
+impl<T: Clone, S: PointerStrategy> Clone for List<T, S> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
   }
 }
 
 /// Formats a snapshot of the elements like a [`Vec`].
-impl<T: Clone + std::fmt::Debug, S: Strategy> std::fmt::Debug for List<T, S> {
+impl<T: Clone + std::fmt::Debug, S: PointerStrategy> std::fmt::Debug for List<T, S> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     // Snapshot first so no lock is held while formatting elements, which may be
     // handles that refer back to this list.
@@ -148,7 +148,7 @@ impl<T: Clone + std::fmt::Debug, S: Strategy> std::fmt::Debug for List<T, S> {
 }
 
 /// Builds a list from the items yielded by an iterator.
-impl<T: Clone, S: Strategy> FromIterator<T> for List<T, S> {
+impl<T: Clone, S: PointerStrategy> FromIterator<T> for List<T, S> {
   fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
     Self(S::Ptr::new(iter.into_iter().collect()))
   }
@@ -176,7 +176,7 @@ mod tests {
   use super::*;
   use crate::pointers::{ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy};
 
-  fn exercise<S: Strategy>() {
+  fn exercise<S: PointerStrategy>() {
     let list: List<i32, S> = List::with_strategy();
     list.push(1);
     list.push(3);

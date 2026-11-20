@@ -1,0 +1,29 @@
+error: `T` isn't used by any field, pointer strategy or parent class
+ --> tests/ui/class/generics.rs:4:20
+  |
+4 | struct UnusedParam<T> {
+  |                    ^
+
+error: `T` isn't used by any field, pointer strategy or parent class
+ --> tests/ui/class/generics.rs:9:28
+  |
+9 | struct OnlyUsedRecursively<T> {
+  |                            ^
+
+error: #[class] supports type parameters, not lifetime or const parameters
+  --> tests/ui/class/generics.rs:14:17
+   |
+14 | struct Lifetime<'a> {
+   |                 ^^
+
+error: #[class] supports type parameters, not lifetime or const parameters
+  --> tests/ui/class/generics.rs:19:14
+   |
+19 | struct Const<const N: usize> {
+   |              ^^^^^^^^^^^^^^
+
+error: write bounds on the class struct rather than #[class_methods], they apply to its methods too
+  --> tests/ui/class/generics.rs:29:5
+   |
+29 | impl<T: Default> BoundsOnMethods<T> {}
+   |     ^^^^^^^^^^^^

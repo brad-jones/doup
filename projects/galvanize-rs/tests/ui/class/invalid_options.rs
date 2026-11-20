@@ -1,13 +1,34 @@
-use galvanize_rs::class;
+use galvanize_rs::{class, class_methods};
 
 #[class(unknown = 1)]
 struct UnknownClassOption {
   a: String,
 }
 
+#[class(strategy = galvanize_rs::ArcSwapStrategy)]
+struct RenamedStrategy {
+  a: String,
+}
+
+#[class(runtime_strategy = FastRuntimeStrategy)]
+struct UnknownRuntime {
+  a: String,
+}
+
+#[class(open, open)]
+struct DuplicateOption {
+  a: String,
+}
+
 #[class]
 struct UnknownFieldOption {
   #[class_prop(writeonly)]
+  pub a: String,
+}
+
+#[class]
+struct RenamedFieldStrategy {
+  #[class_prop(strategy = galvanize_rs::ArcSwapStrategy)]
   pub a: String,
 }
 
@@ -31,21 +52,15 @@ struct ClassOnField {
 }
 
 #[class]
-struct UnusedParam<'a, T, const N: usize> {
-  a: String,
-}
-
-#[class]
-struct OnlyUsedRecursively<T> {
-  next: Option<Self>,
-}
-
-#[class]
 struct Tuple(String);
 
 #[class]
 struct Reserved {
   ptr_eq: String,
+  __hidden: String,
 }
+
+#[class_methods(open)]
+impl Reserved {}
 
 fn main() {}

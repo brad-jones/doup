@@ -1,0 +1,39 @@
+error: future cannot be sent between threads safely
+  --> tests/ui/class/async_not_send.rs:4:1
+   |
+ 4 | #[class(open, runtime_strategy = SafeRuntimeStrategy)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ future returned by `__body_get` is not `Send`
+...
+ 7 | #[class_methods]
+   | ---------------- in this attribute macro expansion
+   |
+   = help: within `impl Future<Output = usize>`, the trait `Send` is not implemented for `Rc<usize>`
+note: future is not `Send` as this value is used across an await
+  --> tests/ui/class/async_not_send.rs:12:34
+   |
+11 |     let value = Rc::new(1);
+   |         ----- has type `Rc<usize>` which is not `Send`
+12 |     std::future::pending::<()>().await;
+   |                                  ^^^^^ await occurs here, with `value` maybe used later
+   = note: required for the cast from `Pin<Box<impl Future<Output = usize>>>` to `Pin<Box<(dyn Future<Output = usize> + Send + '__class_future)>>`
+   = note: this error originates in the macro `::galvanize_rs::__private::__complete` which comes from the expansion of the attribute macro `class_methods` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: future cannot be sent between threads safely
+  --> tests/ui/class/async_not_send.rs:17:1
+   |
+17 | #[class(open, runtime_strategy = UnsafeRuntimeStrategy)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ future returned by `__body_get` is not `Send`
+...
+20 | #[class_methods]
+   | ---------------- in this attribute macro expansion
+   |
+   = help: within `impl Future<Output = usize>`, the trait `Send` is not implemented for `Rc<usize>`
+note: future is not `Send` as this value is used across an await
+  --> tests/ui/class/async_not_send.rs:25:34
+   |
+24 |     let value = Rc::new(1);
+   |         ----- has type `Rc<usize>` which is not `Send`
+25 |     std::future::pending::<()>().await;
+   |                                  ^^^^^ await occurs here, with `value` maybe used later
+   = note: required for the cast from `Pin<Box<impl Future<Output = usize>>>` to `Pin<Box<(dyn Future<Output = usize> + Send + '__class_future)>>`
+   = note: this error originates in the macro `::galvanize_rs::__private::__complete` which comes from the expansion of the attribute macro `class_methods` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -132,6 +132,7 @@ tasks:
     cmds:
       - task: test:unit
       - task: test:integration
+      - task: test:miri
 
   test:unit:
     desc: Runs the in-crate unit tests (and doc tests).
@@ -143,10 +144,35 @@ tasks:
 
   test:integration:
     desc: Runs the integration tests under each crate's tests/ dir, for a given target.
+    summary: |
+      Tests that exercise unsafe code are ignored here, test:miri runs them instead.
     deps:
       - init:rustup
     cmds:
       - cargo test --workspace --test '*' {{if .TARGET}}--target {{.TARGET}}{{end}}
+
+  test:miri:
+    desc: Runs the tests that exercise unsafe code under Miri, which checks them for undefined behaviour.
+    summary: |
+      Covers galvanize-rs's UnsafeRuntimeStrategy: its kernel's unit tests, and the class integration
+      tests in galvanize-rs-fixtures-unsafe (which are ignored outside Miri). Compiler-driving UI tests
+      and Tokio's runtime aren't run under Miri.
+
+      Everything is run under both of Miri's aliasing models (Stacked & Tree Borrows), with strict
+      provenance, across several thread scheduling seeds. Extra flags can be added via MIRIFLAGS, and
+      a test name filter after `--`, eg. `task test:miri -- downcast`.
+
+      Passing is evidence for the safety argument in projects/galvanize-rs/src/class/unsafe_runtime.rs,
+      not a proof of soundness.
+    deps:
+      - init:miri
+    cmds:
+      - task: miri:run
+        vars:
+          ARGS: -p galvanize-rs --lib -- class::unsafe_runtime {{.CLI_ARGS}}
+      - task: miri:run
+        vars:
+          ARGS: -p galvanize-rs-fixtures-unsafe -- {{.CLI_ARGS}}
 
   bench:
     desc: Runs the benchmarks. Pass a name filter after `--`, eg. `task bench -- mixed`.
@@ -164,58 +190,15 @@ tasks:
     cmds:
       - bun scripts/bench-to-html.ts
 
-  miri:
-    desc: Checks hardened inheritance and historical probes with Miri, or a supplied standalone .rs file.
-    summary: |
-      Without args, runs miri:main, the historical "true" inheritance spike, and the inheritance bench's
-      race & verify checks (not its timed benchmarks). The old MainDesign remains known unsound;
-      passing its historical happy-path checks does not endorse its public API.
-      With args, eg. `task miri -- path/to/file.rs`, checks that standalone file instead.
-
-      Everything is run under both of Miri's aliasing models (Stacked & Tree Borrows), with strict
-      provenance, across several thread scheduling seeds. Extra flags can be added via MIRIFLAGS.
-    deps:
-      - init:miri
-    cmds:
-      - if: '[ -z "{{.CLI_ARGS}}" ]'
-        task: miri:main
-      - task: miri:run
-        vars:
-          CMD: run
-          ARGS: '--manifest-path {{.CLI_ARGS | default "docs/research/galvanize-rs-true-inheritance-spike.rs"}}'
-      - if: '[ -z "{{.CLI_ARGS}}" ]'
-        task: miri:run
-        vars:
-          CMD: test
-          ARGS: -p galvanize-rs --bench inheritance
-
-  miri:main:
-    desc: Checks the hardened runtime and generated sync/async classes under both Miri aliasing models.
-    summary: |
-      Runs the generated inheritance, soundness, and async integration tests with strict provenance
-      and eight scheduling seeds per model. Compiler-driving UI tests and Tokio spawning run natively;
-      deterministic async suspension, borrowed inputs, thread migration, and cancellation run in Miri.
-      Passing checks are evidence for the written safety argument, not an exhaustive soundness proof.
-    deps:
-      - init:miri
-    cmds:
-      - task: miri:run
-        vars:
-          CMD: test
-          ARGS: -p galvanize-rs-main-runtime -p galvanize-rs-main-models --lib --tests
-
   miri:run:
     internal: true
     requires:
-      vars: [CMD, ARGS]
-    env:
-      # cargo-script lets cargo (and thus cargo miri) treat a lone .rs file as a package.
-      CARGO_UNSTABLE_SCRIPT: "true"
+      vars: [ARGS]
     cmds:
       - for: ["", "-Zmiri-tree-borrows"]
         cmd: >-
           MIRIFLAGS="-Zmiri-strict-provenance -Zmiri-many-seeds=0..8 {{.ITEM}} $MIRIFLAGS"
-          cargo +{{.MIRI_TOOLCHAIN}} miri {{.CMD}} -q {{.ARGS}}
+          cargo +{{.MIRI_TOOLCHAIN}} miri test -q {{.ARGS}}
 
   run:cli:
     desc: Runs the cli using `cargo run`.

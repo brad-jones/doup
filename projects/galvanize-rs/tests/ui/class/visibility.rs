@@ -1,5 +1,6 @@
+// Final classes can be declared in any module, and keep their private accessors and constructor private.
 mod model {
-  use galvanize_rs::{Str, class};
+  use galvanize_rs::{Str, class, class_methods};
 
   #[class]
   pub struct Foo {
@@ -8,6 +9,7 @@ mod model {
     secret: Str,
   }
 
+  #[class_methods]
   impl Foo {
     pub fn new() -> Self {
       Self::from_data(FooData {

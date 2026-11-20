@@ -1,8 +1,8 @@
 {
   "benchmark": "inheritance",
   "source": "projects/galvanize-rs/benches/inheritance.rs",
-  "generatedAt": "2026-11-19T23:16:11.095Z",
-  "gitCommit": "dbe33262a44f79e84e5a66c118f0933707ff013c",
+  "generatedAt": "2026-11-20T01:10:31.143Z",
+  "gitCommit": "79bde368ae806d6244519f5d1d37283ad07f1a26",
   "filter": null,
   "timerPrecision": "13 ns",
   "units": "Time values are in nanoseconds.",
@@ -26,1483 +26,755 @@
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 0.925,
-      "slowest": 0.932,
-      "median": 0.929,
-      "mean": 0.929,
+      "fastest": 0.904,
+      "slowest": 1.015,
+      "median": 0.908,
+      "mean": 0.909,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 0.789,
-      "slowest": 1.746,
-      "median": 1.002,
-      "mean": 1.085,
+      "fastest": 0.78,
+      "slowest": 1.711,
+      "median": 0.985,
+      "mean": 1.019,
       "samples": 104,
       "iters": 212992
     },
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 0.924,
-      "slowest": 1.559,
-      "median": 0.947,
-      "mean": 0.977,
+      "fastest": 1.048,
+      "slowest": 3.203,
+      "median": 1.377,
+      "mean": 1.33,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 0.779,
-      "slowest": 1.491,
-      "median": 0.983,
-      "mean": 0.962,
+      "fastest": 1.587,
+      "slowest": 19.18,
+      "median": 2.541,
+      "mean": 2.779,
       "samples": 104,
-      "iters": 212992
+      "iters": 13312
     },
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 32.69,
-      "slowest": 33.26,
-      "median": 33,
-      "mean": 32.97,
+      "fastest": 35.4,
+      "slowest": 188.9,
+      "median": 36.51,
+      "mean": 37.9,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "bark_volume",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 38.92,
-      "slowest": 75.83,
-      "median": 41.34,
-      "mean": 44.58,
+      "fastest": 45.78,
+      "slowest": 65.65,
+      "median": 50.7,
+      "mean": 51.21,
       "samples": 104,
       "iters": 3328
     },
     {
       "path": [
         "bark_volume",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 0.734,
-      "slowest": 0.778,
-      "median": 0.753,
-      "mean": 0.751,
+      "fastest": 0.91,
+      "slowest": 0.928,
+      "median": 0.913,
+      "mean": 0.912,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "bark_volume",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 0.83,
-      "slowest": 23.94,
-      "median": 0.935,
-      "mean": 1.162,
+      "fastest": 0.997,
+      "slowest": 4.28,
+      "median": 1.155,
+      "mean": 1.306,
       "samples": 104,
       "iters": 106496
     },
     {
       "path": [
         "bark_volume",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 0.733,
-      "slowest": 0.748,
-      "median": 0.736,
-      "mean": 0.736,
+      "fastest": 0.859,
+      "slowest": 0.873,
+      "median": 0.863,
+      "mean": 0.863,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "bark_volume",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
-      ],
-      "fastest": 1.011,
-      "slowest": 7.468,
-      "median": 1.405,
-      "mean": 1.602,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "bark_volume",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 2.275,
-      "slowest": 2.545,
-      "median": 2.362,
-      "mean": 2.372,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "bark_volume",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 1.89,
-      "slowest": 11.69,
-      "median": 2.653,
-      "mean": 2.84,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 0.943,
-      "slowest": 1.51,
-      "median": 0.946,
-      "mean": 0.957,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 1.042,
-      "slowest": 4.747,
-      "median": 1.245,
-      "mean": 1.329,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 0.942,
-      "slowest": 2.883,
-      "median": 0.946,
-      "mean": 0.972,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 1.022,
-      "slowest": 4.496,
-      "median": 1.158,
-      "mean": 1.2,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 1.648,
-      "slowest": 1.666,
-      "median": 1.655,
-      "mean": 1.655,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "bark_volume",
-        "MainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 1.654,
-      "slowest": 2.785,
-      "median": 1.744,
-      "mean": 1.759,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "bark_volume",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 0.775,
-      "slowest": 1.019,
-      "median": 0.99,
-      "mean": 0.974,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "bark_volume",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 0.966,
-      "slowest": 10.32,
-      "median": 1.199,
-      "mean": 1.355,
-      "samples": 104,
-      "iters": 53248
-    },
-    {
-      "path": [
-        "bark_volume",
-        "SafeDesign",
-        "Dog",
-        "t=1"
       ],
       "fastest": 0.967,
-      "slowest": 0.997,
-      "median": 0.971,
-      "mean": 0.979,
-      "samples": 100,
-      "iters": 204800
+      "slowest": 1.825,
+      "median": 1.111,
+      "mean": 1.188,
+      "samples": 104,
+      "iters": 106496
     },
     {
       "path": [
         "bark_volume",
-        "SafeDesign",
-        "Dog",
-        "t=8"
+        "UnsafeRuntimeStrategy",
+        "Puppy",
+        "t=1"
       ],
-      "fastest": 1.036,
-      "slowest": 5.804,
-      "median": 1.339,
-      "mean": 1.472,
-      "samples": 104,
-      "iters": 53248
+      "fastest": 1.555,
+      "slowest": 1.576,
+      "median": 1.564,
+      "mean": 1.566,
+      "samples": 100,
+      "iters": 102400
     },
     {
       "path": [
         "bark_volume",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 33.95,
-      "slowest": 52.08,
-      "median": 34.17,
-      "mean": 34.62,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "bark_volume",
-        "SafeDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 37.48,
-      "slowest": 235.6,
-      "median": 45.5,
-      "mean": 55.76,
+      "fastest": 1.71,
+      "slowest": 8.678,
+      "median": 1.994,
+      "mean": 2.144,
       "samples": 104,
-      "iters": 3328
+      "iters": 106496
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 6.058,
-      "slowest": 6.374,
-      "median": 6.206,
-      "mean": 6.167,
+      "fastest": 5.752,
+      "slowest": 7.748,
+      "median": 5.783,
+      "mean": 5.807,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 5.413,
-      "slowest": 37.76,
-      "median": 5.724,
-      "mean": 6.762,
+      "fastest": 5.33,
+      "slowest": 19.7,
+      "median": 6.369,
+      "mean": 6.455,
       "samples": 104,
       "iters": 26624
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 13.08,
-      "slowest": 14.15,
-      "median": 13.39,
-      "mean": 13.58,
+      "fastest": 14.22,
+      "slowest": 14.97,
+      "median": 14.27,
+      "mean": 14.29,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 15.55,
-      "slowest": 50.69,
-      "median": 21.43,
-      "mean": 21.71,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "clone",
-        "DescriptorDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 11.65,
-      "slowest": 12.79,
-      "median": 11.75,
-      "mean": 11.77,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "clone",
-        "DescriptorDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 9.776,
-      "slowest": 91.8,
-      "median": 13.94,
-      "mean": 17.29,
+      "fastest": 14.9,
+      "slowest": 264,
+      "median": 15.64,
+      "mean": 24.93,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 10,
+      "slowest": 10.22,
+      "median": 10.06,
+      "mean": 10.06,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "clone",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 10.61,
+      "slowest": 102.7,
+      "median": 11.29,
+      "mean": 13.02,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "clone",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 15.69,
-      "slowest": 16.87,
-      "median": 16.63,
-      "mean": 16.48,
+      "fastest": 14.21,
+      "slowest": 14.69,
+      "median": 14.27,
+      "mean": 14.29,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "clone",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 16.73,
-      "slowest": 279.1,
-      "median": 26.76,
-      "mean": 29.56,
-      "samples": 104,
-      "iters": 3328
-    },
-    {
-      "path": [
-        "clone",
-        "HardenedMainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 6.186,
-      "slowest": 7.136,
-      "median": 6.694,
-      "mean": 6.619,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "HardenedMainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 6.487,
-      "slowest": 42.32,
-      "median": 8.589,
-      "mean": 10.82,
+      "fastest": 14.54,
+      "slowest": 48.83,
+      "median": 15.24,
+      "mean": 16.28,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "clone",
-        "HardenedMainDesign",
-        "Beagle",
+        "UnsafeRuntimeStrategy",
+        "Animal",
         "t=1"
       ],
-      "fastest": 6.878,
-      "slowest": 185.2,
-      "median": 7.329,
-      "mean": 9.33,
+      "fastest": 5.627,
+      "slowest": 5.794,
+      "median": 5.681,
+      "mean": 5.682,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "clone",
-        "HardenedMainDesign",
-        "Beagle",
+        "UnsafeRuntimeStrategy",
+        "Animal",
         "t=8"
       ],
-      "fastest": 6.12,
-      "slowest": 170,
-      "median": 8.776,
-      "mean": 11.85,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "clone",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 5.159,
-      "slowest": 10.85,
-      "median": 5.411,
-      "mean": 5.795,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "HardenedMainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 5.483,
-      "slowest": 21.01,
-      "median": 6.058,
-      "mean": 6.714,
+      "fastest": 6.091,
+      "slowest": 80.16,
+      "median": 6.447,
+      "mean": 7.314,
       "samples": 104,
       "iters": 26624
     },
     {
       "path": [
         "clone",
-        "HardenedMainDesign",
-        "Puppy",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
         "t=1"
       ],
-      "fastest": 5.507,
-      "slowest": 10.08,
-      "median": 5.558,
-      "mean": 5.701,
+      "fastest": 5.755,
+      "slowest": 5.959,
+      "median": 5.814,
+      "mean": 5.815,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "clone",
-        "HardenedMainDesign",
-        "Puppy",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
         "t=8"
       ],
-      "fastest": 7.44,
-      "slowest": 85.03,
-      "median": 10.67,
-      "mean": 12.61,
+      "fastest": 7.267,
+      "slowest": 37.09,
+      "median": 8.884,
+      "mean": 10.83,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "clone",
-        "MainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 7.632,
-      "slowest": 17.97,
-      "median": 8.977,
-      "mean": 9.109,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 6.269,
-      "slowest": 67.3,
-      "median": 7.394,
-      "mean": 8.494,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 5.651,
-      "slowest": 10.24,
-      "median": 5.8,
-      "mean": 5.915,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 7.737,
-      "slowest": 43.76,
-      "median": 8.675,
-      "mean": 9.595,
-      "samples": 104,
-      "iters": 3328
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 5.058,
-      "slowest": 9.499,
-      "median": 5.175,
-      "mean": 5.186,
+      "fastest": 5.763,
+      "slowest": 5.959,
+      "median": 5.818,
+      "mean": 5.82,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "clone",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 6.565,
-      "slowest": 157.9,
-      "median": 7.698,
-      "mean": 10.09,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 5.155,
-      "slowest": 8.144,
-      "median": 5.175,
-      "mean": 5.245,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "MainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 5.479,
-      "slowest": 41.47,
-      "median": 6.226,
-      "mean": 8.683,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 5.772,
-      "slowest": 5.991,
-      "median": 5.796,
-      "mean": 5.803,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 6.03,
-      "slowest": 80.89,
-      "median": 6.265,
-      "mean": 7.264,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 14.23,
-      "slowest": 19.85,
-      "median": 14.42,
-      "mean": 15.6,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 14.51,
-      "slowest": 66.26,
-      "median": 14.92,
-      "mean": 16.49,
+      "fastest": 6.377,
+      "slowest": 28.41,
+      "median": 7.087,
+      "mean": 7.628,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "clone",
-        "SafeDesign",
-        "Dog",
+        "UnsafeRuntimeStrategy",
+        "Puppy",
         "t=1"
       ],
-      "fastest": 9.737,
-      "slowest": 114.4,
-      "median": 9.778,
-      "mean": 10.87,
+      "fastest": 5.763,
+      "slowest": 5.931,
+      "median": 5.814,
+      "mean": 5.819,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "clone",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 10.1,
-      "slowest": 37.69,
-      "median": 10.69,
-      "mean": 12.06,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 13.58,
-      "slowest": 14.08,
-      "median": 13.65,
-      "mean": 13.66,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "clone",
-        "SafeDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 13.79,
-      "slowest": 22.1,
-      "median": 14.41,
-      "mean": 14.95,
+      "fastest": 47.37,
+      "slowest": 792.8,
+      "median": 88.62,
+      "mean": 110.9,
       "samples": 104,
-      "iters": 13312
+      "iters": 208
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 24.79,
-      "slowest": 50.19,
-      "median": 27.81,
-      "mean": 27.89,
+      "fastest": 52.82,
+      "slowest": 648.4,
+      "median": 53.52,
+      "mean": 62.17,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 31.21,
-      "slowest": 222.1,
-      "median": 33.68,
-      "mean": 38.99,
+      "fastest": 66.35,
+      "slowest": 577.6,
+      "median": 74.85,
+      "mean": 93.17,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 36.94,
-      "slowest": 55.52,
-      "median": 37.37,
-      "mean": 38.12,
+      "fastest": 80.44,
+      "slowest": 191.6,
+      "median": 84.94,
+      "mean": 85.66,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 43.3,
-      "slowest": 230.3,
-      "median": 46.93,
-      "mean": 58.03,
+      "fastest": 94.61,
+      "slowest": 778.8,
+      "median": 104.8,
+      "mean": 120.7,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 34.75,
-      "slowest": 47.85,
-      "median": 36.58,
-      "mean": 36.84,
+      "fastest": 79.19,
+      "slowest": 101.2,
+      "median": 81.61,
+      "mean": 81.76,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 40.86,
-      "slowest": 1304,
-      "median": 48.5,
-      "mean": 66.84,
+      "fastest": 93.26,
+      "slowest": 529,
+      "median": 100.9,
+      "mean": 117,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 36.89,
-      "slowest": 48.89,
-      "median": 37.36,
-      "mean": 37.65,
+      "fastest": 83.44,
+      "slowest": 287.5,
+      "median": 86.96,
+      "mean": 88.82,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 44.82,
-      "slowest": 158.9,
-      "median": 49.67,
-      "mean": 53.98,
+      "fastest": 97.33,
+      "slowest": 185.8,
+      "median": 104.5,
+      "mean": 106.5,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 45.07,
-      "slowest": 86.08,
-      "median": 46.42,
-      "mean": 48.39,
+      "fastest": 73.29,
+      "slowest": 104.3,
+      "median": 73.81,
+      "mean": 74.68,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 54.96,
-      "slowest": 198.2,
-      "median": 64.47,
-      "mean": 75.68,
+      "fastest": 88.27,
+      "slowest": 332,
+      "median": 102.2,
+      "mean": 114.2,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 46.11,
-      "slowest": 69.32,
-      "median": 46.61,
-      "mean": 47.23,
+      "fastest": 93.54,
+      "slowest": 176.6,
+      "median": 95.5,
+      "mean": 96.88,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 57.11,
-      "slowest": 428.3,
-      "median": 65.81,
-      "mean": 91.4,
+      "fastest": 109.4,
+      "slowest": 238.4,
+      "median": 118.3,
+      "mean": 128.4,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 46.33,
-      "slowest": 76.88,
-      "median": 47.08,
-      "mean": 47.73,
+      "fastest": 93.42,
+      "slowest": 1174,
+      "median": 96.52,
+      "mean": 113,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 60.46,
-      "slowest": 381.4,
-      "median": 68.27,
-      "mean": 89.65,
+      "fastest": 111.5,
+      "slowest": 344.7,
+      "median": 125.3,
+      "mean": 133.3,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 47.04,
-      "slowest": 68.39,
-      "median": 47.61,
-      "mean": 47.98,
+      "fastest": 94.98,
+      "slowest": 544.8,
+      "median": 95.96,
+      "mean": 105.4,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "construct",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 57.96,
-      "slowest": 480.1,
-      "median": 69.45,
-      "mean": 93.41,
+      "fastest": 106.2,
+      "slowest": 467.4,
+      "median": 123.5,
+      "mean": 139.5,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 35.83,
-      "slowest": 54.63,
-      "median": 36.39,
-      "mean": 36.7,
+      "fastest": 63.13,
+      "slowest": 92.15,
+      "median": 63.89,
+      "mean": 64.34,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 43,
-      "slowest": 299.7,
-      "median": 47.21,
-      "mean": 53.35,
+      "fastest": 92.76,
+      "slowest": 582.1,
+      "median": 116.1,
+      "mean": 124.2,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 35.79,
-      "slowest": 60.96,
-      "median": 36.16,
-      "mean": 36.64,
+      "fastest": 81.27,
+      "slowest": 107.7,
+      "median": 82.05,
+      "mean": 82.48,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 42.02,
-      "slowest": 132.1,
-      "median": 46.71,
-      "mean": 52.33,
+      "fastest": 100.2,
+      "slowest": 555,
+      "median": 152.6,
+      "mean": 178.4,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 36,
-      "slowest": 52.39,
-      "median": 36.36,
-      "mean": 36.74,
+      "fastest": 80.82,
+      "slowest": 179.2,
+      "median": 81.75,
+      "mean": 83.29,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 40.1,
-      "slowest": 84.49,
-      "median": 44.48,
-      "mean": 47.23,
+      "fastest": 107.1,
+      "slowest": 753.6,
+      "median": 143.2,
+      "mean": 181.9,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 35.79,
-      "slowest": 51.71,
-      "median": 36.11,
-      "mean": 36.5,
+      "fastest": 154.4,
+      "slowest": 971.3,
+      "median": 157.2,
+      "mean": 165.6,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "construct",
-        "MainDesign",
+        "describe",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 40.96,
-      "slowest": 89.02,
-      "median": 46.43,
-      "mean": 48.91,
+      "fastest": 188.4,
+      "slowest": 943.1,
+      "median": 336.3,
+      "mean": 357.2,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
-        "construct",
-        "SafeDesign",
+        "describe",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 24.88,
-      "slowest": 48.99,
-      "median": 25.97,
-      "mean": 26.45,
+      "fastest": 60.33,
+      "slowest": 78.35,
+      "median": 61.18,
+      "mean": 61.44,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "construct",
-        "SafeDesign",
+        "describe",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 34.11,
-      "slowest": 131.3,
-      "median": 40.86,
-      "mean": 44.89,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 37.35,
-      "slowest": 49.02,
-      "median": 37.72,
-      "mean": 38.04,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 46.29,
-      "slowest": 361.5,
-      "median": 49.3,
-      "mean": 54.25,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 34.75,
-      "slowest": 54.99,
-      "median": 35.75,
-      "mean": 37.93,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 42.96,
-      "slowest": 397.4,
-      "median": 47.5,
-      "mean": 54.26,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 38.07,
-      "slowest": 49.08,
-      "median": 38.53,
-      "mean": 38.8,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "construct",
-        "SafeDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 44.89,
-      "slowest": 289.3,
-      "median": 48.27,
-      "mean": 52.68,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 57.39,
-      "slowest": 135.8,
-      "median": 58.46,
-      "mean": 59.81,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 76.38,
-      "slowest": 180.5,
-      "median": 98.24,
-      "mean": 102.1,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 76.24,
-      "slowest": 105,
-      "median": 76.91,
-      "mean": 77.4,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 96.13,
-      "slowest": 1002,
-      "median": 148,
-      "mean": 209.9,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 74.74,
-      "slowest": 108.4,
-      "median": 75.75,
-      "mean": 76.31,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 96.42,
-      "slowest": 437.5,
-      "median": 133.8,
-      "mean": 159.2,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 140.2,
-      "slowest": 520.6,
-      "median": 143.4,
-      "mean": 147.1,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "DescriptorDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 168.2,
-      "slowest": 972.4,
-      "median": 331.4,
-      "mean": 357.5,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 54.55,
-      "slowest": 75.03,
-      "median": 55.45,
-      "mean": 55.83,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 70.52,
-      "slowest": 197.6,
-      "median": 87.79,
-      "mean": 90.83,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 55.84,
-      "slowest": 76.5,
-      "median": 58.69,
-      "mean": 58.54,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 75.83,
-      "slowest": 171.6,
-      "median": 89.41,
-      "mean": 91.81,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 56.7,
-      "slowest": 85.19,
-      "median": 58.06,
-      "mean": 58.44,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 76.92,
-      "slowest": 212.5,
-      "median": 93.34,
-      "mean": 100.1,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 105.5,
-      "slowest": 938.6,
-      "median": 107.1,
-      "mean": 117.6,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 121.4,
-      "slowest": 525.1,
-      "median": 145,
-      "mean": 156,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "MainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 57,
-      "slowest": 79.13,
-      "median": 57.8,
-      "mean": 58.1,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "MainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 73.3,
-      "slowest": 361.3,
-      "median": 96.31,
+      "fastest": 86.96,
+      "slowest": 143.7,
+      "median": 117,
       "mean": 115,
       "samples": 104,
       "iters": 6656
@@ -1510,1861 +782,1049 @@
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 58.38,
-      "slowest": 77.47,
-      "median": 59.55,
-      "mean": 59.79,
+      "fastest": 60.6,
+      "slowest": 86.55,
+      "median": 63.07,
+      "mean": 63.51,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 77.89,
-      "slowest": 466.7,
-      "median": 91.47,
-      "mean": 97.91,
+      "fastest": 90.43,
+      "slowest": 211.4,
+      "median": 114.5,
+      "mean": 117,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 58.24,
-      "slowest": 138.4,
-      "median": 59.2,
-      "mean": 60.81,
+      "fastest": 60.07,
+      "slowest": 92.08,
+      "median": 60.9,
+      "mean": 61.43,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 78.2,
-      "slowest": 277.8,
-      "median": 92.54,
-      "mean": 100.9,
+      "fastest": 90.68,
+      "slowest": 184,
+      "median": 114.5,
+      "mean": 115.9,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 103.2,
-      "slowest": 129.1,
-      "median": 105.2,
-      "mean": 105.6,
+      "fastest": 104.4,
+      "slowest": 127.7,
+      "median": 107.2,
+      "mean": 107.7,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "describe",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 126.9,
-      "slowest": 302.8,
-      "median": 144,
-      "mean": 153.6,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 58.58,
-      "slowest": 84.8,
-      "median": 60.49,
-      "mean": 60.83,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 76.33,
-      "slowest": 388.9,
-      "median": 94.77,
-      "mean": 109.2,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 76.83,
-      "slowest": 99.92,
-      "median": 78.02,
-      "mean": 78.3,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 100,
-      "slowest": 281,
-      "median": 121.6,
-      "mean": 140.6,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 76.27,
-      "slowest": 98.66,
-      "median": 77.43,
-      "mean": 77.83,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 97.49,
-      "slowest": 845,
-      "median": 117.2,
-      "mean": 181.2,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 144,
-      "slowest": 472.8,
-      "median": 148.1,
-      "mean": 153,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "describe",
-        "SafeDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 171.9,
-      "slowest": 1863,
-      "median": 275.7,
-      "mean": 352.4,
+      "fastest": 134.2,
+      "slowest": 410.1,
+      "median": 163.1,
+      "mean": 182.2,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 1.333,
-      "slowest": 2.628,
-      "median": 1.447,
-      "mean": 1.49,
+      "fastest": 1.325,
+      "slowest": 1.613,
+      "median": 1.347,
+      "mean": 1.373,
       "samples": 100,
       "iters": 102400
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 12.14,
-      "slowest": 320.2,
-      "median": 19.39,
-      "mean": 29.14,
+      "fastest": 2.07,
+      "slowest": 3.908,
+      "median": 2.537,
+      "mean": 2.553,
       "samples": 104,
-      "iters": 832
+      "iters": 53248
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 15.77,
-      "slowest": 420.7,
-      "median": 15.95,
-      "mean": 19.98,
+      "fastest": 17.32,
+      "slowest": 18.04,
+      "median": 17.47,
+      "mean": 17.49,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 18.76,
-      "slowest": 121.2,
-      "median": 22.22,
-      "mean": 27.67,
+      "fastest": 20.26,
+      "slowest": 78.59,
+      "median": 41.57,
+      "mean": 39.21,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 15.78,
-      "slowest": 17.2,
-      "median": 16.65,
-      "mean": 16.43,
+      "fastest": 28.08,
+      "slowest": 35.43,
+      "median": 31.58,
+      "mean": 30.34,
       "samples": 100,
-      "iters": 12800
+      "iters": 6400
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 22.05,
-      "slowest": 250.8,
-      "median": 26.42,
-      "mean": 34.96,
+      "fastest": 28.65,
+      "slowest": 78.15,
+      "median": 34.61,
+      "mean": 35.22,
       "samples": 104,
       "iters": 3328
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 23.62,
-      "slowest": 25.92,
-      "median": 24.41,
-      "mean": 24.48,
+      "fastest": 20.45,
+      "slowest": 38.11,
+      "median": 20.55,
+      "mean": 21.2,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "downcast",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 21.03,
-      "slowest": 38.22,
-      "median": 22.53,
-      "mean": 23.4,
+      "fastest": 21.42,
+      "slowest": 46.2,
+      "median": 24,
+      "mean": 24.44,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "downcast",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 1.502,
-      "slowest": 3.106,
-      "median": 2.024,
-      "mean": 1.935,
+      "fastest": 1.538,
+      "slowest": 3.071,
+      "median": 1.707,
+      "mean": 1.897,
       "samples": 100,
       "iters": 102400
     },
     {
       "path": [
         "downcast",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=8"
       ],
-      "fastest": 2.651,
-      "slowest": 7.671,
-      "median": 3.22,
-      "mean": 3.444,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 5.679,
-      "slowest": 5.956,
-      "median": 5.727,
-      "mean": 5.766,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 6.784,
-      "slowest": 31.61,
-      "median": 7.261,
-      "mean": 8.305,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 5.675,
-      "slowest": 5.862,
-      "median": 5.706,
-      "mean": 5.717,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 7.69,
-      "slowest": 42.37,
-      "median": 8.362,
-      "mean": 9.272,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 5.538,
-      "slowest": 5.671,
-      "median": 5.558,
-      "mean": 5.567,
-      "samples": 100,
-      "iters": 25600
-    },
-    {
-      "path": [
-        "downcast",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 5.925,
-      "slowest": 28.94,
-      "median": 6.413,
-      "mean": 7.051,
-      "samples": 104,
-      "iters": 26624
-    },
-    {
-      "path": [
-        "downcast",
-        "MainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.415,
-      "slowest": 2.435,
-      "median": 1.534,
-      "mean": 1.591,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "downcast",
-        "MainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 2.356,
-      "slowest": 32.09,
-      "median": 2.692,
-      "mean": 3.71,
+      "fastest": 2.443,
+      "slowest": 26.29,
+      "median": 2.764,
+      "mean": 3.09,
       "samples": 104,
       "iters": 53248
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 5.429,
-      "slowest": 5.745,
-      "median": 5.558,
-      "mean": 5.537,
+      "fastest": 5.529,
+      "slowest": 5.65,
+      "median": 5.544,
+      "mean": 5.55,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 6.054,
-      "slowest": 16.57,
-      "median": 6.319,
-      "mean": 6.666,
+      "fastest": 6.361,
+      "slowest": 18.28,
+      "median": 7.025,
+      "mean": 7.855,
       "samples": 104,
       "iters": 26624
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=1"
       ],
-      "fastest": 5.546,
-      "slowest": 5.808,
-      "median": 5.565,
-      "mean": 5.569,
+      "fastest": 8.353,
+      "slowest": 8.689,
+      "median": 8.384,
+      "mean": 8.397,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 5.979,
-      "slowest": 33.64,
-      "median": 6.376,
-      "mean": 7.889,
+      "fastest": 8.541,
+      "slowest": 21.65,
+      "median": 9.705,
+      "mean": 10.27,
       "samples": 104,
-      "iters": 26624
+      "iters": 13312
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 5.417,
-      "slowest": 5.644,
-      "median": 5.44,
-      "mean": 5.445,
+      "fastest": 6.767,
+      "slowest": 7.072,
+      "median": 6.814,
+      "mean": 6.821,
       "samples": 100,
       "iters": 25600
     },
     {
       "path": [
         "downcast",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 7.628,
-      "slowest": 39.72,
-      "median": 8.761,
-      "mean": 11.07,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.276,
-      "slowest": 2.472,
-      "median": 1.477,
-      "mean": 1.472,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 1.897,
-      "slowest": 7.192,
-      "median": 2.288,
-      "mean": 2.411,
-      "samples": 104,
-      "iters": 53248
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 16.12,
-      "slowest": 205.3,
-      "median": 16.3,
-      "mean": 18.17,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 18.81,
-      "slowest": 48.72,
-      "median": 20.11,
-      "mean": 21.5,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 15.79,
-      "slowest": 16.45,
-      "median": 15.97,
-      "mean": 15.95,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 78.39,
-      "slowest": 1147,
-      "median": 98.39,
-      "mean": 117.4,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 16.64,
-      "slowest": 17.54,
-      "median": 16.74,
-      "mean": 16.8,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "downcast",
-        "SafeDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 18.86,
-      "slowest": 54.97,
-      "median": 20.21,
-      "mean": 20.79,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "field",
-        "DescriptorDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 11.07,
-      "slowest": 158.2,
-      "median": 11.14,
-      "mean": 12.62,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "DescriptorDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 12.37,
-      "slowest": 54.34,
-      "median": 12.79,
-      "mean": 14.76,
+      "fastest": 7.134,
+      "slowest": 33.01,
+      "median": 8.427,
+      "mean": 9.523,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "field",
-        "DescriptorDesign",
-        "Beagle",
+        "SafeRuntimeStrategy",
+        "Animal",
         "t=1"
       ],
-      "fastest": 11.33,
-      "slowest": 11.62,
-      "median": 11.41,
-      "mean": 11.42,
+      "fastest": 12.22,
+      "slowest": 12.41,
+      "median": 12.25,
+      "mean": 12.26,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "field",
-        "DescriptorDesign",
-        "Beagle",
+        "SafeRuntimeStrategy",
+        "Animal",
         "t=8"
       ],
-      "fastest": 12.29,
-      "slowest": 97.48,
-      "median": 12.64,
-      "mean": 16.04,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "DescriptorDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 11.32,
-      "slowest": 11.65,
-      "median": 11.39,
-      "mean": 11.4,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "DescriptorDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 13.4,
-      "slowest": 143.3,
-      "median": 14.05,
-      "mean": 15.53,
+      "fastest": 14.34,
+      "slowest": 147.4,
+      "median": 15.58,
+      "mean": 19.1,
       "samples": 104,
       "iters": 6656
     },
     {
       "path": [
         "field",
-        "DescriptorDesign",
-        "Puppy",
+        "SafeRuntimeStrategy",
+        "Beagle",
         "t=1"
       ],
-      "fastest": 11.58,
-      "slowest": 11.72,
-      "median": 11.65,
-      "mean": 11.65,
+      "fastest": 12.21,
+      "slowest": 12.49,
+      "median": 12.25,
+      "mean": 12.27,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "field",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
+        "Beagle",
+        "t=8"
+      ],
+      "fastest": 12.62,
+      "slowest": 258.4,
+      "median": 13.55,
+      "mean": 22.03,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "field",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 11.65,
+      "slowest": 11.81,
+      "median": 11.69,
+      "mean": 11.7,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "field",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 12.58,
+      "slowest": 13.94,
+      "median": 13.19,
+      "mean": 13.18,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "field",
+        "SafeRuntimeStrategy",
+        "Puppy",
+        "t=1"
+      ],
+      "fastest": 11.65,
+      "slowest": 11.86,
+      "median": 11.7,
+      "mean": 11.7,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "field",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
       "fastest": 13.22,
-      "slowest": 87.15,
-      "median": 14.48,
-      "mean": 16.73,
+      "slowest": 123.7,
+      "median": 13.92,
+      "mean": 17.19,
       "samples": 104,
-      "iters": 6656
+      "iters": 13312
     },
     {
       "path": [
         "field",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 11.37,
-      "slowest": 11.51,
-      "median": 11.42,
-      "mean": 11.43,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 11.83,
-      "slowest": 42.76,
-      "median": 12.27,
-      "mean": 13.19,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 11.37,
-      "slowest": 11.57,
-      "median": 11.41,
-      "mean": 11.42,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 11.66,
-      "slowest": 77.94,
-      "median": 12.23,
-      "mean": 13.95,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 11.12,
-      "slowest": 11.24,
-      "median": 11.15,
-      "mean": 11.16,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 11.5,
-      "slowest": 16.74,
-      "median": 12.01,
-      "mean": 12.25,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 12.36,
+      "fastest": 12.18,
       "slowest": 12.61,
-      "median": 12.41,
-      "mean": 12.42,
+      "median": 12.22,
+      "mean": 12.23,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "field",
-        "HardenedMainDesign",
-        "Puppy",
+        "UnsafeRuntimeStrategy",
+        "Animal",
         "t=8"
       ],
-      "fastest": 11.46,
-      "slowest": 192.7,
-      "median": 12,
-      "mean": 15.44,
+      "fastest": 12.94,
+      "slowest": 346.4,
+      "median": 13.66,
+      "mean": 33.66,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "field",
-        "MainDesign",
-        "Animal",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
         "t=1"
       ],
-      "fastest": 11.11,
-      "slowest": 11.36,
-      "median": 11.17,
-      "mean": 11.17,
+      "fastest": 12.18,
+      "slowest": 12.39,
+      "median": 12.23,
+      "mean": 12.24,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "field",
-        "MainDesign",
-        "Animal",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
         "t=8"
       ],
-      "fastest": 11.71,
-      "slowest": 17.6,
-      "median": 12.1,
+      "fastest": 12.8,
+      "slowest": 118.6,
+      "median": 13.45,
+      "mean": 16.32,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "field",
+        "UnsafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 14.65,
+      "slowest": 14.87,
+      "median": 14.72,
+      "mean": 14.72,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "field",
+        "UnsafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 16.43,
+      "slowest": 20.97,
+      "median": 18.68,
+      "mean": 18.61,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "field",
+        "UnsafeRuntimeStrategy",
+        "Puppy",
+        "t=1"
+      ],
+      "fastest": 14.64,
+      "slowest": 15,
+      "median": 14.71,
+      "mean": 14.72,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "field",
+        "UnsafeRuntimeStrategy",
+        "Puppy",
+        "t=8"
+      ],
+      "fastest": 14.01,
+      "slowest": 101.1,
+      "median": 15.4,
+      "mean": 17.12,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "generic_construct",
+        "SafeRuntimeStrategy",
+        "Boxed",
+        "t=1"
+      ],
+      "fastest": 24.28,
+      "slowest": 39.75,
+      "median": 25.27,
+      "mean": 25.65,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "generic_construct",
+        "SafeRuntimeStrategy",
+        "Boxed",
+        "t=8"
+      ],
+      "fastest": 33.33,
+      "slowest": 72.11,
+      "median": 38.7,
+      "mean": 40.11,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "generic_construct",
+        "SafeRuntimeStrategy",
+        "Tagged",
+        "t=1"
+      ],
+      "fastest": 54.78,
+      "slowest": 70.15,
+      "median": 55.57,
+      "mean": 56.16,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "generic_construct",
+        "SafeRuntimeStrategy",
+        "Tagged",
+        "t=8"
+      ],
+      "fastest": 59.93,
+      "slowest": 135.8,
+      "median": 64.17,
+      "mean": 66.1,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "generic_construct",
+        "UnsafeRuntimeStrategy",
+        "Boxed",
+        "t=1"
+      ],
+      "fastest": 48.34,
+      "slowest": 65.16,
+      "median": 48.88,
+      "mean": 49.38,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "generic_construct",
+        "UnsafeRuntimeStrategy",
+        "Boxed",
+        "t=8"
+      ],
+      "fastest": 57.31,
+      "slowest": 367.2,
+      "median": 65.02,
+      "mean": 77.25,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "generic_construct",
+        "UnsafeRuntimeStrategy",
+        "Tagged",
+        "t=1"
+      ],
+      "fastest": 63.57,
+      "slowest": 87.65,
+      "median": 65.51,
+      "mean": 66,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "generic_construct",
+        "UnsafeRuntimeStrategy",
+        "Tagged",
+        "t=8"
+      ],
+      "fastest": 74.95,
+      "slowest": 579,
+      "median": 81.42,
+      "mean": 103.6,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "generic_get",
+        "SafeRuntimeStrategy",
+        "Boxed",
+        "t=1"
+      ],
+      "fastest": 12.21,
+      "slowest": 12.36,
+      "median": 12.25,
       "mean": 12.26,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 11.11,
-      "slowest": 22.69,
-      "median": 11.66,
-      "mean": 12.32,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 11.71,
-      "slowest": 31.25,
-      "median": 12.44,
-      "mean": 12.86,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 11.37,
-      "slowest": 11.57,
-      "median": 11.44,
-      "mean": 11.44,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 11.69,
-      "slowest": 116.9,
-      "median": 12.26,
-      "mean": 15.35,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 11.36,
-      "slowest": 11.55,
-      "median": 11.41,
-      "mean": 11.41,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "MainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 12,
-      "slowest": 60.15,
-      "median": 12.44,
-      "mean": 14.4,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 11.42,
-      "slowest": 11.66,
-      "median": 11.48,
-      "mean": 11.49,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 12.06,
-      "slowest": 18.06,
-      "median": 12.55,
-      "mean": 12.78,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 11.41,
-      "slowest": 11.66,
-      "median": 11.56,
-      "mean": 11.56,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 12.3,
-      "slowest": 275.2,
-      "median": 12.57,
-      "mean": 16.33,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 11.46,
-      "slowest": 11.61,
-      "median": 11.53,
-      "mean": 11.53,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 12.22,
-      "slowest": 213.6,
-      "median": 12.88,
-      "mean": 22.31,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 11.41,
-      "slowest": 11.68,
-      "median": 11.48,
-      "mean": 11.49,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "field",
-        "SafeDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 12.19,
-      "slowest": 65.72,
-      "median": 12.53,
-      "mean": 14.81,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "generic_construct",
-        "DescriptorDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 11.75,
-      "slowest": 24.86,
-      "median": 12.09,
-      "mean": 12.42,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "DescriptorDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 16.81,
-      "slowest": 50.05,
-      "median": 21.73,
-      "mean": 23.87,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "DescriptorDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 16.69,
-      "slowest": 27.16,
-      "median": 17.03,
-      "mean": 17.27,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "DescriptorDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 20.42,
-      "slowest": 335.8,
-      "median": 22.97,
-      "mean": 27.15,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "HardenedMainDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 27.89,
-      "slowest": 549.4,
-      "median": 28.31,
-      "mean": 33.88,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "HardenedMainDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 36.39,
-      "slowest": 89.3,
-      "median": 42.63,
-      "mean": 46.93,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "HardenedMainDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 32.74,
-      "slowest": 51.81,
-      "median": 33.02,
-      "mean": 33.62,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "HardenedMainDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 37.66,
-      "slowest": 87.47,
-      "median": 42.13,
-      "mean": 45.29,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "MainDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 26.66,
-      "slowest": 51.16,
-      "median": 26.86,
-      "mean": 27.29,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "MainDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 35.13,
-      "slowest": 188.7,
-      "median": 39.29,
-      "mean": 47.16,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "MainDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 34.03,
-      "slowest": 55.49,
-      "median": 34.53,
-      "mean": 34.94,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "MainDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 39.22,
-      "slowest": 173.5,
-      "median": 42.92,
-      "mean": 49.02,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "SafeDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 11.67,
-      "slowest": 29.61,
-      "median": 11.95,
-      "mean": 12.37,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "SafeDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 17.06,
-      "slowest": 101.8,
-      "median": 19.99,
-      "mean": 22.41,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_construct",
-        "SafeDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 16.67,
-      "slowest": 23.53,
-      "median": 17.02,
-      "mean": 17.28,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_construct",
-        "SafeDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 21.13,
-      "slowest": 112.5,
-      "median": 25.42,
-      "mean": 28.94,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_get",
-        "DescriptorDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 11.43,
-      "slowest": 11.61,
-      "median": 11.47,
-      "mean": 11.47,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "generic_get",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Boxed",
         "t=8"
       ],
-      "fastest": 12.48,
-      "slowest": 151.4,
-      "median": 12.92,
-      "mean": 18.03,
+      "fastest": 14.67,
+      "slowest": 125.5,
+      "median": 16,
+      "mean": 19.48,
       "samples": 104,
-      "iters": 13312
+      "iters": 6656
     },
     {
       "path": [
         "generic_get",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Tagged",
         "t=1"
       ],
-      "fastest": 36.78,
-      "slowest": 38.14,
-      "median": 37,
-      "mean": 37.03,
+      "fastest": 41.43,
+      "slowest": 1020.9999999999999,
+      "median": 41.78,
+      "mean": 51.61,
       "samples": 100,
-      "iters": 6400
+      "iters": 3200
     },
     {
       "path": [
         "generic_get",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Tagged",
         "t=8"
       ],
-      "fastest": 42.48,
-      "slowest": 56.11,
-      "median": 45.81,
-      "mean": 46.48,
+      "fastest": 46.06,
+      "slowest": 310.5,
+      "median": 51,
+      "mean": 59.78,
       "samples": 104,
       "iters": 3328
     },
     {
       "path": [
         "generic_get",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Boxed",
         "t=1"
       ],
-      "fastest": 11.38,
-      "slowest": 108.5,
-      "median": 11.43,
-      "mean": 12.41,
+      "fastest": 12.08,
+      "slowest": 12.43,
+      "median": 12.18,
+      "mean": 12.2,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "generic_get",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Boxed",
         "t=8"
       ],
-      "fastest": 13.28,
-      "slowest": 68.9,
-      "median": 14.12,
-      "mean": 15.2,
+      "fastest": 92.87,
+      "slowest": 849.8,
+      "median": 135.6,
+      "mean": 146,
       "samples": 104,
-      "iters": 6656
+      "iters": 208
     },
     {
       "path": [
         "generic_get",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Tagged",
         "t=1"
       ],
-      "fastest": 10.97,
-      "slowest": 11.53,
-      "median": 11.18,
-      "mean": 11.22,
+      "fastest": 13.17,
+      "slowest": 13.43,
+      "median": 13.27,
+      "mean": 13.27,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "generic_get",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Tagged",
         "t=8"
       ],
-      "fastest": 12.24,
-      "slowest": 70.4,
-      "median": 12.65,
-      "mean": 15.08,
+      "fastest": 14.97,
+      "slowest": 48.08,
+      "median": 17.08,
+      "mean": 17.77,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
-        "generic_get",
-        "MainDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 11.14,
-      "slowest": 11.34,
-      "median": 11.21,
-      "mean": 11.22,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "generic_get",
-        "MainDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 12.37,
-      "slowest": 143,
-      "median": 12.76,
-      "mean": 14.93,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "generic_get",
-        "MainDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 25.33,
-      "slowest": 25.75,
-      "median": 25.45,
-      "mean": 25.45,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_get",
-        "MainDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 29.5,
-      "slowest": 108.7,
-      "median": 31.86,
-      "mean": 35.6,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_get",
-        "SafeDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 11.37,
-      "slowest": 11.62,
-      "median": 11.46,
-      "mean": 11.46,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "generic_get",
-        "SafeDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 13.64,
-      "slowest": 74.65,
-      "median": 14.33,
-      "mean": 16.82,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "generic_get",
-        "SafeDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 37.01,
-      "slowest": 37.53,
-      "median": 37.31,
-      "mean": 37.29,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "generic_get",
-        "SafeDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 40.67,
-      "slowest": 50.51,
-      "median": 43.3,
-      "mean": 44.25,
-      "samples": 104,
-      "iters": 3328
-    },
-    {
-      "path": [
         "generic_get_independent",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Boxed",
         "t=1"
       ],
-      "fastest": 717.8,
-      "slowest": 728.3,
-      "median": 721.3,
-      "mean": 721.7,
+      "fastest": 943.3,
+      "slowest": 994.8,
+      "median": 948.3,
+      "mean": 949.7,
       "samples": 100,
       "iters": 200
     },
     {
       "path": [
         "generic_get_independent",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Boxed",
         "t=8"
       ],
-      "fastest": 783.3,
-      "slowest": 10040,
-      "median": 829.1,
-      "mean": 931.2,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "DescriptorDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 2419,
-      "slowest": 3424,
-      "median": 2431,
-      "mean": 2443,
-      "samples": 100,
-      "iters": 100
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "DescriptorDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 2541,
-      "slowest": 3115,
-      "median": 2638,
-      "mean": 2674,
+      "fastest": 1039,
+      "slowest": 4374,
+      "median": 1205,
+      "mean": 1262,
       "samples": 104,
       "iters": 104
     },
     {
       "path": [
         "generic_get_independent",
-        "HardenedMainDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 717.3,
-      "slowest": 741.3,
-      "median": 735.8,
-      "mean": 733.1,
-      "samples": 100,
-      "iters": 200
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "HardenedMainDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 778.8,
-      "slowest": 912.3,
-      "median": 823.6,
-      "mean": 825.8,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "HardenedMainDesign",
+        "SafeRuntimeStrategy",
         "Tagged",
         "t=1"
       ],
-      "fastest": 733.8,
-      "slowest": 743.8,
-      "median": 738.3,
-      "mean": 738.3,
-      "samples": 100,
-      "iters": 200
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "HardenedMainDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 809.3,
-      "slowest": 1167,
-      "median": 885.1,
-      "mean": 893.3,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "MainDesign",
-        "Boxed",
-        "t=1"
-      ],
-      "fastest": 747.8,
-      "slowest": 764.8,
-      "median": 758.8,
-      "mean": 757.2,
-      "samples": 100,
-      "iters": 200
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "MainDesign",
-        "Boxed",
-        "t=8"
-      ],
-      "fastest": 788.3,
-      "slowest": 5432,
-      "median": 849.1,
-      "mean": 912.7,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "MainDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 1661,
-      "slowest": 1819,
-      "median": 1667,
-      "mean": 1669,
+      "fastest": 2986,
+      "slowest": 3376,
+      "median": 3006,
+      "mean": 3011,
       "samples": 100,
       "iters": 100
     },
     {
       "path": [
         "generic_get_independent",
-        "MainDesign",
+        "SafeRuntimeStrategy",
         "Tagged",
         "t=8"
       ],
-      "fastest": 1961,
-      "slowest": 10710,
-      "median": 2051,
-      "mean": 2474,
+      "fastest": 3112,
+      "slowest": 4988,
+      "median": 3320,
+      "mean": 3389,
       "samples": 104,
       "iters": 104
     },
     {
       "path": [
         "generic_get_independent",
-        "SafeDesign",
+        "UnsafeRuntimeStrategy",
         "Boxed",
         "t=1"
       ],
-      "fastest": 813.8,
-      "slowest": 1951,
-      "median": 821.3,
-      "mean": 846.5,
+      "fastest": 844.8,
+      "slowest": 856.8,
+      "median": 848.8,
+      "mean": 848.8,
       "samples": 100,
-      "iters": 100
+      "iters": 200
     },
     {
       "path": [
         "generic_get_independent",
-        "SafeDesign",
+        "UnsafeRuntimeStrategy",
         "Boxed",
         "t=8"
       ],
-      "fastest": 787.3,
-      "slowest": 936.8,
-      "median": 823.1,
-      "mean": 825.7,
-      "samples": 104,
-      "iters": 208
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "SafeDesign",
-        "Tagged",
-        "t=1"
-      ],
-      "fastest": 2427,
-      "slowest": 31420,
-      "median": 2487,
-      "mean": 2804,
-      "samples": 100,
-      "iters": 100
-    },
-    {
-      "path": [
-        "generic_get_independent",
-        "SafeDesign",
-        "Tagged",
-        "t=8"
-      ],
-      "fastest": 2494,
-      "slowest": 3929,
-      "median": 2611,
-      "mean": 2652,
+      "fastest": 961.8,
+      "slowest": 4233,
+      "median": 1063,
+      "mean": 1111,
       "samples": 104,
       "iters": 104
+    },
+    {
+      "path": [
+        "generic_get_independent",
+        "UnsafeRuntimeStrategy",
+        "Tagged",
+        "t=1"
+      ],
+      "fastest": 805.3,
+      "slowest": 816.8,
+      "median": 808.3,
+      "mean": 808.8,
+      "samples": 100,
+      "iters": 200
+    },
+    {
+      "path": [
+        "generic_get_independent",
+        "UnsafeRuntimeStrategy",
+        "Tagged",
+        "t=8"
+      ],
+      "fastest": 883.8,
+      "slowest": 1415,
+      "median": 935.1,
+      "mean": 955.8,
+      "samples": 104,
+      "iters": 208
     },
     {
       "path": [
         "legs",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
         "Animal",
         "t=1"
       ],
-      "fastest": 16.89,
-      "slowest": 8729,
-      "median": 17.89,
-      "mean": 105.5,
-      "samples": 100,
-      "iters": 100
-    },
-    {
-      "path": [
-        "legs",
-        "DescriptorDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 0.852,
-      "slowest": 1.588,
-      "median": 1.053,
-      "mean": 1.062,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "DescriptorDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 0.963,
-      "slowest": 0.975,
-      "median": 0.967,
-      "mean": 0.967,
+      "fastest": 1.105,
+      "slowest": 1.112,
+      "median": 1.109,
+      "mean": 1.109,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "legs",
-        "DescriptorDesign",
-        "Beagle",
+        "SafeRuntimeStrategy",
+        "Animal",
         "t=8"
       ],
-      "fastest": 0.878,
-      "slowest": 1.904,
-      "median": 1.101,
-      "mean": 1.147,
+      "fastest": 1.016,
+      "slowest": 2.051,
+      "median": 1.297,
+      "mean": 1.312,
       "samples": 104,
       "iters": 106496
     },
     {
       "path": [
         "legs",
-        "DescriptorDesign",
-        "Dog",
+        "SafeRuntimeStrategy",
+        "Beagle",
         "t=1"
       ],
-      "fastest": 0.989,
-      "slowest": 0.999,
-      "median": 0.992,
-      "mean": 0.992,
+      "fastest": 1.135,
+      "slowest": 1.148,
+      "median": 1.14,
+      "mean": 1.14,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "legs",
-        "DescriptorDesign",
-        "Dog",
+        "SafeRuntimeStrategy",
+        "Beagle",
         "t=8"
       ],
-      "fastest": 0.852,
-      "slowest": 3.569,
-      "median": 1.056,
-      "mean": 1.115,
+      "fastest": 1.052,
+      "slowest": 8.055,
+      "median": 1.296,
+      "mean": 1.358,
       "samples": 104,
       "iters": 106496
     },
     {
       "path": [
         "legs",
-        "DescriptorDesign",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 1.14,
+      "slowest": 1.178,
+      "median": 1.146,
+      "mean": 1.149,
+      "samples": 100,
+      "iters": 102400
+    },
+    {
+      "path": [
+        "legs",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 1.024,
+      "slowest": 1.385,
+      "median": 1.29,
+      "mean": 1.255,
+      "samples": 104,
+      "iters": 106496
+    },
+    {
+      "path": [
+        "legs",
+        "SafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 0.965,
-      "slowest": 0.975,
-      "median": 0.969,
+      "fastest": 1.137,
+      "slowest": 1.165,
+      "median": 1.143,
+      "mean": 1.143,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "legs",
+        "SafeRuntimeStrategy",
+        "Puppy",
+        "t=8"
+      ],
+      "fastest": 0.991,
+      "slowest": 1.404,
+      "median": 1.23,
+      "mean": 1.224,
+      "samples": 104,
+      "iters": 106496
+    },
+    {
+      "path": [
+        "legs",
+        "UnsafeRuntimeStrategy",
+        "Animal",
+        "t=1"
+      ],
+      "fastest": 0.837,
+      "slowest": 0.85,
+      "median": 0.84,
+      "mean": 0.84,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "legs",
+        "UnsafeRuntimeStrategy",
+        "Animal",
+        "t=8"
+      ],
+      "fastest": 2.642,
+      "slowest": 23.2,
+      "median": 3.775,
+      "mean": 4.622,
+      "samples": 104,
+      "iters": 6656
+    },
+    {
+      "path": [
+        "legs",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
+        "t=1"
+      ],
+      "fastest": 0.815,
+      "slowest": 0.821,
+      "median": 0.817,
+      "mean": 0.818,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "legs",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
+        "t=8"
+      ],
+      "fastest": 0.911,
+      "slowest": 6.793,
+      "median": 1.057,
+      "mean": 1.1,
+      "samples": 104,
+      "iters": 212992
+    },
+    {
+      "path": [
+        "legs",
+        "UnsafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 0.911,
+      "slowest": 1.471,
+      "median": 0.97,
       "mean": 0.969,
       "samples": 100,
       "iters": 204800
@@ -3372,800 +1832,268 @@
     {
       "path": [
         "legs",
-        "DescriptorDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 11.01,
-      "slowest": 371.2,
-      "median": 13.39,
-      "mean": 18.77,
-      "samples": 104,
-      "iters": 832
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 0.751,
-      "slowest": 0.774,
-      "median": 0.754,
-      "mean": 0.757,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 0.792,
-      "slowest": 0.934,
-      "median": 0.837,
-      "mean": 0.835,
-      "samples": 104,
-      "iters": 212992
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 0.752,
-      "slowest": 4.081,
-      "median": 0.755,
-      "mean": 0.794,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 0.919,
-      "slowest": 3.435,
-      "median": 0.978,
-      "mean": 1.043,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 0.81,
-      "slowest": 0.817,
-      "median": 0.813,
-      "mean": 0.813,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
+        "UnsafeRuntimeStrategy",
         "Dog",
         "t=8"
       ],
-      "fastest": 2.362,
-      "slowest": 55.23,
-      "median": 3.089,
-      "mean": 3.985,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 0.81,
+      "fastest": 0.948,
       "slowest": 1.379,
-      "median": 0.813,
-      "mean": 0.824,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 0.836,
-      "slowest": 0.946,
-      "median": 0.878,
-      "mean": 0.875,
+      "median": 0.996,
+      "mean": 1.007,
       "samples": 104,
       "iters": 212992
     },
     {
       "path": [
         "legs",
-        "MainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.012,
-      "slowest": 1.039,
-      "median": 1.015,
-      "mean": 1.016,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 1.07,
-      "slowest": 1.261,
-      "median": 1.098,
-      "mean": 1.11,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 0.989,
-      "slowest": 0.996,
-      "median": 0.991,
-      "mean": 0.991,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 1.084,
-      "slowest": 1.67,
-      "median": 1.136,
-      "mean": 1.163,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 1.013,
-      "slowest": 1.022,
-      "median": 1.016,
-      "mean": 1.016,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 1.027,
-      "slowest": 3.625,
-      "median": 1.109,
-      "mean": 1.215,
-      "samples": 104,
-      "iters": 212992
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=1"
       ],
-      "fastest": 1.109,
-      "slowest": 1.628,
-      "median": 1.272,
-      "mean": 1.261,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "legs",
-        "MainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 1.066,
-      "slowest": 11.07,
-      "median": 1.434,
-      "mean": 1.596,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.066,
-      "slowest": 1.129,
-      "median": 1.095,
-      "mean": 1.085,
+      "fastest": 0.884,
+      "slowest": 0.91,
+      "median": 0.887,
+      "mean": 0.888,
       "samples": 100,
       "iters": 204800
     },
     {
       "path": [
         "legs",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 1.035,
-      "slowest": 2.869,
-      "median": 1.77,
-      "mean": 1.669,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 1.226,
-      "slowest": 2.051,
-      "median": 1.435,
-      "mean": 1.483,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 1,
-      "slowest": 2.266,
-      "median": 1.305,
-      "mean": 1.423,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 1.455,
-      "slowest": 1.565,
-      "median": 1.486,
-      "mean": 1.491,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 1.067,
-      "slowest": 2.594,
-      "median": 1.306,
-      "mean": 1.339,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 1.19,
-      "slowest": 1.209,
-      "median": 1.197,
-      "mean": 1.197,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "legs",
-        "SafeDesign",
+        "UnsafeRuntimeStrategy",
         "Puppy",
         "t=8"
       ],
-      "fastest": 0.991,
-      "slowest": 3.828,
-      "median": 1.195,
-      "mean": 1.241,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.065,
-      "slowest": 1.077,
-      "median": 1.068,
-      "mean": 1.069,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 0.933,
-      "slowest": 2.017,
-      "median": 1.146,
-      "mean": 1.173,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 26.56,
-      "slowest": 27.14,
-      "median": 26.85,
-      "mean": 26.85,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 28.78,
-      "slowest": 139.3,
-      "median": 31.01,
-      "mean": 36.28,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 25.3,
-      "slowest": 26,
-      "median": 25.51,
-      "mean": 25.55,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 27.53,
-      "slowest": 354.7,
-      "median": 28.83,
-      "mean": 40.23,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 62.26,
-      "slowest": 63.67,
-      "median": 62.89,
-      "mean": 62.91,
-      "samples": 100,
-      "iters": 3200
-    },
-    {
-      "path": [
-        "weight",
-        "DescriptorDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 306.8,
-      "slowest": 3340,
-      "median": 378.8,
-      "mean": 527.2,
-      "samples": 104,
-      "iters": 104
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.037,
-      "slowest": 1.047,
-      "median": 1.041,
-      "mean": 1.041,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 1.107,
-      "slowest": 37.34,
-      "median": 1.252,
-      "mean": 1.852,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 1.013,
-      "slowest": 1.61,
-      "median": 1.066,
-      "mean": 1.083,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 1.111,
-      "slowest": 5.384,
-      "median": 1.174,
-      "mean": 1.455,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 1.166,
-      "slowest": 1.343,
-      "median": 1.21,
-      "mean": 1.216,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 1.13,
-      "slowest": 3.856,
-      "median": 1.168,
-      "mean": 1.26,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 1.725,
-      "slowest": 41.99,
-      "median": 1.731,
-      "mean": 2.135,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "weight",
-        "HardenedMainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 1.942,
-      "slowest": 3.171,
-      "median": 2.041,
-      "mean": 2.103,
-      "samples": 104,
-      "iters": 53248
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 1.037,
-      "slowest": 1.049,
-      "median": 1.041,
-      "mean": 1.042,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 0.892,
-      "slowest": 2.338,
-      "median": 1.103,
-      "mean": 1.135,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Beagle",
-        "t=1"
-      ],
-      "fastest": 1.017,
-      "slowest": 1.024,
-      "median": 1.02,
-      "mean": 1.02,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Beagle",
-        "t=8"
-      ],
-      "fastest": 0.894,
-      "slowest": 4.684,
-      "median": 1.106,
-      "mean": 1.149,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 0.934,
-      "slowest": 3.037,
-      "median": 1.02,
-      "mean": 1.04,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 0.871,
-      "slowest": 1.691,
-      "median": 1.072,
-      "mean": 1.072,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 2.083,
-      "slowest": 2.605,
-      "median": 2.098,
-      "mean": 2.142,
-      "samples": 100,
-      "iters": 102400
-    },
-    {
-      "path": [
-        "weight",
-        "MainDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 1.751,
-      "slowest": 2.958,
-      "median": 1.96,
-      "mean": 2,
-      "samples": 104,
-      "iters": 106496
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Animal",
-        "t=1"
-      ],
-      "fastest": 0.77,
-      "slowest": 0.792,
-      "median": 0.773,
-      "mean": 0.773,
-      "samples": 100,
-      "iters": 204800
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Animal",
-        "t=8"
-      ],
-      "fastest": 0.813,
-      "slowest": 1.481,
-      "median": 0.843,
-      "mean": 0.86,
+      "fastest": 0.869,
+      "slowest": 1.298,
+      "median": 0.926,
+      "mean": 0.93,
       "samples": 104,
       "iters": 212992
     },
     {
       "path": [
         "weight",
-        "SafeDesign",
+        "SafeRuntimeStrategy",
+        "Animal",
+        "t=1"
+      ],
+      "fastest": 1.076,
+      "slowest": 36.59,
+      "median": 1.083,
+      "mean": 1.444,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
+        "Animal",
+        "t=8"
+      ],
+      "fastest": 1.202,
+      "slowest": 2.025,
+      "median": 1.26,
+      "mean": 1.28,
+      "samples": 104,
+      "iters": 106496
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=1"
       ],
-      "fastest": 26.2,
-      "slowest": 123.5,
-      "median": 26.47,
-      "mean": 27.44,
+      "fastest": 28.43,
+      "slowest": 29.29,
+      "median": 28.58,
+      "mean": 28.59,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
         "weight",
-        "SafeDesign",
+        "SafeRuntimeStrategy",
         "Beagle",
         "t=8"
       ],
-      "fastest": 27.95,
-      "slowest": 91.75,
-      "median": 29.33,
-      "mean": 32.33,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Dog",
-        "t=1"
-      ],
-      "fastest": 25.25,
-      "slowest": 43.39,
-      "median": 25.98,
-      "mean": 26.14,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Dog",
-        "t=8"
-      ],
-      "fastest": 27.55,
-      "slowest": 765.4,
-      "median": 29.05,
-      "mean": 41.12,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Puppy",
-        "t=1"
-      ],
-      "fastest": 62.05,
-      "slowest": 69.51,
-      "median": 62.64,
-      "mean": 62.72,
-      "samples": 100,
-      "iters": 3200
-    },
-    {
-      "path": [
-        "weight",
-        "SafeDesign",
-        "Puppy",
-        "t=8"
-      ],
-      "fastest": 78.45,
-      "slowest": 148.7,
-      "median": 85.76,
-      "mean": 87.7,
+      "fastest": 37.18,
+      "slowest": 82.31,
+      "median": 44.34,
+      "mean": 46.72,
       "samples": 104,
       "iters": 1664
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 27.84,
+      "slowest": 28.4,
+      "median": 28.03,
+      "mean": 28.03,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 31.31,
+      "slowest": 274,
+      "median": 34.92,
+      "mean": 42.85,
+      "samples": 104,
+      "iters": 3328
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
+        "Puppy",
+        "t=1"
+      ],
+      "fastest": 67.09,
+      "slowest": 68.68,
+      "median": 67.65,
+      "mean": 67.73,
+      "samples": 100,
+      "iters": 3200
+    },
+    {
+      "path": [
+        "weight",
+        "SafeRuntimeStrategy",
+        "Puppy",
+        "t=8"
+      ],
+      "fastest": 80.37,
+      "slowest": 297.8,
+      "median": 91.72,
+      "mean": 93.22,
+      "samples": 104,
+      "iters": 1664
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Animal",
+        "t=1"
+      ],
+      "fastest": 0.813,
+      "slowest": 0.823,
+      "median": 0.816,
+      "mean": 0.816,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Animal",
+        "t=8"
+      ],
+      "fastest": 0.927,
+      "slowest": 1.653,
+      "median": 1.009,
+      "mean": 1.046,
+      "samples": 104,
+      "iters": 106496
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
+        "t=1"
+      ],
+      "fastest": 0.814,
+      "slowest": 0.818,
+      "median": 0.816,
+      "mean": 0.816,
+      "samples": 100,
+      "iters": 204800
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Beagle",
+        "t=8"
+      ],
+      "fastest": 0.909,
+      "slowest": 5.367,
+      "median": 1.466,
+      "mean": 1.521,
+      "samples": 104,
+      "iters": 212992
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Dog",
+        "t=1"
+      ],
+      "fastest": 1.18,
+      "slowest": 2.244,
+      "median": 1.184,
+      "mean": 1.215,
+      "samples": 100,
+      "iters": 102400
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Dog",
+        "t=8"
+      ],
+      "fastest": 1.025,
+      "slowest": 2.252,
+      "median": 1.214,
+      "mean": 1.237,
+      "samples": 104,
+      "iters": 106496
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Puppy",
+        "t=1"
+      ],
+      "fastest": 1.639,
+      "slowest": 1.653,
+      "median": 1.647,
+      "mean": 1.647,
+      "samples": 100,
+      "iters": 102400
+    },
+    {
+      "path": [
+        "weight",
+        "UnsafeRuntimeStrategy",
+        "Puppy",
+        "t=8"
+      ],
+      "fastest": 1.603,
+      "slowest": 2.752,
+      "median": 1.724,
+      "mean": 1.799,
+      "samples": 104,
+      "iters": 106496
     }
   ]
 }

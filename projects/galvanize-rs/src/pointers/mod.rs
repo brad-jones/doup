@@ -14,5 +14,7 @@ pub use arc_rw_lock_pointer::ArcRwLockPointer;
 mod arc_swap_pointer;
 pub use arc_swap_pointer::ArcSwapPointer;
 
-mod strategy;
-pub use strategy::{ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy, DefaultStrategy, Strategy};
+mod pointer_strategy;
+pub use pointer_strategy::{
+  ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy, DefaultPointerStrategy, PointerStrategy,
+};

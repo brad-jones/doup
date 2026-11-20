@@ -1,0 +1,35 @@
+error[E0308]: mismatched types
+ --> tests/ui/class/variance.rs:5:71
+  |
+5 |   let _widened: galvanize_rs_fixtures_safe::Boxed<fn(&'static str)> = boxed;
+  |                                                                       ^^^^^ one type is more general than the other
+  |
+  = note: expected struct `Boxed<fn(&str)>`
+             found struct `Boxed<for<'a> fn(&'a str)>`
+
+error[E0308]: mismatched types
+ --> tests/ui/class/variance.rs:7:72
+  |
+7 |   let _widened: galvanize_rs_fixtures_safe::Tagged<fn(&'static str)> = tagged;
+  |                                                                        ^^^^^^ one type is more general than the other
+  |
+  = note: expected struct `Tagged<fn(&str)>`
+             found struct `Tagged<for<'a> fn(&'a str)>`
+
+error[E0308]: mismatched types
+  --> tests/ui/class/variance.rs:10:73
+   |
+10 |   let _widened: galvanize_rs_fixtures_unsafe::Boxed<fn(&'static str)> = boxed;
+   |                                                                         ^^^^^ one type is more general than the other
+   |
+   = note: expected struct `Boxed<fn(&str)>`
+              found struct `Boxed<for<'a> fn(&'a str)>`
+
+error[E0308]: mismatched types
+  --> tests/ui/class/variance.rs:12:74
+   |
+12 |   let _widened: galvanize_rs_fixtures_unsafe::Tagged<fn(&'static str)> = tagged;
+   |                                                                          ^^^^^^ one type is more general than the other
+   |
+   = note: expected struct `Tagged<fn(&str)>`
+              found struct `Tagged<for<'a> fn(&'a str)>`
