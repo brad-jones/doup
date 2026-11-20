@@ -83,6 +83,8 @@ use proc_macro::TokenStream;
 /// The handle also gets:
 ///
 /// * `from_data` (private), see above, unless the class is `abstract`.
+/// * `new()` and `Default`, unless the class declares a constructor, see
+///   [Default constructors](#default-constructors).
 /// * `ptr_eq(&self, other)`, which is `true` when both handles refer to the same object, even when they
 ///   view it as different classes.
 /// * `upcast`, `is` and `downcast`, see [Inheritance](#inheritance).
@@ -225,12 +227,64 @@ use proc_macro::TokenStream;
 ///
 /// # Abstract classes
 ///
-/// A class declared `#[class(abstract)]` can't be instantiated, as it doesn't get `from_data`, but its
-/// `XData` still initializes subclasses. It may declare abstract methods, virtual methods without a body,
-/// with `#[class_abstract]`. A class that isn't abstract must implement every abstract method it inherits
-/// that no ancestor implements, which is checked at compile time. Implementing one doesn't need
+/// A class declared `#[class(abstract)]` can't be instantiated, as it doesn't get `from_data` or `new()`,
+/// but its `XData` still initializes subclasses. It may declare abstract methods, virtual methods without a
+/// body, with `#[class_abstract]`. A class that isn't abstract must implement every abstract method it
+/// inherits that no ancestor implements, which is checked at compile time. Implementing one doesn't need
 /// `#[class_override]`, as there's no implementation to replace (and a misspelt one leaves the abstract
 /// method unimplemented), nor does it get a `super_x`, as there's no implementation to call.
+///
+/// # Default constructors
+///
+/// Like in Java or C#, a class that doesn't declare a constructor gets a default one: `new()`, with the
+/// class's visibility, which sets every field, including those of its ancestors, to `Default::default()`.
+/// The class also implements `Default`, calling `new()`.
+///
+/// A constructor is a method named `new`, or a function without a receiver whose return type mentions
+/// `Self` or the class, such as `fn load() -> Result<Self, Error>`. Functions returning the class's `XData`,
+/// like the `init` functions above, aren't constructors. Abstract classes, and classes with a field named
+/// `new`, don't get a default constructor. Declare constructors in the `#[class_methods]` block, as one in
+/// another `impl` block isn't seen and would clash with `new()`, as would implementing `Default` yourself.
+///
+/// The class still compiles when a field, or an ancestor's, doesn't implement `Default`, but calling
+/// `new()` or `default()` is then an error, like with `#[derive(Default)]` on a generic struct.
+///
+/// ```
+/// use galvanize_rs::{class, class_methods};
+///
+/// pub trait Locate {
+///   fn locate(&self, dir: &str) -> String;
+/// }
+///
+/// #[class(abstract, implements = Locate)]
+/// pub struct ConfigFile {
+///   pub file_name: String,
+/// }
+///
+/// #[class_methods]
+/// impl ConfigFile {
+///   #[class_abstract]
+///   fn locate(&self, dir: &str) -> String;
+/// }
+///
+/// #[class(extends = ConfigFile)]
+/// pub struct BotConfigFile {}
+///
+/// #[class_methods]
+/// impl BotConfigFile {
+///   fn locate(&self, dir: &str) -> String {
+///     format!("{dir}/{}", self.file_name())
+///   }
+/// }
+///
+/// # fn main() {
+/// let bot = BotConfigFile::new();
+/// assert_eq!(bot.file_name(), "");
+/// bot.set_file_name("bot.yaml");
+/// assert_eq!(bot.upcast::<ConfigFile, _>().locate("/etc"), "/etc/bot.yaml");
+/// assert!(!BotConfigFile::default().ptr_eq(&bot));
+/// # }
+/// ```
 ///
 /// # Interfaces
 ///

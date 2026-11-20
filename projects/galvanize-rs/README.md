@@ -34,6 +34,23 @@ Each field lives in its own pointer, chosen by a `PointerStrategy` (`ArcRwLockSt
 the whole class with `#[class(pointer_strategy = ArcSwapStrategy)]`, or for a single field with
 `#[class_prop(pointer_strategy = ...)]`. Mark a public field `#[class_prop(readonly)]` to keep its setter private.
 
+Like in Java or C#, a concrete class that doesn't declare a constructor (a `new`, or any associated function returning
+`Self`) gets a default one: `new()`, plus a `Default` impl, which set every field, including inherited ones, to its
+`Default::default()`. It's only callable when all those fields implement `Default`.
+
+```rust
+#[class]
+pub struct Settings {
+  pub verbose: bool,
+  pub tags: List<Str>,
+}
+
+#[class_methods]
+impl Settings {}
+
+let settings = Settings::new(); // verbose: false, tags: []
+```
+
 Classes can be generic, e.g. `struct Node<T> { value: T, next: Option<Self> }`. Type parameters are bounded with
 `Clone + Send + Sync + 'static` for you, like `#[derive]` does with `Clone`.
 
@@ -121,6 +138,9 @@ impl Square {
     self.side() * self.side()
   }
 }
+
+let square = Square::new(); // a default constructor, as `Square` declares none
+square.set_side(2.0);
 ```
 
 An `open` class must be declared at the root of its crate (final classes can live anywhere). Classes get single

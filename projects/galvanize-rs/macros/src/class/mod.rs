@@ -327,6 +327,8 @@ pub struct Model {
   data_attrs: Vec<Attribute>,
   open: bool,
   is_abstract: bool,
+  /// Whether the class gets a generated `new()` and `Default` impl.
+  default_new: bool,
   /// The traits named by `implements`, which `Method::implements` indexes.
   implements: Vec<Path>,
   parent: Option<Type>,
@@ -418,6 +420,10 @@ impl Model {
     if !is_abstract {
       require_implementations(&name, &ancestors, &unimplemented, &methods)?;
     }
+    // Like Java, a concrete class only gets a default constructor when it doesn't declare one. A field
+    // named `new` would clash with it.
+    let default_new =
+      !is_abstract && !methods.iter().any(|m| m.is_constructor(&name)) && !fields.iter().any(|f| f.bare() == "new");
 
     // Doc comments document the class, which `#[class]` already declared.
     let data_attrs = item.attrs.into_iter().filter(|a| !a.path().is_ident("doc")).collect();
@@ -428,6 +434,7 @@ impl Model {
       data_attrs,
       open,
       is_abstract,
+      default_new,
       implements,
       parent: extends,
       runtime,

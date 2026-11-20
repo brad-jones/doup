@@ -5,7 +5,7 @@ use super::Model;
 use super::methods::arguments;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
-use syn::{Result, Type, spanned::Spanned};
+use syn::{Result, Type, parse_quote, spanned::Spanned};
 
 /// `XData`, the initial values passed to `from_data`.
 pub fn data_struct(model: &Model) -> TokenStream {
@@ -33,6 +33,76 @@ pub fn data_struct(model: &Model) -> TokenStream {
       #(#fields)*
     }
   }
+}
+
+/// `XData`'s `DefaultData` impl, which defaults every field, and the parent's data in `base`. Each bound is
+/// wrapped in `for<'__d>` so that it isn't global: rustc then only checks it where it's used, rather than
+/// rejecting classes whose fields aren't `Default`.
+pub fn default_data(model: &Model) -> TokenStream {
+  let krate = &model.krate;
+  let private = quote!(#krate::__private);
+  let data_ty = model.data_ty();
+  let mut generics = model.generics.data.clone();
+  let wc = generics.make_where_clause();
+  let mut inits = Vec::new();
+  if let Some(parent) = model.parent_data() {
+    wc.predicates
+      .push(parse_quote!(for<'__d> #parent: #private::DefaultData));
+    inits.push(quote!(base: <#parent as #private::DefaultData>::__default_data(),));
+  }
+  for field in &model.fields {
+    let (ident, ty) = (&field.ident, &field.ty);
+    wc.predicates
+      .push(parse_quote!(for<'__d> #ty: ::core::default::Default));
+    inits.push(quote!(#ident: ::core::default::Default::default(),));
+  }
+  let (ig, _, wc) = generics.split_for_impl();
+  quote! {
+    impl #ig #private::DefaultData for #data_ty #wc {
+      #[inline]
+      fn __default_data() -> Self {
+        Self { #(#inits)* }
+      }
+    }
+  }
+}
+
+/// The class's default constructor, `new()`, and its `Default` impl, if it gets them.
+fn default_new(model: &Model) -> (Option<TokenStream>, Option<TokenStream>) {
+  if !model.default_new {
+    return (None, None);
+  }
+  let krate = &model.krate;
+  let private = quote!(#krate::__private);
+  let vis = &model.vis;
+  let own = model.own();
+  let data_ty = model.data_ty();
+  let mut generics = model.generics.full.clone();
+  generics
+    .make_where_clause()
+    .predicates
+    .push(parse_quote!(for<'__d> #data_ty: #private::DefaultData));
+  let (ig, _, default_wc) = generics.split_for_impl();
+  let constructor = quote! {
+    /// Creates a new object with every field, including those of its ancestors, set to its default value.
+    #[inline]
+    #vis fn new() -> Self
+    where
+      for<'__d> #data_ty: #private::DefaultData,
+    {
+      Self::__from_data(<#data_ty as #private::DefaultData>::__default_data())
+    }
+  };
+  let default_impl = quote! {
+    /// Creates a new object with `new()`.
+    impl #ig ::core::default::Default for #own #default_wc {
+      #[inline]
+      fn default() -> Self {
+        Self::new()
+      }
+    }
+  };
+  (Some(constructor), Some(default_impl))
 }
 
 /// The storage's field declarations, one pointer per field.
@@ -72,6 +142,8 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
   let accessors = model.fields.iter().map(|f| accessors(model, f));
   let data = data_struct(model);
   let data_ty = model.data_ty();
+  let default_data = default_data(model);
+  let (constructor, default_impl) = default_new(model);
 
   let parent_items = model.parent.as_ref().map(|parent| {
     quote! {
@@ -148,10 +220,12 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
 
   quote! {
     #data
+    #default_data
 
     #[allow(dead_code)]
     impl #ig #own #wc {
       #from_data
+      #constructor
 
       /// Returns `true` if both handles refer to the same object, whatever class they view it as.
       #[inline]
@@ -226,6 +300,7 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
       }
     }
 
+    #default_impl
     #runtime_check
   }
 }

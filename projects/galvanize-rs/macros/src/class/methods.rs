@@ -1,5 +1,6 @@
 //! The `#[class_methods]` block: ordinary, virtual, abstract and overriding methods.
 
+use super::fields::names_in;
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
@@ -49,6 +50,21 @@ impl Method {
       .receiver()
       .map(|r| &r.self_token)
       .ok_or_else(|| Error::new_spanned(&self.item.sig, "missing receiver"))
+  }
+
+  /// Whether this is a constructor of `class`, which stops `#[class]` generating `new()`: a method named
+  /// `new`, or an associated function whose return type mentions `Self` or the class, e.g. `-> Self`,
+  /// `-> Option<Self>` or `-> Result<Name, E>`. Functions returning `NameData`, such as `init`, aren't.
+  pub fn is_constructor(&self, class: &Ident) -> bool {
+    let sig = &self.item.sig;
+    if sig.ident == "new" {
+      return true;
+    }
+    let ReturnType::Type(_, ty) = &sig.output else {
+      return false;
+    };
+    let names = names_in(ty.to_token_stream());
+    sig.receiver().is_none() && (names.contains("Self") || names.contains(&class.to_string()))
   }
 }
 

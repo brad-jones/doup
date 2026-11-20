@@ -156,6 +156,19 @@ pub mod __private {
     fn fmt_fields(&self, d: &mut DebugStruct<'_, '_>);
   }
 
+  /// Implemented by every class's `XData`, when the fields of the class and its ancestors all implement
+  /// `Default`. It builds the data for a class's generated `new()`, and for the `base` of its subclasses'.
+  ///
+  /// The macros bound it with `for<'__d> Field: Default`. As that bound isn't global, it's only checked
+  /// where it's used, so classes with fields that aren't `Default` still compile, but can't call `new()`.
+  #[diagnostic::on_unimplemented(
+    message = "`{Self}` can't be defaulted, as one of its class's fields (or its ancestors') isn't `Default`",
+    label = "a field type, or an ancestor's, doesn't implement `Default`"
+  )]
+  pub trait DefaultData: Sized {
+    fn __default_data() -> Self;
+  }
+
   /// [`super::Extends`] index for upcasting a class to itself.
   pub struct Here;
 

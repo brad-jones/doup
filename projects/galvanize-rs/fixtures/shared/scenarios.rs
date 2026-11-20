@@ -3,7 +3,8 @@
 // `UnsafeRuntimeStrategy` and runs its tests under Miri only.
 
 use fixtures::{
-  Animal, Boxed as ImportedBox, BoxedData, Dog as ImportedDog, Named, Polygon, Puppy, Rectangle, Shape, Tagged,
+  Animal, Boxed as ImportedBox, BoxedData, ConfigFile, Dog as ImportedDog, Locate, Named, Polygon, Puppy, Rectangle,
+  RepoConfigFile, Shape, Tagged,
 };
 use galvanize_rs::{
   ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, DefaultPointerStrategy, Extends, List, MutablePointer,
@@ -721,4 +722,141 @@ fn abstract_classes_support_casts_and_debug() {
     format!("{rectangle:?}"),
     r#"Rectangle { label: "sq", width: 1.0, height: 1.0 }"#
   );
+}
+
+// ---------- default constructors ----------
+
+#[class(runtime_strategy = SafeRuntimeStrategy)]
+pub struct Blank {}
+
+#[class_methods]
+impl Blank {}
+
+#[test]
+fn classes_without_a_constructor_get_new_and_default() {
+  let a = Blank::new();
+  let b = Blank::default();
+  assert!(!a.ptr_eq(&b));
+  assert_eq!(format!("{a:?}"), "Blank");
+}
+
+/// `init` returns the data rather than the class, so it isn't a constructor.
+#[class(runtime_strategy = SafeRuntimeStrategy)]
+pub struct Defaulted {
+  pub name: Str,
+  pub count: i64,
+  pub tags: List<Str>,
+  pub next: Option<Self>,
+}
+
+#[class_methods]
+impl Defaulted {
+  pub fn init(name: &str) -> DefaultedData {
+    DefaultedData {
+      name: name.into(),
+      count: 1,
+      tags: List::new(),
+      next: None,
+    }
+  }
+}
+
+#[test]
+fn default_constructors_default_every_field() {
+  let d = Defaulted::new();
+  assert_eq!(
+    format!("{d:?}"),
+    r#"Defaulted { name: "", count: 0, tags: [], next: None }"#
+  );
+  d.set_next(Defaulted::from_data(Defaulted::init("b")));
+  assert_eq!(d.next().map(|n| n.count()), Some(1));
+}
+
+#[test]
+fn default_constructors_dont_clash_with_derived_data_defaults() {
+  // `Settings` derives `Default` for its data, and `Pair` also has a generic where clause.
+  let s = Settings::new();
+  assert_eq!((s.verbose(), s.level()), (false, 0));
+  let p: Pair<Str> = Pair::default();
+  assert_eq!((p.left(), p.right()), (Str::new(), 0));
+}
+
+/// A field named `new` would clash with a default constructor, so the class doesn't get one.
+#[class(runtime_strategy = SafeRuntimeStrategy)]
+struct Fresh {
+  new: bool,
+}
+
+#[class_methods]
+impl Fresh {}
+
+#[test]
+fn fields_named_new_keep_their_getter() {
+  assert!(Fresh::from_data(FreshData { new: true }).new());
+}
+
+#[class(extends = ConfigFile)]
+pub struct BotConfigFile {}
+
+#[class_methods]
+impl BotConfigFile {
+  fn locate(&self, dir: Option<&str>) -> Option<String> {
+    dir.map(|dir| format!("{dir}/{}", self.file_name()))
+  }
+}
+
+#[test]
+fn default_constructors_default_inherited_fields_across_crates() {
+  let bot = BotConfigFile::new();
+  assert_eq!(format!("{bot:?}"), r#"BotConfigFile { file_name: "", loaded: false }"#);
+  bot.set_file_name("bot.yaml");
+  let repo = RepoConfigFile::default();
+  repo.set_file_name("doup.yaml");
+
+  let files: Vec<Box<dyn Locate>> = vec![
+    Box::new(bot.upcast::<ConfigFile, _>()),
+    Box::new(ConfigFile::from(&repo)),
+  ];
+  let found: Vec<Option<String>> = files.iter().map(|f| f.locate(Some("/src"))).collect();
+  assert_eq!(
+    found,
+    [Some("/src/bot.yaml".into()), Some("/src/.repo/doup.yaml".into())]
+  );
+  assert!(!BotConfigFile::new().ptr_eq(&bot));
+}
+
+#[class(extends = Rectangle)]
+pub struct Plain {}
+
+#[class_methods]
+impl Plain {
+  pub fn scaled(&self, factor: f64) -> f64 {
+    self.width() * self.height() * factor
+  }
+}
+
+#[test]
+fn default_constructors_default_every_ancestor() {
+  let plain = Plain::new();
+  plain.set_width(2.0);
+  plain.set_height(3.0);
+  assert_eq!(format!("{plain:?}"), r#"Plain { label: "", width: 2.0, height: 3.0 }"#);
+  assert_eq!(plain.upcast::<Polygon, _>().summary(), "4 corners, area 6");
+  assert_eq!(plain.describe(), "polygon : 6");
+}
+
+#[class(extends = ImportedBox<V>)]
+pub struct Unboxed<V> {
+  pub opened: bool,
+}
+
+#[class_methods]
+impl<V> Unboxed<V> {}
+
+#[test]
+fn generic_subclasses_get_default_constructors() {
+  let unboxed: Unboxed<u64> = Unboxed::new();
+  unboxed.set_opened(true);
+  assert_eq!(unboxed.get(), 0);
+  assert_eq!(format!("{unboxed:?}"), "Unboxed { value: 0, opened: true }");
 }

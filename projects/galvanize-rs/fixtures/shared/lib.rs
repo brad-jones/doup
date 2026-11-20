@@ -236,6 +236,37 @@ impl Rectangle {
   }
 }
 
+/// An interface implemented by an abstract class, like doup's config files.
+pub trait Locate: Send + Sync {
+  /// Where the file is, if `dir` is given.
+  fn locate(&self, dir: Option<&str>) -> Option<String>;
+}
+
+/// An abstract root whose subclasses declare no constructor, so they get `new()`, which defaults the
+/// fields they inherit from it too.
+#[class(abstract, implements = Locate, runtime_strategy = SafeRuntimeStrategy)]
+pub struct ConfigFile {
+  pub file_name: String,
+  pub loaded: bool,
+}
+
+#[class_methods]
+impl ConfigFile {
+  #[class_abstract]
+  fn locate(&self, dir: Option<&str>) -> Option<String>;
+}
+
+/// A concrete subclass without a constructor, which other crates create with its generated `new()`.
+#[class(extends = ConfigFile)]
+pub struct RepoConfigFile {}
+
+#[class_methods]
+impl RepoConfigFile {
+  fn locate(&self, dir: Option<&str>) -> Option<String> {
+    dir.map(|dir| format!("{dir}/.repo/{}", self.file_name()))
+  }
+}
+
 /// Returns `Pending` once before completing, so async tests exercise real suspension.
 pub async fn suspend_once() {
   let mut suspended = false;

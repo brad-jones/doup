@@ -37,3 +37,7 @@ impl DoupRepoConfigFile {
     todo!()
   }
 }
+
+fn example() {
+  let c = DoupBotConfigFile::new();
+}
