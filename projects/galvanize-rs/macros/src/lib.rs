@@ -20,25 +20,25 @@ use proc_macro::TokenStream;
 ///   constructor. This keeps your own constructor the only way to create the class from outside its
 ///   module.
 ///
-/// Each field is stored in its own `MutablePointer`, chosen by a `PointerStrategy` (its `SyncPtr`) that
+/// Each field is stored in its own `GPointer`, chosen by a `PointerStrategy` (its `SyncPtr`) that
 /// defaults to `DefaultPointerStrategy`.
 ///
 /// ```
-/// use galvanize_rs::{List, Str, class, class_methods, sf};
+/// use galvanize_rs::{GList, GString, class, class_methods, sf};
 ///
 /// #[class]
 /// pub struct Person {
 ///   /// The full name.
-///   pub name: Str,
-///   cities: List<Str>,
+///   pub name: GString,
+///   cities: GList<GString>,
 /// }
 ///
 /// #[class_methods]
 /// impl Person {
-///   pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>) -> Self {
+///   pub fn new(first_name: impl Into<GString>, last_name: impl Into<GString>) -> Self {
 ///     Self::from_data(PersonData {
 ///       name: sf!("{} {}", first_name.into(), last_name.into()),
-///       cities: List::new(),
+///       cities: GList::new(),
 ///     })
 ///   }
 ///
@@ -67,13 +67,13 @@ use proc_macro::TokenStream;
 ///
 /// For every field `x: T` the handle gets:
 ///
-/// * `x(&self) -> T` returns a clone of the value. For handle types (`Str`, `List`, `Dict`, other classes)
+/// * `x(&self) -> T` returns a clone of the value. For handle types (`GString`, `GList`, `GDict`, other classes)
 ///   that's the *same* shared object, so `person.cities().push(..)` modifies `person`. Other types are
 ///   copied, so keep field types cheap to clone and avoid e.g. `Vec`.
 /// * `set_x(&self, value: impl Into<T>)` replaces the value.
 /// * `update_x(&self, f: impl FnMut(&mut T) -> R) -> R` modifies the value in place, atomically with
 ///   respect to other accessors of `x`. `f` may be called more than once (see
-///   `MutablePointer::write_with`).
+///   `GPointer::write_with`).
 ///
 /// The getter has the field's visibility, and so do the setter and updater unless the field is marked
 /// `#[class_prop(readonly)]`. Each field has its own pointer, so `f` passed to `update_x` may safely call
@@ -109,18 +109,18 @@ use proc_macro::TokenStream;
 /// On a field, `#[class_prop(...)]` takes comma separated options:
 ///
 /// * `readonly`: makes `set_x` and `update_x` private. The field still can't be reassigned from outside
-///   the module, but a handle-typed field (such as a `List`) can still be modified through its getter.
+///   the module, but a handle-typed field (such as a `GList`) can still be modified through its getter.
 /// * `pointer_strategy = SomePointerStrategy`: overrides the class's pointer strategy for this field.
 ///
 /// `class_prop` is read and removed by `#[class]`, so it doesn't need importing.
 ///
 /// ```
-/// use galvanize_rs::{ArcMutexStrategy, ArcSwapStrategy, Str, class, class_methods};
+/// use galvanize_rs::{ArcMutexStrategy, ArcSwapStrategy, GString, class, class_methods};
 ///
 /// #[class(pointer_strategy = ArcSwapStrategy)]
 /// pub struct Counter {
 ///   #[class_prop(readonly)]
-///   pub label: Str,
+///   pub label: GString,
 ///   #[class_prop(pointer_strategy = ArcMutexStrategy)]
 ///   pub count: i64,
 /// }
@@ -169,11 +169,11 @@ use proc_macro::TokenStream;
 /// what a subclass's method of the same name does.
 ///
 /// ```
-/// use galvanize_rs::{Str, class, class_methods, sf};
+/// use galvanize_rs::{GString, class, class_methods, sf};
 ///
 /// #[class(open)]
 /// pub struct Animal {
-///   pub name: Str,
+///   pub name: GString,
 /// }
 ///
 /// #[class_methods]
@@ -183,11 +183,11 @@ use proc_macro::TokenStream;
 ///   }
 ///
 ///   #[class_virtual]
-///   pub fn speak(&self) -> Str {
+///   pub fn speak(&self) -> GString {
 ///     "...".into()
 ///   }
 ///
-///   pub fn describe(&self) -> Str {
+///   pub fn describe(&self) -> GString {
 ///     sf!("{} says {}", self.name(), self.speak())
 ///   }
 /// }
@@ -204,7 +204,7 @@ use proc_macro::TokenStream;
 ///   }
 ///
 ///   #[class_override]
-///   pub fn speak(&self) -> Str {
+///   pub fn speak(&self) -> GString {
 ///     sf!("Woof (not {})", self.super_speak())
 ///   }
 /// }

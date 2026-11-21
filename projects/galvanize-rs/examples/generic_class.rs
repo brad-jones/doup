@@ -1,4 +1,4 @@
-use galvanize_rs::{ArcSwapStrategy, DefaultPointerStrategy, Dict, List, PointerStrategy, class, class_methods};
+use galvanize_rs::{ArcSwapStrategy, DefaultPointerStrategy, GDict, GList, PointerStrategy, class, class_methods};
 
 // ---------- Tree ----------
 
@@ -8,7 +8,7 @@ use galvanize_rs::{ArcSwapStrategy, DefaultPointerStrategy, Dict, List, PointerS
 #[class]
 pub struct Tree<T> {
   pub value: T,
-  children: List<Self>,
+  children: GList<Self>,
 }
 
 // The struct's bounds apply to the methods block, so it doesn't repeat them.
@@ -17,7 +17,7 @@ impl<T> Tree<T> {
   pub fn new(value: T) -> Self {
     Self::from_data(TreeData {
       value,
-      children: List::new(),
+      children: GList::new(),
     })
   }
 
@@ -49,7 +49,7 @@ impl<T> Tree<T> {
 /// strategies, so it doesn't need to be `Clone` and `CacheData` doesn't have it.
 #[class(pointer_strategy = S)]
 pub struct Cache<K: Ord, V, S: PointerStrategy = DefaultPointerStrategy> {
-  entries: Dict<K, V>,
+  entries: GDict<K, V>,
   #[class_prop(readonly)]
   pub hits: usize,
   #[class_prop(readonly)]
@@ -60,7 +60,7 @@ pub struct Cache<K: Ord, V, S: PointerStrategy = DefaultPointerStrategy> {
 impl<K, V, S> Cache<K, V, S> {
   pub fn new() -> Self {
     Self::from_data(CacheData {
-      entries: Dict::new(),
+      entries: GDict::new(),
       hits: 0,
       misses: 0,
     })

@@ -1,4 +1,4 @@
-/// Generates the behavioural tests every [`MutablePointer`](super::MutablePointer)
+/// Generates the behavioural tests every [`GPointer`](super::GPointer)
 /// implementation must satisfy.
 macro_rules! pointer_contract_tests {
   ($pointer:ident) => {

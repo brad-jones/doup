@@ -1,7 +1,7 @@
 /// A cheaply cloneable, shared handle to a value of type `T`.
 ///
 /// As the name suggests the underlying value is mutable, read the value via
-/// [`MutablePointer::read_with`] and write using [`MutablePointer::write_with`].
+/// [`GPointer::read_with`] and write using [`GPointer::write_with`].
 ///
 /// If you use one of the locking pointers [`super::ArcMutexPointer`] or
 /// [`super::ArcRwLockPointer`], beware of deadlocks! As a rule of thumb so long
@@ -9,8 +9,8 @@
 /// the closure passed to `read/write_with` you should be deadlock free.
 ///
 /// Cloning the pointer yields another handle to the *same* value, whereas
-/// [`MutablePointer::deep_clone`] copies the value into an independent pointer.
-pub trait MutablePointer<T: Clone>: Clone {
+/// [`GPointer::deep_clone`] copies the value into an independent pointer.
+pub trait GPointer<T: Clone>: Clone {
   /// Creates a new pointer owning `value`.
   fn new(value: T) -> Self;
 

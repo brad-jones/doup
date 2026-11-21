@@ -1,8 +1,8 @@
-use super::MutablePointer;
+use super::GPointer;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 
-/// A [`MutablePointer`] backed by `Arc<ArcSwap<T>>`.
+/// A [`GPointer`] backed by `Arc<ArcSwap<T>>`.
 ///
 /// Reads are lock-free. Writes clone the current value, apply the closure to
 /// the copy and atomically swap it in (read-copy-update), retrying if another
@@ -12,7 +12,7 @@ use std::sync::Arc;
 /// # Examples
 ///
 /// ```
-/// use galvanize_rs::{MutablePointer, ArcSwapPointer};
+/// use galvanize_rs::{GPointer, ArcSwapPointer};
 ///
 /// let a = ArcSwapPointer::new(vec![1, 2]);
 /// let b = a.clone(); // same underlying value
@@ -26,7 +26,7 @@ use std::sync::Arc;
 /// ```
 pub struct ArcSwapPointer<T>(Arc<ArcSwap<T>>);
 
-impl<T: Clone> MutablePointer<T> for ArcSwapPointer<T> {
+impl<T: Clone> GPointer<T> for ArcSwapPointer<T> {
   fn new(value: T) -> Self {
     Self(Arc::new(ArcSwap::from_pointee(value)))
   }

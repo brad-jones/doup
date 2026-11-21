@@ -12,11 +12,11 @@ pub use galvanize_rs_macros::{class, class_methods};
 /// hierarchy, so leave it generic. To accept any class that extends `Animal`:
 ///
 /// ```
-/// use galvanize_rs::{Extends, Str, class, class_methods};
+/// use galvanize_rs::{Extends, GString, class, class_methods};
 ///
 /// #[class(open)]
 /// pub struct Animal {
-///   pub name: Str,
+///   pub name: GString,
 /// }
 ///
 /// #[class_methods]
@@ -34,7 +34,7 @@ pub use galvanize_rs_macros::{class, class_methods};
 ///   }
 /// }
 ///
-/// fn name_of<I>(animal: impl Extends<Animal, I>) -> Str {
+/// fn name_of<I>(animal: impl Extends<Animal, I>) -> GString {
 ///   animal.upcast().name()
 /// }
 ///

@@ -1,12 +1,12 @@
 // Final classes can be declared in any module, and keep their private accessors and constructor private.
 mod model {
-  use galvanize_rs::{Str, class, class_methods};
+  use galvanize_rs::{GString, class, class_methods};
 
   #[class]
   pub struct Foo {
     #[class_prop(readonly)]
-    pub id: Str,
-    secret: Str,
+    pub id: GString,
+    secret: GString,
   }
 
   #[class_methods]

@@ -7,24 +7,24 @@ gets a getter, a setter and an updater with the field's visibility. Every class 
 block (which may be empty), where you write its constructor using plain values:
 
 ```rust
-use galvanize_rs::{List, Str, class, class_methods, sf};
+use galvanize_rs::{GList, GString, class, class_methods, sf};
 
 #[class]
 pub struct Person {
-  pub name: Str,     // pub fn name(), set_name(), update_name()
-  cities: List<Str>, // private fn cities(), set_cities(), update_cities()
+  pub name: GString,      // pub fn name(), set_name(), update_name()
+  cities: GList<GString>, // private fn cities(), set_cities(), update_cities()
 }
 
 #[class_methods]
 impl Person {
-  pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>) -> Self {
+  pub fn new(first_name: impl Into<GString>, last_name: impl Into<GString>) -> Self {
     Self::from_data(PersonData {
       name: sf!("{} {}", first_name.into(), last_name.into()),
-      cities: List::new(),
+      cities: GList::new(),
     })
   }
 
-  pub fn visit(&self, city: impl Into<Str>) {
+  pub fn visit(&self, city: impl Into<GString>) {
     self.cities().push(city);
   }
 }
@@ -42,7 +42,7 @@ Like in Java or C#, a concrete class that doesn't declare a constructor (a `new`
 #[class]
 pub struct Settings {
   pub verbose: bool,
-  pub tags: List<Str>,
+  pub tags: GList<GString>,
 }
 
 #[class_methods]
@@ -63,7 +63,7 @@ visibility), and call the parent's version with `super_x()`. Calls are late-boun
 ```rust
 #[class(open)]
 pub struct Animal {
-  pub name: Str,
+  pub name: GString,
 }
 
 #[class_methods]
@@ -73,11 +73,11 @@ impl Animal {
   }
 
   #[class_virtual]
-  pub fn speak(&self) -> Str {
+  pub fn speak(&self) -> GString {
     "...".into()
   }
 
-  pub fn describe(&self) -> Str {
+  pub fn describe(&self) -> GString {
     sf!("{} says {}", self.name(), self.speak())
   }
 }
@@ -94,7 +94,7 @@ impl Dog {
   }
 
   #[class_override]
-  pub fn speak(&self) -> Str {
+  pub fn speak(&self) -> GString {
     sf!("Woof (not {})", self.super_speak())
   }
 }

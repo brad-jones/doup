@@ -7,8 +7,8 @@ use fixtures::{
   RepoConfigFile, Shape, Tagged,
 };
 use galvanize_rs::{
-  ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, DefaultPointerStrategy, Extends, List, MutablePointer,
-  PointerStrategy, SafeRuntimeStrategy, Str, class, class_methods, sf,
+  ArcMutexPointer, ArcMutexStrategy, ArcSwapStrategy, DefaultPointerStrategy, Extends, GList, GPointer, GString,
+  PointerStrategy, SafeRuntimeStrategy, class, class_methods, sf,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -18,9 +18,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[class(runtime_strategy = SafeRuntimeStrategy)]
 pub struct Person {
-  pub name: Str,
+  pub name: GString,
   pub age: i64,
-  friends: List<Str>,
+  friends: GList<GString>,
 }
 
 #[class_methods]
@@ -29,7 +29,7 @@ impl Person {
     Self::from_data(PersonData {
       name: name.into(),
       age: 0,
-      friends: List::new(),
+      friends: GList::new(),
     })
   }
 
@@ -111,7 +111,7 @@ fn update_may_access_other_fields() {
 
 #[class(runtime_strategy = SafeRuntimeStrategy)]
 struct Keyword {
-  r#type: Str,
+  r#type: GString,
 }
 
 #[class_methods]
@@ -150,7 +150,7 @@ fn struct_attributes_apply_to_data() {
 /// `base` is only reserved in subclasses, whose data uses it for the parent's.
 #[class(runtime_strategy = SafeRuntimeStrategy)]
 struct Statue {
-  base: Str,
+  base: GString,
 }
 
 #[class_methods]
@@ -202,7 +202,7 @@ struct Counting;
 #[derive(Clone)]
 struct CountingPointer<T>(ArcMutexPointer<T>);
 
-impl<T: Clone> MutablePointer<T> for CountingPointer<T> {
+impl<T: Clone> GPointer<T> for CountingPointer<T> {
   fn new(value: T) -> Self {
     COUNTED_POINTERS.fetch_add(1, Ordering::SeqCst);
     Self(ArcMutexPointer::new(value))
@@ -246,7 +246,7 @@ impl OneCounted {}
 #[class(pointer_strategy = ArcMutexStrategy, runtime_strategy = SafeRuntimeStrategy)]
 struct Mutexed {
   #[class_prop(pointer_strategy = ArcSwapStrategy)]
-  pub list: List<i64>,
+  pub list: GList<i64>,
   pub n: i64,
 }
 
@@ -270,7 +270,7 @@ fn pointer_strategies_apply_per_class_and_per_field() {
   assert_eq!((one.a(), one.b()), (1, 5));
 
   let m = Mutexed::from_data(MutexedData {
-    list: List::new(),
+    list: GList::new(),
     n: 0,
   });
   m.list().push(1);
@@ -281,11 +281,11 @@ fn pointer_strategies_apply_per_class_and_per_field() {
 /// `S` is only used by the pointer strategies, so `StoreData` doesn't get it, and it needn't be `Clone`.
 #[class(pointer_strategy = S, runtime_strategy = SafeRuntimeStrategy)]
 struct Store<T, S: PointerStrategy = DefaultPointerStrategy> {
-  items: List<T>,
+  items: GList<T>,
   #[class_prop(pointer_strategy = S)]
   count: usize,
   #[class_prop(pointer_strategy = ArcSwapStrategy)]
-  label: Str,
+  label: GString,
 }
 
 #[class_methods]
@@ -294,7 +294,7 @@ impl<T, S> Store<T, S> {}
 #[test]
 fn generic_pointer_strategies_apply_to_fields() {
   let store: Store<i64, Counting> = Store::from_data(StoreData {
-    items: List::new(),
+    items: GList::new(),
     count: 0,
     label: "nums".into(),
   });
@@ -302,7 +302,7 @@ fn generic_pointer_strategies_apply_to_fields() {
   store.update_count(|c| *c += 1);
   assert_eq!(
     (store.items().len(), store.count(), store.label()),
-    (1, 1, Str::from("nums"))
+    (1, 1, GString::from("nums"))
   );
   assert_eq!(format!("{store:?}"), r#"Store { items: [1], count: 1, label: "nums" }"#);
 }
@@ -328,7 +328,7 @@ impl<T> Node<T> {
 
 #[test]
 fn generic_classes_get_typed_accessors() {
-  let head = Node::new(Str::from("a"));
+  let head = Node::new(GString::from("a"));
   head.set_next(Node::new("b".into()));
   let doubled = head.update_value(|v| {
     *v = v.clone() + "a";
@@ -376,14 +376,14 @@ impl<R, H> Pair<R, H> {}
 
 #[test]
 fn generic_classes_keep_defaults_and_where_clauses() {
-  let p: Pair<Str> = Pair::from_data(PairData::default());
+  let p: Pair<GString> = Pair::from_data(PairData::default());
   p.update_right(|r| *r += 1);
   p.set_left("a");
 
   #[allow(clippy::mutable_key_type)]
-  let set: HashSet<Pair<Str>> = [p.clone(), p.clone()].into_iter().collect();
+  let set: HashSet<Pair<GString>> = [p.clone(), p.clone()].into_iter().collect();
   assert_eq!(set.len(), 1);
-  assert_eq!((p.left(), p.right()), (Str::from("a"), 1));
+  assert_eq!((p.left(), p.right()), (GString::from("a"), 1));
 }
 
 #[class(runtime_strategy = SafeRuntimeStrategy)]
@@ -743,9 +743,9 @@ fn classes_without_a_constructor_get_new_and_default() {
 /// `init` returns the data rather than the class, so it isn't a constructor.
 #[class(runtime_strategy = SafeRuntimeStrategy)]
 pub struct Defaulted {
-  pub name: Str,
+  pub name: GString,
   pub count: i64,
-  pub tags: List<Str>,
+  pub tags: GList<GString>,
   pub next: Option<Self>,
 }
 
@@ -755,7 +755,7 @@ impl Defaulted {
     DefaultedData {
       name: name.into(),
       count: 1,
-      tags: List::new(),
+      tags: GList::new(),
       next: None,
     }
   }
@@ -777,8 +777,8 @@ fn default_constructors_dont_clash_with_derived_data_defaults() {
   // `Settings` derives `Default` for its data, and `Pair` also has a generic where clause.
   let s = Settings::new();
   assert_eq!((s.verbose(), s.level()), (false, 0));
-  let p: Pair<Str> = Pair::default();
-  assert_eq!((p.left(), p.right()), (Str::new(), 0));
+  let p: Pair<GString> = Pair::default();
+  assert_eq!((p.left(), p.right()), (GString::new(), 0));
 }
 
 /// A field named `new` would clash with a default constructor, so the class doesn't get one.

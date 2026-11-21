@@ -7,13 +7,13 @@
 //!
 //! Run with `cargo run -p galvanize-rs --example traits`.
 
-use galvanize_rs::{Str, class, class_methods, sf};
+use galvanize_rs::{GString, class, class_methods, sf};
 
 // ---------- the class hierarchy ----------
 
 #[class(open)]
 pub struct Animal {
-  pub name: Str,
+  pub name: GString,
 }
 
 #[class_methods]
@@ -23,11 +23,11 @@ impl Animal {
   }
 
   #[class_virtual]
-  pub fn sound(&self) -> Str {
+  pub fn sound(&self) -> GString {
     "...".into()
   }
 
-  pub fn speak(&self) -> Str {
+  pub fn speak(&self) -> GString {
     sf!("{} says {}", self.name(), self.sound())
   }
 }
@@ -51,7 +51,7 @@ impl Bird {
   }
 
   #[class_override]
-  pub fn sound(&self) -> Str {
+  pub fn sound(&self) -> GString {
     "tweet".into()
   }
 }
@@ -71,7 +71,7 @@ impl Duck {
   }
 
   #[class_override]
-  pub fn sound(&self) -> Str {
+  pub fn sound(&self) -> GString {
     "quack".into()
   }
 }
@@ -88,7 +88,7 @@ impl Fish {
   }
 
   #[class_override]
-  pub fn sound(&self) -> Str {
+  pub fn sound(&self) -> GString {
     "blub".into()
   }
 }
@@ -117,7 +117,7 @@ pub trait Flyer: Send + Sync {
   fn wingspan(&self) -> f64;
 
   /// A default method calling a virtual one: `speak` runs the object's own `sound` override.
-  fn fly(&self) -> Str {
+  fn fly(&self) -> GString {
     sf!(
       "{} and flies with a {}m wingspan",
       self.animal().speak(),
@@ -131,7 +131,7 @@ pub trait Swimmer: Send + Sync {
 
   fn dive_depth(&self) -> f64;
 
-  fn swim(&self) -> Str {
+  fn swim(&self) -> GString {
     sf!("{} dives to {}m", self.animal().name(), self.dive_depth())
   }
 }
@@ -139,7 +139,7 @@ pub trait Swimmer: Send + Sync {
 /// Interfaces can combine others. With a blanket impl, anything that both flies and swims is waterfowl,
 /// without saying so.
 pub trait Waterfowl: Flyer + Swimmer {
-  fn migrate(&self) -> Str {
+  fn migrate(&self) -> GString {
     sf!("{}, then {}", self.fly(), self.swim())
   }
 }
@@ -209,7 +209,7 @@ impl Flyer for Bat {
 
 /// Static dispatch over several interfaces at once. Both traits have an `animal` method, so it's called
 /// through one explicitly, like an explicit interface implementation in C#.
-fn tour<T: Waterfowl>(traveller: &T) -> Str {
+fn tour<T: Waterfowl>(traveller: &T) -> GString {
   sf!("{} migrates: {}", Flyer::animal(traveller).name(), traveller.migrate())
 }
 

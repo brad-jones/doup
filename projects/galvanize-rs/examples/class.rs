@@ -1,4 +1,4 @@
-use galvanize_rs::{ArcSwapStrategy, List, Str, class, class_methods, sf};
+use galvanize_rs::{ArcSwapStrategy, GList, GString, class, class_methods, sf};
 
 // ---------- Person ----------
 
@@ -6,23 +6,23 @@ use galvanize_rs::{ArcSwapStrategy, List, Str, class, class_methods, sf};
 #[class]
 pub struct Person {
   /// A public field gets a public getter, setter and updater.
-  pub name: Str,
+  pub name: GString,
 
   /// A private field gets them too, they're just private.
-  cities: List<Str>,
+  cities: GList<GString>,
 }
 
 // Every class needs one `#[class_methods]` block, which holds its methods (and can be empty).
 #[class_methods]
 impl Person {
-  pub fn new(first_name: impl Into<Str>, last_name: impl Into<Str>) -> Self {
+  pub fn new(first_name: impl Into<GString>, last_name: impl Into<GString>) -> Self {
     Self::from_data(PersonData {
       name: sf!("{} {}", first_name.into(), last_name.into()),
-      cities: List::new(),
+      cities: GList::new(),
     })
   }
 
-  pub fn visit(&self, city: impl Into<Str>) {
+  pub fn visit(&self, city: impl Into<GString>) {
     self.cities().push(city);
   }
 
@@ -38,7 +38,7 @@ impl Person {
 /// Stores every field in an `ArcSwapPointer` instead of the default.
 #[class(pointer_strategy = ArcSwapStrategy)]
 pub struct Team {
-  pub name: Str,
+  pub name: GString,
 
   /// Anyone can read the leader, but only `Team` can replace them.
   #[class_prop(readonly)]
@@ -47,14 +47,14 @@ pub struct Team {
 
 #[class_methods]
 impl Team {
-  pub fn new(name: impl Into<Str>, leader: impl Into<Person>) -> Self {
+  pub fn new(name: impl Into<GString>, leader: impl Into<Person>) -> Self {
     Self::from_data(TeamData {
       name: name.into(),
       leader: leader.into(),
     })
   }
 
-  pub fn describe(&self) -> Str {
+  pub fn describe(&self) -> GString {
     let leader = self.leader();
     sf!(
       "{} (led by {}, who has visited {} cities)",

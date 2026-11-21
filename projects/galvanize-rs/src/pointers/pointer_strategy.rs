@@ -1,19 +1,19 @@
-use super::{ArcMutexPointer, ArcRwLockPointer, ArcSwapPointer, MutablePointer};
+use super::{ArcMutexPointer, ArcRwLockPointer, ArcSwapPointer, GPointer};
 
-/// Selects which [`MutablePointer`] a collection such as [`crate::List`] or
-/// [`crate::Dict`], or the fields of a [`crate::class`], store their data in.
+/// Selects which [`GPointer`] a collection such as [`crate::GList`] or
+/// [`crate::GDict`], or the fields of a [`crate::class`], store their data in.
 ///
-/// A [`MutablePointer`] is generic over the value it holds, so it can't be
+/// A [`GPointer`] is generic over the value it holds, so it can't be
 /// passed around as a plain type parameter. A `PointerStrategy` is a zero sized marker
 /// that maps to a whole family of pointers via the [`PointerStrategy::Ptr`] GAT.
 pub trait PointerStrategy {
   /// The pointer type used to hold a value of type `T`.
-  type Ptr<T: Clone>: MutablePointer<T>;
+  type Ptr<T: Clone>: GPointer<T>;
 
   /// The pointer type used to hold a class's field of type `T`. Classes are
   /// shared between threads, so this must be `Send + Sync`. It's usually the
   /// same type as [`PointerStrategy::Ptr`].
-  type SyncPtr<T: Clone + Send + Sync>: MutablePointer<T> + Send + Sync;
+  type SyncPtr<T: Clone + Send + Sync>: GPointer<T> + Send + Sync;
 }
 
 /// Backs a collection with [`ArcRwLockPointer`]. This is the default.

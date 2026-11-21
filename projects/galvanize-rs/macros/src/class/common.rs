@@ -126,7 +126,7 @@ pub fn storage_inits(model: &Model) -> Vec<TokenStream> {
     .iter()
     .map(|f| {
       let ident = &f.ident;
-      quote! { #ident: #krate::MutablePointer::new(data.#ident), }
+      quote! { #ident: #krate::GPointer::new(data.#ident), }
     })
     .collect()
 }
@@ -192,7 +192,7 @@ pub fn shared_items(model: &Model, identity: TokenStream) -> TokenStream {
     let ident = &f.ident;
     let label = f.bare().to_string();
     quote! {
-      d.field(#label, &#krate::MutablePointer::read_with(&self.__fields().#ident, ::core::clone::Clone::clone));
+      d.field(#label, &#krate::GPointer::read_with(&self.__fields().#ident, ::core::clone::Clone::clone));
     }
   });
   let label = name.to_string();
@@ -329,20 +329,20 @@ fn accessors(model: &Model, field: &super::fields::ClassField) -> TokenStream {
     #getter_doc
     #[inline]
     #vis fn #ident(&self) -> #ty {
-      #krate::MutablePointer::read_with(&self.__fields().#ident, ::core::clone::Clone::clone)
+      #krate::GPointer::read_with(&self.__fields().#ident, ::core::clone::Clone::clone)
     }
 
     #[doc = #setter_doc]
     #[inline]
     #setter_vis fn #setter(&self, value: impl ::core::convert::Into<#ty>) {
       let value: #ty = value.into();
-      #krate::MutablePointer::write_with(&self.__fields().#ident, |v| *v = ::core::clone::Clone::clone(&value))
+      #krate::GPointer::write_with(&self.__fields().#ident, |v| *v = ::core::clone::Clone::clone(&value))
     }
 
     #[doc = #updater_doc]
     #[inline]
     #setter_vis fn #updater<__R>(&self, f: impl ::core::ops::FnMut(&mut #ty) -> __R) -> __R {
-      #krate::MutablePointer::write_with(&self.__fields().#ident, f)
+      #krate::GPointer::write_with(&self.__fields().#ident, f)
     }
   }
 }

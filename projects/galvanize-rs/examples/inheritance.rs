@@ -2,7 +2,7 @@
 //!
 //! Run with `cargo run -p galvanize-rs --example inheritance`.
 
-use galvanize_rs::{Extends, List, Str, UnsafeRuntimeStrategy, class, class_methods, sf};
+use galvanize_rs::{Extends, GList, GString, UnsafeRuntimeStrategy, class, class_methods, sf};
 
 // ---------- Shape ----------
 
@@ -13,7 +13,7 @@ use galvanize_rs::{Extends, List, Str, UnsafeRuntimeStrategy, class, class_metho
 /// same API, so this example behaves the same either way.
 #[class(open, runtime_strategy = UnsafeRuntimeStrategy)]
 pub struct Shape {
-  pub name: Str,
+  pub name: GString,
   pub x: f64,
   pub y: f64,
 }
@@ -45,18 +45,18 @@ impl Shape {
   }
 
   #[class_virtual]
-  pub fn describe(&self) -> Str {
+  pub fn describe(&self) -> GString {
     sf!("{} at ({}, {})", self.name(), self.x(), self.y())
   }
 
   /// Virtual methods can be async too. Their futures are `Send`, so they work with any executor.
   #[class_virtual]
-  pub async fn render(&self, canvas: &str) -> Str {
+  pub async fn render(&self, canvas: &str) -> GString {
     sf!("drew {} on {canvas}", self.name())
   }
 
   /// Not virtual, but the calls it makes are, so it does the right thing for every subclass.
-  pub fn summary(&self) -> Str {
+  pub fn summary(&self) -> GString {
     sf!("{}, with an area of {}", self.describe(), self.area())
   }
 }
@@ -91,12 +91,12 @@ impl Rect {
 
   /// Overrides get a `super_` method to call the parent's implementation.
   #[class_override]
-  pub fn describe(&self) -> Str {
+  pub fn describe(&self) -> GString {
     sf!("{} sized {}x{}", self.super_describe(), self.width(), self.height())
   }
 
   #[class_override]
-  pub async fn render(&self, canvas: &str) -> Str {
+  pub async fn render(&self, canvas: &str) -> GString {
     sf!("{} with a border", self.super_render(canvas).await)
   }
 }
@@ -117,7 +117,7 @@ impl Square {
 
   /// Overrides a method declared two levels up. `Rect`'s `area` is inherited.
   #[class_override]
-  pub fn describe(&self) -> Str {
+  pub fn describe(&self) -> GString {
     sf!("{} (a square)", self.super_describe())
   }
 }
@@ -128,7 +128,7 @@ fn print_summary(shape: &Shape) {
 }
 
 /// Takes any shape by value, via `Extends`.
-fn add_to_canvas<I>(canvas: &List<Shape>, shape: impl Extends<Shape, I>) {
+fn add_to_canvas<I>(canvas: &GList<Shape>, shape: impl Extends<Shape, I>) {
   canvas.push(shape.upcast());
 }
 
@@ -143,7 +143,7 @@ fn main() {
   print_summary(&square);
 
   // A canvas of `Shape`s holds the same objects, and every call is late-bound to the object's own class.
-  let canvas = List::new();
+  let canvas = GList::new();
   add_to_canvas(&canvas, dot);
   add_to_canvas(&canvas, rect.clone());
   add_to_canvas(&canvas, square.clone());

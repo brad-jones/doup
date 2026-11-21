@@ -1,29 +1,29 @@
-use crate::pointers::{DefaultPointerStrategy, MutablePointer, PointerStrategy};
+use crate::pointers::{DefaultPointerStrategy, GPointer, PointerStrategy};
 
 /// A shared, growable list. Cloning yields another handle to the same list.
 ///
-/// The `S` [`PointerStrategy`] picks the [`MutablePointer`] the data lives in and
-/// defaults to [`DefaultPointerStrategy`]. Use [`List::with_strategy`] to pick another.
+/// The `S` [`PointerStrategy`] picks the [`GPointer`] the data lives in and
+/// defaults to [`DefaultPointerStrategy`]. Use [`GList::with_strategy`] to pick another.
 ///
 /// Elements are stored by value and must be [`Clone`]: accessors such as
-/// [`List::get`] and [`List::iter`] return clones rather than references.
+/// [`GList::get`] and [`GList::iter`] return clones rather than references.
 ///
 /// ```
-/// use galvanize_rs::{ArcSwapStrategy, List};
+/// use galvanize_rs::{ArcSwapStrategy, GList};
 ///
-/// let a: List<i32> = List::new();
-/// let b: List<i32, ArcSwapStrategy> = List::with_strategy();
+/// let a: GList<i32> = GList::new();
+/// let b: GList<i32, ArcSwapStrategy> = GList::with_strategy();
 /// ```
-pub struct List<T: Clone, S: PointerStrategy = DefaultPointerStrategy>(S::Ptr<Vec<T>>);
+pub struct GList<T: Clone, S: PointerStrategy = DefaultPointerStrategy>(S::Ptr<Vec<T>>);
 
-impl<T: Clone> List<T> {
+impl<T: Clone> GList<T> {
   /// Creates an empty list using the [`DefaultPointerStrategy`].
   pub fn new() -> Self {
     Self::with_strategy()
   }
 }
 
-impl<T: Clone, S: PointerStrategy> List<T, S> {
+impl<T: Clone, S: PointerStrategy> GList<T, S> {
   /// Creates an empty list using the strategy `S`.
   pub fn with_strategy() -> Self {
     Self(S::Ptr::new(Vec::new()))
@@ -123,23 +123,23 @@ impl<T: Clone, S: PointerStrategy> List<T, S> {
   }
 }
 
-/// Equivalent to [`List::with_strategy`].
-impl<T: Clone, S: PointerStrategy> Default for List<T, S> {
+/// Equivalent to [`GList::with_strategy`].
+impl<T: Clone, S: PointerStrategy> Default for GList<T, S> {
   fn default() -> Self {
     Self::with_strategy()
   }
 }
 
 /// Clones the handle, not the data; both handles refer to the same list.
-/// Use [`List::deep_clone`] for an independent copy.
-impl<T: Clone, S: PointerStrategy> Clone for List<T, S> {
+/// Use [`GList::deep_clone`] for an independent copy.
+impl<T: Clone, S: PointerStrategy> Clone for GList<T, S> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
   }
 }
 
 /// Formats a snapshot of the elements like a [`Vec`].
-impl<T: Clone + std::fmt::Debug, S: PointerStrategy> std::fmt::Debug for List<T, S> {
+impl<T: Clone + std::fmt::Debug, S: PointerStrategy> std::fmt::Debug for GList<T, S> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     // Snapshot first so no lock is held while formatting elements, which may be
     // handles that refer back to this list.
@@ -148,24 +148,24 @@ impl<T: Clone + std::fmt::Debug, S: PointerStrategy> std::fmt::Debug for List<T,
 }
 
 /// Builds a list from the items yielded by an iterator.
-impl<T: Clone, S: PointerStrategy> FromIterator<T> for List<T, S> {
+impl<T: Clone, S: PointerStrategy> FromIterator<T> for GList<T, S> {
   fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
     Self(S::Ptr::new(iter.into_iter().collect()))
   }
 }
 
-/// Creates a [`List`] containing the given values.
+/// Creates a [`GList`] containing the given values.
 ///
 /// ```
-/// use galvanize_rs::{List, list};
+/// use galvanize_rs::{GList, list};
 ///
-/// let l: List<i32> = list![1, 2, 3];
+/// let l: GList<i32> = list![1, 2, 3];
 /// assert_eq!(l.len(), 3);
 /// ```
 #[macro_export]
 macro_rules! list {
   ($($value:expr),* $(,)?) => {{
-    let list = $crate::List::new();
+    let list = $crate::GList::new();
     $(list.push($value);)*
     list
   }};
@@ -177,7 +177,7 @@ mod tests {
   use crate::pointers::{ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy};
 
   fn exercise<S: PointerStrategy>() {
-    let list: List<i32, S> = List::with_strategy();
+    let list: GList<i32, S> = GList::with_strategy();
     list.push(1);
     list.push(3);
     list.insert(1, 2);
