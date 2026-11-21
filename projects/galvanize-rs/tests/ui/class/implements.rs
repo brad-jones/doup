@@ -1,4 +1,4 @@
-use galvanize_rs::{class, class_methods};
+use galvanize_rs::{class, class_interface, class_methods};
 
 pub trait First {
   fn first(&self) -> u64;
@@ -86,5 +86,32 @@ pub struct MissingTraitMethod {}
 
 #[class_methods]
 impl MissingTraitMethod {}
+
+#[class_interface(export)]
+pub trait WithOptions {}
+
+#[class_interface]
+pub struct NotATrait {}
+
+#[class_interface]
+pub trait Described {
+  fn described(&self) -> u64;
+}
+
+// A marker naming a trait with a descriptor still puts the method in its impl.
+#[class(implements = Described)]
+pub struct NamesUndeclared {}
+
+#[class_methods]
+impl NamesUndeclared {
+  fn described(&self) -> u64 {
+    1
+  }
+
+  #[class_virtual(Described)]
+  fn undeclared(&self) -> u64 {
+    2
+  }
+}
 
 fn main() {}

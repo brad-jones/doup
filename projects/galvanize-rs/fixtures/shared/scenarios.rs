@@ -724,6 +724,107 @@ fn abstract_classes_support_casts_and_debug() {
   );
 }
 
+// ---------- interfaces declared with #[class_interface] ----------
+
+/// `#[class_interface]` traits can be declared in any module.
+mod interfaces {
+  use galvanize_rs::class_interface;
+
+  #[class_interface]
+  pub trait ConfigSource: Send + Sync {
+    fn locate(&self, dir: &str) -> Option<String>;
+
+    fn format(&self) -> String;
+
+    fn checksum(&self, pair: (u8, u8)) -> u16;
+
+    fn quote<T: ToString>(&self, value: T) -> String
+    where
+      Self: Sized;
+
+    fn describe(&self) -> String {
+      format!("{} file", self.format())
+    }
+  }
+}
+
+use interfaces::ConfigSource;
+
+/// Without `#[class_interface]`, a trait's methods are matched by visibility.
+pub trait Reloadable {
+  fn reload(&self) -> u64;
+}
+
+#[class(abstract, implements = ConfigSource, runtime_strategy = SafeRuntimeStrategy)]
+pub struct SourceFile {
+  pub reloads: u64,
+}
+
+#[class_methods]
+impl SourceFile {
+  /// Not part of `ConfigSource`, which doesn't declare it.
+  #[class_abstract]
+  fn file_names(&self) -> Vec<String>;
+
+  /// An ordinary method implementing `ConfigSource::locate`.
+  fn locate(&self, dir: &str) -> Option<String> {
+    self.file_names().first().map(|name| format!("{dir}/{name}"))
+  }
+
+  /// A public virtual method implementing `ConfigSource::format`.
+  #[class_virtual]
+  pub fn format(&self) -> String {
+    "yaml".into()
+  }
+
+  fn checksum(&self, (a, b): (u8, u8)) -> u16 {
+    u16::from(a) * 256 + u16::from(b)
+  }
+
+  fn quote<T: ToString>(&self, value: T) -> String {
+    format!("'{}'", value.to_string())
+  }
+}
+
+#[class(extends = SourceFile, implements = Reloadable)]
+pub struct JsonSourceFile {}
+
+#[class_methods]
+impl JsonSourceFile {
+  fn file_names(&self) -> Vec<String> {
+    vec!["doup.json".into()]
+  }
+
+  #[class_override]
+  pub fn format(&self) -> String {
+    format!("json, not {}", self.super_format())
+  }
+
+  /// Implements `Reloadable` by having no visibility, as it has no descriptor.
+  #[class_virtual]
+  fn reload(&self) -> u64 {
+    self.update_reloads(|n| {
+      *n += 1;
+      *n
+    })
+  }
+}
+
+#[test]
+fn class_interfaces_match_methods_by_name() {
+  let file = JsonSourceFile::new();
+  let source: Box<dyn ConfigSource> = Box::new(file.upcast::<SourceFile, _>());
+  assert_eq!(source.locate("/etc").as_deref(), Some("/etc/doup.json"));
+  assert_eq!(source.format(), "json, not yaml");
+  assert_eq!(source.describe(), "json, not yaml file");
+  assert_eq!(source.checksum((1, 2)), 258);
+  assert_eq!(ConfigSource::quote(&*file, 7), "'7'");
+
+  let reloadable: &dyn Reloadable = &file;
+  assert_eq!(reloadable.reload(), 1);
+  assert_eq!(file.reloads(), 1);
+}
+
 // ---------- default constructors ----------
 
 #[class(runtime_strategy = SafeRuntimeStrategy)]

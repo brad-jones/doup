@@ -96,7 +96,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     .collect::<Result<Vec<_>>>()?;
 
   let handle_methods = handle_methods(model, &own_object)?;
-  let trait_impls = common::trait_impls(model)?;
+  let trait_impls = super::interface::trait_impls(model)?;
   let data_ty = model.data_ty();
   let from_data = (!model.is_abstract).then(|| {
     quote! {

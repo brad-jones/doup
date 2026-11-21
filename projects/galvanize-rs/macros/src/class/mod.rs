@@ -10,10 +10,13 @@ mod common;
 mod descriptor;
 mod fields;
 mod generics;
+mod interface;
 mod methods;
 mod options;
 mod safe_runtime;
 mod unsafe_runtime;
+
+pub use interface::{class_interface, implement, no_interface};
 
 use descriptor::{Ancestor, Inheritance, Input, Substitute, VirtualMethod};
 use fields::{ClassField, RESERVED_NAMES, SelfType, names_in};

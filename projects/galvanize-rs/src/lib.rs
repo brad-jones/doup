@@ -5,7 +5,7 @@ mod list;
 pub use crate::list::GList;
 
 mod string;
-pub use crate::string::GString;
+pub use crate::string::{GOsStr, GString};
 
 mod path;
 pub use crate::path::GPath;
@@ -15,7 +15,8 @@ pub use crate::dict::GDict;
 
 mod class;
 pub use crate::class::{
-  DefaultRuntimeStrategy, Extends, RuntimeStrategy, SafeRuntimeStrategy, UnsafeRuntimeStrategy, class, class_methods,
+  DefaultRuntimeStrategy, Extends, RuntimeStrategy, SafeRuntimeStrategy, UnsafeRuntimeStrategy, class, class_interface,
+  class_methods,
 };
 
 #[doc(hidden)]

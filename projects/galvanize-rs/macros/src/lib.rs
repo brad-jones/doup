@@ -289,14 +289,18 @@ use proc_macro::TokenStream;
 /// # Interfaces
 ///
 /// `implements = Trait` implements `Trait` for the class, so a trait can be an interface the class
-/// fulfils. A proc macro can't see the trait's methods, so the class's virtual and abstract methods
+/// fulfils. Declare the trait with [`macro@class_interface`] and the class's methods named after the
+/// trait's methods implement it, whatever their kind or visibility, so ordinary methods can implement it
+/// too, and private methods the trait doesn't declare stay out of it.
+///
+/// Otherwise, as a proc macro can't see the trait's methods, the class's virtual and abstract methods
 /// declared *without a visibility*, like the methods of a trait impl, are the ones that implement it. With
-/// several traits, each of those names its trait: `#[class_virtual(TraitA)]`. The trait's methods that the
-/// class doesn't declare keep their defaults, and rustc checks the impl as usual.
+/// several such traits, each of those names its trait: `#[class_virtual(TraitA)]`. Use `pub(self)` for a
+/// private virtual method that isn't part of the trait. Either way, the trait's methods that the class
+/// doesn't declare keep their defaults, and rustc checks the impl as usual.
 ///
 /// Each method is still a method of the class too, callable in its module, and its doc comment documents
-/// the trait impl, which otherwise shows the trait's docs. Use `pub(self)` for a private virtual method
-/// that isn't part of the trait.
+/// the trait impl, which otherwise shows the trait's docs.
 ///
 /// Subclasses don't implement the trait themselves, as the macro can't see its signatures. Method calls
 /// such as `square.area()` still reach it through the ancestor that does, and `&*square` or
@@ -455,6 +459,81 @@ pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn class_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
   class::class_methods(attr.into(), item.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+/// Lets classes implement a trait by matching their methods to the trait's by name.
+///
+/// A proc macro can't see a trait's methods, so `implements = Trait` normally treats a class's virtual
+/// and abstract methods declared without a visibility as the trait's (see [Interfaces](macro@class#interfaces)).
+/// With `#[class_interface]` on the trait, the methods named after the trait's methods implement it
+/// instead, whether they're ordinary, virtual or abstract, and whatever their visibility. The class's
+/// other methods are just methods of the class.
+///
+/// ```
+/// use galvanize_rs::{class, class_interface, class_methods};
+///
+/// #[class_interface]
+/// pub trait Locate {
+///   fn locate(&self, dir: &str) -> Option<String>;
+/// }
+///
+/// #[class(abstract, implements = Locate)]
+/// pub struct ConfigFile {}
+///
+/// #[class_methods]
+/// impl ConfigFile {
+///   /// Not part of `Locate`, as it doesn't declare it.
+///   #[class_abstract]
+///   fn file_name(&self) -> String;
+///
+///   /// An ordinary method implementing `Locate::locate`.
+///   fn locate(&self, dir: &str) -> Option<String> {
+///     Some(format!("{dir}/{}", self.file_name()))
+///   }
+/// }
+///
+/// #[class(extends = ConfigFile)]
+/// pub struct BotConfigFile {}
+///
+/// #[class_methods]
+/// impl BotConfigFile {
+///   fn file_name(&self) -> String {
+///     "bot.yaml".into()
+///   }
+/// }
+///
+/// # fn main() {
+/// let file: Box<dyn Locate> = Box::new(BotConfigFile::new().upcast::<ConfigFile, _>());
+/// assert_eq!(file.locate("/etc").as_deref(), Some("/etc/bot.yaml"));
+/// # }
+/// ```
+///
+/// The trait itself is unchanged. Its method names are recorded in a hidden macro, which shares the
+/// trait's name and so is imported along with it. It's visible within the trait's crate only, so classes
+/// in other crates, like those implementing traits without `#[class_interface]`, match the trait's
+/// methods by visibility. So do classes implementing a trait named like one of std's derive macros, such
+/// as `Ord`, as they'd find the derive macro instead.
+#[proc_macro_attribute]
+pub fn class_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+  class::class_interface(attr.into(), item.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn __implement(input: TokenStream) -> TokenStream {
+  class::implement(input.into())
+    .unwrap_or_else(syn::Error::into_compile_error)
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn __no_interface(input: TokenStream) -> TokenStream {
+  class::no_interface(input.into())
     .unwrap_or_else(syn::Error::into_compile_error)
     .into()
 }

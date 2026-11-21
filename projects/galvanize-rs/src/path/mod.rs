@@ -1,4 +1,4 @@
-use crate::GString;
+use crate::{GOsStr, GString};
 use std::borrow::Borrow;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -55,6 +55,148 @@ impl GPath {
   /// ```
   pub fn as_path(&self) -> &Path {
     &self.0
+  }
+
+  /// Like [`Path::join`] but returns a `GPath`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/tmp").join("a"), "/tmp/a");
+  /// ```
+  pub fn join(&self, p: impl AsRef<Path>) -> GPath {
+    GPath::from(self.0.join(p))
+  }
+
+  /// Like [`Path::parent`] but returns a `GPath`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/tmp/a").parent().unwrap(), "/tmp");
+  /// assert!(GPath::from("/").parent().is_none());
+  /// ```
+  pub fn parent(&self) -> Option<GPath> {
+    self.0.parent().map(GPath::from)
+  }
+
+  /// Like [`Path::as_os_str`] but returns a `GOsStr`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/a/b").as_os_str(), "/a/b");
+  /// ```
+  pub fn as_os_str(&self) -> GOsStr {
+    GOsStr::from(self.0.as_os_str())
+  }
+
+  /// Like [`Path::file_name`] but returns a `GOsStr`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/a/b.txt").file_name().unwrap(), "b.txt");
+  /// ```
+  pub fn file_name(&self) -> Option<GOsStr> {
+    self.0.file_name().map(GOsStr::from)
+  }
+
+  /// Like [`Path::file_stem`] but returns a `GOsStr`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/a/b.txt").file_stem().unwrap(), "b");
+  /// ```
+  pub fn file_stem(&self) -> Option<GOsStr> {
+    self.0.file_stem().map(GOsStr::from)
+  }
+
+  /// Like [`Path::extension`] but returns a `GOsStr`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/a/b.txt").extension().unwrap(), "txt");
+  /// ```
+  pub fn extension(&self) -> Option<GOsStr> {
+    self.0.extension().map(GOsStr::from)
+  }
+
+  /// Like [`Path::ancestors`] but yields `GPath`s.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// let all: Vec<GPath> = GPath::from("/a/b").ancestors().collect();
+  /// assert_eq!(all, ["/a/b", "/a", "/"]);
+  /// ```
+  pub fn ancestors(&self) -> impl Iterator<Item = GPath> + '_ {
+    self.0.ancestors().map(GPath::from)
+  }
+
+  /// Like [`Path::strip_prefix`] but returns a `GPath`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/a/b").strip_prefix("/a").unwrap(), "b");
+  /// ```
+  pub fn strip_prefix(&self, base: impl AsRef<Path>) -> Result<GPath, std::path::StripPrefixError> {
+    self.0.strip_prefix(base).map(GPath::from)
+  }
+
+  /// Like [`Path::with_file_name`] but returns a `GPath`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/tmp/a").with_file_name("b"), "/tmp/b");
+  /// ```
+  pub fn with_file_name(&self, name: impl AsRef<OsStr>) -> GPath {
+    GPath::from(self.0.with_file_name(name))
+  }
+
+  /// Like [`Path::with_extension`] but returns a `GPath`.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use galvanize_rs::GPath;
+  ///
+  /// assert_eq!(GPath::from("/tmp/a.txt").with_extension("md"), "/tmp/a.md");
+  /// ```
+  pub fn with_extension(&self, ext: impl AsRef<OsStr>) -> GPath {
+    GPath::from(self.0.with_extension(ext))
+  }
+
+  /// Like [`Path::canonicalize`] but returns a `GPath`.
+  pub fn canonicalize(&self) -> std::io::Result<GPath> {
+    self.0.canonicalize().map(GPath::from)
+  }
+
+  /// Like [`Path::read_link`] but returns a `GPath`.
+  pub fn read_link(&self) -> std::io::Result<GPath> {
+    self.0.read_link().map(GPath::from)
   }
 }
 

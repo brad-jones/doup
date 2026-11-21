@@ -110,10 +110,11 @@ A subclass dereferences to its parent, so the parent's accessors and methods wor
 A `#[class(abstract)]` class can't be instantiated, and may declare `#[class_abstract] fn x(&self);` methods without a
 body, which every concrete subclass must implement (checked at compile time). As in Scala, implementing an abstract
 method doesn't need `#[class_override]`, but replacing an implementation does, so a method can never silently shadow an
-inherited virtual one. With `implements = Trait`, the class's virtual and abstract methods declared without a
-visibility, like those of a trait impl, implement `Trait`:
+inherited virtual one. With `implements = Trait`, and `#[class_interface]` on the trait, the class's methods named after
+the trait's methods implement `Trait`, whether they're ordinary, virtual or abstract:
 
 ```rust
+#[class_interface]
 pub trait Shape {
   fn area(&self) -> f64;
 }
@@ -125,6 +126,9 @@ pub struct Polygon {}
 impl Polygon {
   #[class_abstract]
   fn area(&self) -> f64;
+
+  #[class_abstract]
+  fn corners(&self) -> u64; // not part of `Shape`, which doesn't declare it
 }
 
 #[class(extends = Polygon)]
@@ -137,11 +141,18 @@ impl Square {
   fn area(&self) -> f64 {
     self.side() * self.side()
   }
+
+  fn corners(&self) -> u64 {
+    4
+  }
 }
 
 let square = Square::new(); // a default constructor, as `Square` declares none
 square.set_side(2.0);
 ```
+
+A proc macro can't see the methods of a trait without `#[class_interface]`, such as one from another crate, so the
+class's virtual and abstract methods declared without a visibility, like those of a trait impl, implement it instead.
 
 An `open` class must be declared at the root of its crate (final classes can live anywhere). Classes get single
 inheritance; for multiple inheritance, implement traits as interfaces and mixins, as

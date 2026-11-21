@@ -1,9 +1,3 @@
-error: the class implements several traits, name the one this method implements, e.g. #[class_virtual(First)]
-  --> tests/ui/class/implements.rs:17:6
-   |
-17 |   fn first(&self) -> u64 {
-   |      ^^^^^
-
 error: `Second` isn't one of the traits in this class's `implements` option
   --> tests/ui/class/implements.rs:27:19
    |
@@ -34,11 +28,35 @@ error: name at least one trait
 61 | #[class(implements = ())]
    |         ^^^^^^^^^^^^^^^
 
+error: #[class_interface] doesn't take any options
+  --> tests/ui/class/implements.rs:90:19
+   |
+90 | #[class_interface(export)]
+   |                   ^^^^^^
+
+error: #[class_interface] must be on a trait
+  --> tests/ui/class/implements.rs:94:1
+   |
+94 | pub struct NotATrait {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: the class implements several traits, name the one this method implements, e.g. #[class_virtual(First)]
+  --> tests/ui/class/implements.rs:17:6
+   |
+17 |   fn first(&self) -> u64 {
+   |      ^^^^^
+
 error[E0407]: method `third` is not a member of trait `First`
   --> tests/ui/class/implements.rs:79:3
    |
 79 |   fn third(&self) -> u64 {
    |   ^^^^^^^^ not a member of trait `First`
+
+error[E0407]: method `undeclared` is not a member of trait `Described`
+   --> tests/ui/class/implements.rs:112:3
+    |
+112 |   fn undeclared(&self) -> u64 {
+    |   ^^^^^^^^^^^^^ not a member of trait `Described`
 
 error[E0046]: not all trait items implemented, missing: `second`
   --> tests/ui/class/implements.rs:84:22

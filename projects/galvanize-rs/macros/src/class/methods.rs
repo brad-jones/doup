@@ -27,8 +27,8 @@ pub struct Method {
   pub item: ImplItemFn,
   /// Whether this is a virtual method without a body.
   pub is_abstract: bool,
-  /// The index, in the class's `implements`, of the trait this virtual method implements.
-  pub implements: Option<usize>,
+  /// The index, in the class's `implements`, of the trait named by its marker, e.g. `#[class_virtual(Trait)]`.
+  pub named_trait: Option<usize>,
   /// Whether an override gets a `super_x` method, i.e. whether an ancestor implements the method.
   pub has_super: bool,
 }
@@ -220,13 +220,13 @@ fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context
       kind,
       item,
       is_abstract: false,
-      implements: None,
+      named_trait: None,
       has_super: false,
     });
   }
   check_dispatchable(&mut item)?;
   check_virtual_signature(&item)?;
-  let implements = match (kind, inherited) {
+  let named_trait = match (kind, inherited) {
     (Kind::Virtual, Some(_)) => {
       return Err(Error::new_spanned(
         &item.sig.ident,
@@ -249,19 +249,14 @@ fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context
       check_override_visibility(&item, &declared.vis)?;
       None
     }
-    _ => implemented_trait(
-      &item,
-      marker.implements.as_ref(),
-      marker.is_abstract,
-      context.implements,
-    )?,
+    _ => named_trait(&item, marker.implements.as_ref(), context.implements)?,
   };
   Ok(Method {
     kind,
     has_super: kind == Kind::Override && !context.unimplemented.contains(&label),
     item,
     is_abstract: marker.is_abstract,
-    implements,
+    named_trait,
   })
 }
 
@@ -378,29 +373,11 @@ fn check_override_visibility(method: &ImplItemFn, declared: &Visibility) -> Resu
   }
 }
 
-/// Works out which of the class's `implements` traits a virtual method implements, if any.
-///
-/// A method naming a trait implements it. Otherwise, a method without a visibility implements the class's
-/// only trait, as methods in a trait impl don't take a visibility either.
-fn implemented_trait(
-  method: &ImplItemFn,
-  named: Option<&Path>,
-  is_abstract: bool,
-  implements: &[Path],
-) -> Result<Option<usize>> {
-  let marker = if is_abstract { "class_abstract" } else { "class_virtual" };
+/// Finds the trait a virtual method's marker names, e.g. `#[class_virtual(Trait)]`, among the class's
+/// `implements` traits. Methods that don't name one are matched to traits later, by `__implement`.
+fn named_trait(method: &ImplItemFn, named: Option<&Path>, implements: &[Path]) -> Result<Option<usize>> {
   let Some(named) = named else {
-    return match (&method.vis, implements.len()) {
-      (Visibility::Inherited, 1) => Ok(Some(0)),
-      (Visibility::Inherited, n) if n > 1 => Err(Error::new_spanned(
-        &method.sig.ident,
-        format!(
-          "the class implements several traits, name the one this method implements, e.g. #[{marker}({})]",
-          implements[0].to_token_stream()
-        ),
-      )),
-      _ => Ok(None),
-    };
+    return Ok(None);
   };
   if !matches!(method.vis, Visibility::Inherited) {
     return Err(Error::new_spanned(
