@@ -1,7 +1,7 @@
 // The class hierarchies shared by galvanize-rs's tests and benchmarks. Written for
 // `SafeRuntimeStrategy`; the unsafe fixtures' build script rewrites it for `UnsafeRuntimeStrategy`.
 
-use galvanize_rs::{SafeRuntimeStrategy, class, class_methods};
+use galvanize_rs::{SafeRuntimeStrategy, class, class_interface, class_methods};
 
 /// Root of the benchmark hierarchy.
 #[class(open, runtime_strategy = SafeRuntimeStrategy)]
@@ -395,5 +395,129 @@ impl AsyncSource {
       values.push(self.lookup(key).await?);
     }
     Ok(values)
+  }
+}
+
+/// The stem of a file name. Named through `crate::` by `Format`, which its subclasses in other crates repeat.
+pub type Stem = str;
+
+/// An interface with class-level members, implemented by every class that implements `Format`'s.
+#[class_interface]
+pub trait FileFormat {
+  const EXTENSIONS: &'static [&'static str];
+
+  fn file_name(stem: &Stem) -> String;
+
+  fn preview(&self) -> String;
+}
+
+/// An abstract root with class-level members, which are late-bound: in their bodies `Self` is the class
+/// they're called on.
+#[class(abstract, implements = FileFormat, runtime_strategy = SafeRuntimeStrategy)]
+pub struct Format {
+  pub text: String,
+}
+
+#[class_methods]
+impl Format {
+  /// The format's file extensions.
+  #[class_abstract]
+  pub const EXTENSIONS: &'static [&'static str];
+
+  /// A virtual constant, computed from an abstract one.
+  #[class_virtual]
+  pub const PRIMARY: &'static str = Self::EXTENSIONS[0];
+
+  /// The file name for `stem`, with the extension of the class it's called on.
+  #[class_virtual]
+  pub fn file_name(stem: &crate::Stem) -> String {
+    format!("{stem}.{}", Self::PRIMARY)
+  }
+
+  #[class_virtual]
+  pub fn label() -> String {
+    "format".into()
+  }
+
+  #[class_virtual]
+  pub async fn fetch(stem: &str) -> String {
+    suspend_once().await;
+    format!("fetched {}", Self::file_name(stem))
+  }
+
+  /// An ordinary method, implementing `FileFormat::preview` for every subclass.
+  fn preview(&self) -> String {
+    format!("{}: {}", self.label_of(), self.text())
+  }
+
+  #[class_virtual]
+  pub fn label_of(&self) -> String {
+    "format".into()
+  }
+}
+
+/// An open subclass implementing the abstract constant, overriding a function and declaring another.
+#[class(open, extends = Format)]
+pub struct Yaml {}
+
+#[class_methods]
+impl Yaml {
+  /// Implements `Format`'s abstract constant, without `#[class_override]`.
+  pub const EXTENSIONS: &'static [&'static str] = &["yaml", "yml"];
+
+  /// Shared with subclasses, which run it with `Self` as themselves.
+  #[class_override]
+  pub fn label() -> String {
+    format!("yaml {}", Self::super_label())
+  }
+
+  #[class_virtual]
+  pub fn indent() -> usize {
+    2
+  }
+}
+
+/// A final subclass, whose overrides use `Self` as the concrete class, so can call its ordinary members.
+#[class(extends = Format)]
+pub struct Json {}
+
+#[class_methods]
+impl Json {
+  /// An ordinary constant, neither late-bound nor inherited.
+  pub const MIME: &'static str = "application/json";
+
+  pub const EXTENSIONS: &'static [&'static str] = &["json"];
+
+  #[class_override]
+  pub const PRIMARY: &'static str = "JSON";
+
+  #[class_override]
+  pub fn file_name(stem: &crate::Stem) -> String {
+    Self::shout(&Self::super_file_name(stem))
+  }
+
+  fn shout(text: &str) -> String {
+    text.to_uppercase()
+  }
+}
+
+/// A generic open class with class-level members using its type parameter.
+#[class(open, runtime_strategy = SafeRuntimeStrategy)]
+pub struct Registry<T> {
+  pub items: Vec<T>,
+}
+
+#[class_methods]
+impl<T> Registry<T> {
+  #[class_virtual]
+  pub fn capacity() -> usize {
+    4
+  }
+
+  #[class_virtual]
+  pub fn wrap(item: T) -> Vec<T> {
+    let mut items = Vec::with_capacity(Self::capacity());
+    items.push(item);
+    items
   }
 }

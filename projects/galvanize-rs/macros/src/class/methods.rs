@@ -2,11 +2,11 @@
 
 use super::fields::names_in;
 use proc_macro2::{Span, TokenStream};
-use quote::ToTokens;
+use quote::{ToTokens, format_ident, quote};
 use std::collections::{HashMap, HashSet};
 use syn::{
-  Attribute, Error, FnArg, Generics, Ident, ImplItem, ImplItemFn, ItemImpl, Meta, Pat, Path, PathArguments, Result,
-  ReturnType, Signature, Token, Type, Visibility,
+  Attribute, Error, Expr, FnArg, GenericParam, Generics, Ident, ImplItem, ImplItemFn, ItemImpl, Meta, Pat, Path,
+  PathArguments, Result, ReturnType, Signature, Token, Type, Visibility,
   fold::{self, Fold},
   parse::{ParseStream, Parser},
   parse_quote,
@@ -56,19 +56,119 @@ impl Method {
   /// `new`, or an associated function whose return type mentions `Self` or the class, e.g. `-> Self`,
   /// `-> Option<Self>` or `-> Result<Name, E>`. Functions returning `NameData`, such as `init`, aren't.
   pub fn is_constructor(&self, class: &Ident) -> bool {
-    let sig = &self.item.sig;
-    if sig.ident == "new" {
-      return true;
-    }
-    let ReturnType::Type(_, ty) = &sig.output else {
-      return false;
-    };
-    let names = names_in(ty.to_token_stream());
-    sig.receiver().is_none() && (names.contains("Self") || names.contains(&class.to_string()))
+    is_constructor(&self.item.sig, class)
   }
 }
 
-/// A virtual method declared by an ancestor.
+/// See [`Method::is_constructor`].
+pub fn is_constructor(sig: &Signature, class: &Ident) -> bool {
+  if sig.ident == "new" {
+    return true;
+  }
+  let ReturnType::Type(_, ty) = &sig.output else {
+    return false;
+  };
+  let names = names_in(ty.to_token_stream());
+  sig.receiver().is_none() && (names.contains("Self") || names.contains(&class.to_string()))
+}
+
+/// What sort of member a virtual member is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MemberKind {
+  /// A method taking `&self`.
+  Instance,
+  /// A class-level function, without a receiver.
+  Static,
+  /// A class-level constant.
+  Const,
+}
+
+impl MemberKind {
+  fn describe(self) -> &'static str {
+    match self {
+      MemberKind::Instance => "a method",
+      MemberKind::Static => "a class-level function (without `self`)",
+      MemberKind::Const => "a class-level constant",
+    }
+  }
+}
+
+/// A constant of a `#[class_methods]` block. Only an abstract one leaves out its value.
+pub struct ConstItem {
+  pub attrs: Vec<Attribute>,
+  pub vis: Visibility,
+  pub ident: Ident,
+  pub ty: Type,
+  pub expr: Option<Expr>,
+}
+
+impl ToTokens for ConstItem {
+  fn to_tokens(&self, tokens: &mut TokenStream) {
+    let Self {
+      attrs,
+      vis,
+      ident,
+      ty,
+      expr,
+    } = self;
+    tokens.extend(quote!(#(#attrs)* #vis const #ident: #ty = #expr;));
+  }
+}
+
+/// A class-level member's item.
+pub enum StaticItem {
+  Fn(ImplItemFn),
+  Const(ConstItem),
+}
+
+/// A class-level member: a virtual, abstract or overriding associated function (without a receiver) or
+/// constant, which is late-bound, see `statics`.
+pub struct Static {
+  /// `Virtual` for a declaration, `Override` for an override or implementation of an inherited one.
+  pub kind: Kind,
+  /// The item with its marker removed. An abstract function's empty block is a placeholder.
+  pub item: StaticItem,
+  pub is_abstract: bool,
+  /// The index, in the class's `implements`, of the trait named by its marker.
+  pub named_trait: Option<usize>,
+  /// Whether an override can call `Self::super_x`, i.e. whether an ancestor implements the member.
+  pub has_super: bool,
+}
+
+impl Static {
+  pub fn name(&self) -> &Ident {
+    match &self.item {
+      StaticItem::Fn(item) => &item.sig.ident,
+      StaticItem::Const(item) => &item.ident,
+    }
+  }
+
+  pub fn vis(&self) -> &Visibility {
+    match &self.item {
+      StaticItem::Fn(item) => &item.vis,
+      StaticItem::Const(item) => &item.vis,
+    }
+  }
+
+  pub fn attrs(&self) -> &[Attribute] {
+    match &self.item {
+      StaticItem::Fn(item) => &item.attrs,
+      StaticItem::Const(item) => &item.attrs,
+    }
+  }
+}
+
+/// The members of a `#[class_methods]` block.
+pub struct Members {
+  /// Instance methods, and ordinary associated functions.
+  pub methods: Vec<Method>,
+  /// Class-level members.
+  pub statics: Vec<Static>,
+  /// Ordinary constants, which are neither inherited nor late-bound.
+  pub consts: Vec<ConstItem>,
+}
+
+/// A virtual member declared by an ancestor.
 pub struct InheritedMethod {
   /// The index of the ancestor that declares it.
   pub index: usize,
@@ -76,6 +176,7 @@ pub struct InheritedMethod {
   pub class: String,
   pub is_async: bool,
   pub vis: Visibility,
+  pub member: MemberKind,
 }
 
 /// The virtual methods declared by a class's ancestors, by name.
@@ -130,14 +231,20 @@ pub fn validate_impl(methods: &ItemImpl, own: &Type, generics: &Generics) -> Res
   Ok(())
 }
 
-/// Collects the methods of a `#[class_methods]` block, checking them against the names the class
-/// generates (`reserved`) and the virtual methods its ancestors declare.
-pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Vec<Method>> {
-  let mut methods = Vec::new();
+/// Collects the members of a `#[class_methods]` block, checking them against the names the class
+/// generates (`reserved`) and the virtual members its ancestors declare.
+pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Members> {
+  let mut members = Members {
+    methods: Vec::new(),
+    statics: Vec::new(),
+    consts: Vec::new(),
+  };
   let mut errors: Option<Error> = None;
   for item in block.items {
     match collect_one(item, reserved, context) {
-      Ok(method) => methods.push(method),
+      Ok(Member::Method(method)) => members.methods.push(method),
+      Ok(Member::Static(member)) => members.statics.push(member),
+      Ok(Member::Const(item)) => members.consts.push(item),
       Err(e) => match errors.as_mut() {
         Some(errors) => errors.combine(e),
         None => errors = Some(e),
@@ -147,7 +254,7 @@ pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, context: &Contex
   if let Some(errors) = errors {
     return Err(errors);
   }
-  for method in &methods {
+  for method in &members.methods {
     if method.has_super && reserved.contains(&format!("super_{}", method.name())) {
       return Err(Error::new_spanned(
         method.name(),
@@ -155,7 +262,80 @@ pub fn collect(block: ItemImpl, reserved: &mut HashSet<String>, context: &Contex
       ));
     }
   }
-  Ok(methods)
+  Ok(members)
+}
+
+enum Member {
+  Method(Method),
+  Static(Static),
+  Const(ConstItem),
+}
+
+/// A member of the block, before its marker is taken.
+enum Parsed {
+  Fn { item: ImplItemFn, has_body: bool },
+  Const(ConstItem),
+}
+
+impl Parsed {
+  fn attrs_mut(&mut self) -> &mut Vec<Attribute> {
+    match self {
+      Parsed::Fn { item, .. } => &mut item.attrs,
+      Parsed::Const(item) => &mut item.attrs,
+    }
+  }
+
+  fn ident(&self) -> &Ident {
+    match self {
+      Parsed::Fn { item, .. } => &item.sig.ident,
+      Parsed::Const(item) => &item.ident,
+    }
+  }
+
+  fn vis(&self) -> &Visibility {
+    match self {
+      Parsed::Fn { item, .. } => &item.vis,
+      Parsed::Const(item) => &item.vis,
+    }
+  }
+
+  fn has_body(&self) -> bool {
+    match self {
+      Parsed::Fn { has_body, .. } => *has_body,
+      Parsed::Const(item) => item.expr.is_some(),
+    }
+  }
+
+  fn member(&self) -> MemberKind {
+    match self {
+      Parsed::Fn { item, .. } if item.sig.receiver().is_some() => MemberKind::Instance,
+      Parsed::Fn { .. } => MemberKind::Static,
+      Parsed::Const(_) => MemberKind::Const,
+    }
+  }
+}
+
+fn parse_item(item: ImplItem) -> Result<Parsed> {
+  match item {
+    ImplItem::Fn(item) => Ok(Parsed::Fn { item, has_body: true }),
+    ImplItem::Const(item) => {
+      if !item.generics.params.is_empty() || item.generics.where_clause.is_some() {
+        return Err(Error::new_spanned(&item.generics, "class constants can't be generic"));
+      }
+      Ok(Parsed::Const(ConstItem {
+        attrs: item.attrs,
+        vis: item.vis,
+        ident: item.ident,
+        ty: item.ty,
+        expr: Some(item.expr),
+      }))
+    }
+    ImplItem::Verbatim(tokens) => parse_bodyless(tokens),
+    other => Err(Error::new_spanned(
+      other,
+      "#[class_methods] only supports methods, associated functions and constants",
+    )),
+  }
 }
 
 /// A method's `#[class_virtual]`, `#[class_abstract]` or `#[class_override]` marker.
@@ -166,23 +346,26 @@ struct Marker {
   implements: Option<Path>,
 }
 
-fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Method> {
-  let (mut item, has_body) = match item {
-    ImplItem::Fn(item) => (item, true),
-    ImplItem::Verbatim(tokens) => (parse_bodyless(tokens)?, false),
-    other => return Err(Error::new_spanned(other, "#[class_methods] only supports methods")),
+fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context<'_>) -> Result<Member> {
+  let mut parsed = parse_item(item)?;
+  let marker = take_marker(parsed.attrs_mut())?;
+  let member = parsed.member();
+  let ident = parsed.ident().clone();
+  let label = ident.to_string();
+  let noun = if member == MemberKind::Const {
+    "constant"
+  } else {
+    "method"
   };
-  let marker = take_marker(&mut item)?;
-  let label = item.sig.ident.to_string();
   let inherited = context.inherited.get(&label);
-  // A method named after an inherited virtual method overrides it, so it can't shadow it by accident. As in
-  // Scala, replacing an implementation must be marked, while implementing an abstract method needn't be
-  // (a misspelt implementation leaves the abstract method unimplemented, which is an error anyway).
+  // A member named after an inherited virtual member overrides it, so it can't shadow it by accident. As in
+  // Scala, replacing an implementation must be marked, while implementing an abstract member needn't be
+  // (a misspelt implementation leaves the abstract member unimplemented, which is an error anyway).
   let kind = match (marker.kind, inherited) {
     (Kind::Ordinary, Some(_)) if context.unimplemented.contains(&label) => Kind::Override,
     (Kind::Ordinary, Some(declared)) => {
       return Err(Error::new_spanned(
-        &item.sig.ident,
+        &ident,
         format!(
           "`{label}` would override `{}::{label}`, mark it #[class_override] or rename it",
           declared.class
@@ -191,97 +374,171 @@ fn collect_one(item: ImplItem, reserved: &mut HashSet<String>, context: &Context
     }
     (kind, _) => kind,
   };
+  let has_body = parsed.has_body();
   if !has_body && !marker.is_abstract {
-    return Err(Error::new_spanned(
-      &item.sig,
-      "only #[class_abstract] methods can leave out their body",
-    ));
+    return Err(match &parsed {
+      Parsed::Fn { item, .. } => {
+        Error::new_spanned(&item.sig, "only #[class_abstract] methods can leave out their body")
+      }
+      Parsed::Const(_) => Error::new_spanned(&ident, "only #[class_abstract] constants can leave out their value"),
+    });
   }
   if has_body && marker.is_abstract {
-    return Err(Error::new_spanned(
-      &item.block,
-      "an abstract method has no body, end its signature with `;`",
-    ));
+    return Err(match &parsed {
+      Parsed::Fn { item, .. } => Error::new_spanned(
+        &item.block,
+        "an abstract method has no body, end its signature with `;`",
+      ),
+      Parsed::Const(item) => Error::new_spanned(&item.expr, "an abstract constant has no value, end it with `;`"),
+    });
   }
   if marker.is_abstract && !context.is_abstract {
     return Err(Error::new_spanned(
-      &item.sig.ident,
-      "only abstract classes can declare abstract methods, declare the class with #[class(abstract)]",
+      &ident,
+      format!("only abstract classes can declare abstract {noun}s, declare the class with #[class(abstract)]"),
     ));
   }
   if label.starts_with("__") || !reserved.insert(label.clone()) {
     return Err(Error::new_spanned(
-      &item.sig.ident,
-      "this method's name conflicts with a member generated by #[class]",
+      &ident,
+      format!("this {noun}'s name conflicts with a member generated by #[class]"),
     ));
   }
   if kind == Kind::Ordinary {
-    return Ok(Method {
-      kind,
-      item,
-      is_abstract: false,
-      named_trait: None,
-      has_super: false,
+    return Ok(match parsed {
+      Parsed::Fn { item, .. } => Member::Method(Method {
+        kind,
+        item,
+        is_abstract: false,
+        named_trait: None,
+        has_super: false,
+      }),
+      Parsed::Const(item) => Member::Const(item),
     });
   }
-  check_dispatchable(&mut item)?;
-  check_virtual_signature(&item)?;
+  if let Some(declared) = inherited
+    && declared.member != member
+  {
+    return Err(Error::new_spanned(
+      &ident,
+      format!(
+        "`{}::{label}` is {}, so this must be one too",
+        declared.class,
+        declared.member.describe()
+      ),
+    ));
+  }
+  let is_async = match &mut parsed {
+    Parsed::Fn { item, .. } if member == MemberKind::Instance => {
+      check_dispatchable(item)?;
+      check_virtual_signature(item)?;
+      item.sig.asyncness.is_some()
+    }
+    Parsed::Fn { item, .. } => {
+      check_static_signature(item)?;
+      item.sig.asyncness.is_some()
+    }
+    Parsed::Const(_) => false,
+  };
   let named_trait = match (kind, inherited) {
     (Kind::Virtual, Some(_)) => {
       return Err(Error::new_spanned(
-        &item.sig.ident,
-        "an ancestor already declares this virtual method, leave out the marker to override it",
+        &ident,
+        format!("an ancestor already declares this virtual {noun}, leave out the marker to override it"),
       ));
     }
     (Kind::Override, None) => {
       return Err(Error::new_spanned(
-        &item.sig.ident,
-        "no ancestor declares a virtual method with this name",
+        &ident,
+        format!("no ancestor declares a virtual {noun} with this name"),
       ));
     }
-    (Kind::Override, Some(declared)) if declared.is_async != item.sig.asyncness.is_some() => {
+    (Kind::Override, Some(declared)) if declared.is_async != is_async => {
+      let span = match &parsed {
+        Parsed::Fn { item, .. } => item.sig.to_token_stream(),
+        Parsed::Const(_) => ident.to_token_stream(),
+      };
       return Err(Error::new_spanned(
-        &item.sig,
+        span,
         "an override must match whether the inherited method is async",
       ));
     }
     (Kind::Override, Some(declared)) => {
-      check_override_visibility(&item, &declared.vis)?;
+      check_override_visibility(parsed.vis(), &ident, &declared.vis)?;
       None
     }
-    _ => named_trait(&item, marker.implements.as_ref(), context.implements)?,
+    _ => named_trait(parsed.vis(), marker.implements.as_ref(), context.implements)?,
   };
-  Ok(Method {
-    kind,
-    has_super: kind == Kind::Override && !context.unimplemented.contains(&label),
-    item,
-    is_abstract: marker.is_abstract,
-    named_trait,
+  let has_super = kind == Kind::Override && !context.unimplemented.contains(&label);
+  let is_abstract = marker.is_abstract;
+  Ok(match (parsed, member) {
+    (Parsed::Fn { item, .. }, MemberKind::Instance) => Member::Method(Method {
+      kind,
+      has_super,
+      item,
+      is_abstract,
+      named_trait,
+    }),
+    (Parsed::Fn { item, .. }, _) => Member::Static(Static {
+      kind,
+      item: StaticItem::Fn(item),
+      is_abstract,
+      named_trait,
+      has_super,
+    }),
+    (Parsed::Const(item), _) => Member::Static(Static {
+      kind,
+      item: StaticItem::Const(item),
+      is_abstract,
+      named_trait,
+      has_super,
+    }),
   })
 }
 
-/// Parses a method without a body, `fn name(&self);`, which `syn` leaves unparsed.
-fn parse_bodyless(tokens: TokenStream) -> Result<ImplItemFn> {
+/// Parses a method without a body, `fn name(&self);`, or a constant without a value, `const X: T;`, which
+/// `syn` leaves unparsed.
+fn parse_bodyless(tokens: TokenStream) -> Result<Parsed> {
   let parser = |input: ParseStream<'_>| {
     let attrs = input.call(Attribute::parse_outer)?;
     let vis = input.parse()?;
+    if input.peek(Token![const]) && !input.peek2(Token![fn]) && !input.peek2(Token![unsafe]) {
+      input.parse::<Token![const]>()?;
+      let ident = input.parse()?;
+      input.parse::<Token![:]>()?;
+      let ty = input.parse()?;
+      input.parse::<Token![;]>()?;
+      return Ok(Parsed::Const(ConstItem {
+        attrs,
+        vis,
+        ident,
+        ty,
+        expr: None,
+      }));
+    }
     let sig: Signature = input.parse()?;
     input.parse::<Token![;]>()?;
-    Ok(ImplItemFn {
-      attrs,
-      vis,
-      defaultness: None,
-      sig,
-      block: parse_quote!({}),
+    Ok(Parsed::Fn {
+      item: ImplItemFn {
+        attrs,
+        vis,
+        defaultness: None,
+        sig,
+        block: parse_quote!({}),
+      },
+      has_body: false,
     })
   };
-  parser
-    .parse2(tokens.clone())
-    .map_err(|_| Error::new_spanned(tokens, "#[class_methods] only supports methods"))
+  parser.parse2(tokens.clone()).map_err(|_| {
+    Error::new_spanned(
+      tokens,
+      "#[class_methods] only supports methods, associated functions and constants",
+    )
+  })
 }
 
-/// Removes a method's `#[class_virtual]`, `#[class_abstract]` or `#[class_override]` marker.
-fn take_marker(method: &mut ImplItemFn) -> Result<Marker> {
+/// Removes a member's `#[class_virtual]`, `#[class_abstract]` or `#[class_override]` marker.
+fn take_marker(attrs: &mut Vec<Attribute>) -> Result<Marker> {
   let mut marker = Marker {
     kind: Kind::Ordinary,
     is_abstract: false,
@@ -289,7 +546,7 @@ fn take_marker(method: &mut ImplItemFn) -> Result<Marker> {
   };
   let mut found = false;
   let mut retained = Vec::new();
-  for attr in &method.attrs {
+  for attr in attrs.iter() {
     let (kind, is_abstract) = if attr.path().is_ident("class_virtual") {
       (Kind::Virtual, false)
     } else if attr.path().is_ident("class_abstract") {
@@ -324,8 +581,20 @@ fn take_marker(method: &mut ImplItemFn) -> Result<Marker> {
       implements,
     };
   }
-  method.attrs = retained;
+  *attrs = retained;
   Ok(marker)
+}
+
+/// Checks the signature of a class-level function, which is dispatched statically, through a trait.
+fn check_static_signature(method: &ImplItemFn) -> Result<()> {
+  let sig = &method.sig;
+  if sig.constness.is_some() || sig.unsafety.is_some() || sig.abi.is_some() || sig.variadic.is_some() {
+    return Err(Error::new_spanned(
+      sig,
+      "class-level functions can't be `const`, `unsafe` or `extern`",
+    ));
+  }
+  Ok(())
 }
 
 /// Checks the signature a virtual method or override needs to be dispatched, and marks it `#[inline]`.
@@ -354,9 +623,9 @@ fn check_dispatchable(method: &mut ImplItemFn) -> Result<()> {
   Ok(())
 }
 
-/// Requires an override to repeat the visibility of the method it overrides.
-fn check_override_visibility(method: &ImplItemFn, declared: &Visibility) -> Result<()> {
-  let written = method.vis.to_token_stream().to_string();
+/// Requires an override to repeat the visibility of the member it overrides.
+fn check_override_visibility(vis: &Visibility, ident: &Ident, declared: &Visibility) -> Result<()> {
+  let written = vis.to_token_stream().to_string();
   let expected = declared.to_token_stream().to_string();
   if written == expected {
     return Ok(());
@@ -366,22 +635,22 @@ fn check_override_visibility(method: &ImplItemFn, declared: &Visibility) -> Resu
   } else {
     format!("an override must have the same visibility as the method it overrides, `{expected}`")
   };
-  if matches!(method.vis, Visibility::Inherited) {
-    Err(Error::new_spanned(&method.sig.ident, message))
+  if matches!(vis, Visibility::Inherited) {
+    Err(Error::new_spanned(ident, message))
   } else {
-    Err(Error::new_spanned(&method.vis, message))
+    Err(Error::new_spanned(vis, message))
   }
 }
 
-/// Finds the trait a virtual method's marker names, e.g. `#[class_virtual(Trait)]`, among the class's
-/// `implements` traits. Methods that don't name one are matched to traits later, by `__implement`.
-fn named_trait(method: &ImplItemFn, named: Option<&Path>, implements: &[Path]) -> Result<Option<usize>> {
+/// Finds the trait a virtual member's marker names, e.g. `#[class_virtual(Trait)]`, among the class's
+/// `implements` traits. Members that don't name one are matched to traits later, by `__implement`.
+fn named_trait(vis: &Visibility, named: Option<&Path>, implements: &[Path]) -> Result<Option<usize>> {
   let Some(named) = named else {
     return Ok(None);
   };
-  if !matches!(method.vis, Visibility::Inherited) {
+  if !matches!(vis, Visibility::Inherited) {
     return Err(Error::new_spanned(
-      &method.vis,
+      vis,
       "a method implementing a trait doesn't take a visibility, as in a trait impl",
     ));
   }
@@ -496,4 +765,101 @@ impl Fold for FutureLifetime {
       fold::fold_path_arguments(self, args)
     }
   }
+}
+
+/// A signature with plain parameter names, for an item that passes its arguments on to another.
+pub struct Forward {
+  /// The signature, without `const`, `mut` or patterns, which a function without a body can't have.
+  pub sig: Signature,
+  /// The receiver, if any.
+  pub receiver: Option<Token![self]>,
+  pub args: Vec<Ident>,
+  /// The explicit generic arguments to pass on, which can't be given alongside `impl Trait` parameters
+  /// (which infer them anyway).
+  pub turbofish: Option<TokenStream>,
+}
+
+impl Forward {
+  pub fn new(sig: &Signature) -> Self {
+    let mut sig = sig.clone();
+    sig.constness = None;
+    let mut receiver = None;
+    let mut args = Vec::new();
+    for (index, arg) in sig.inputs.iter_mut().enumerate() {
+      match arg {
+        FnArg::Receiver(r) => {
+          if r.reference.is_none() {
+            r.mutability = None;
+          }
+          receiver = Some(r.self_token);
+        }
+        FnArg::Typed(arg) => {
+          let ident = match &*arg.pat {
+            Pat::Ident(pat) if pat.by_ref.is_none() && pat.subpat.is_none() => pat.ident.clone(),
+            _ => format_ident!("__arg{}", index),
+          };
+          *arg.pat = parse_quote!(#ident);
+          args.push(ident);
+        }
+      }
+    }
+    let params: Vec<&Ident> = sig
+      .generics
+      .params
+      .iter()
+      .filter_map(|param| match param {
+        GenericParam::Type(param) => Some(&param.ident),
+        GenericParam::Const(param) => Some(&param.ident),
+        GenericParam::Lifetime(_) => None,
+      })
+      .collect();
+    let turbofish = (!params.is_empty() && !has_impl_trait(&sig)).then(|| quote!(::<#(#params),*>));
+    Self {
+      sig,
+      receiver,
+      args,
+      turbofish,
+    }
+  }
+
+  /// A call of `function` (e.g. `<Self as Trait>::name`), with the receiver, if any, and the arguments,
+  /// awaited if the signature is async.
+  pub fn call(&self, function: TokenStream) -> TokenStream {
+    self.call_with(function, self.receiver.map(|r| quote!(#r)))
+  }
+
+  /// A call of `function`, passing `first` (e.g. a view of the receiver) before the arguments.
+  pub fn call_with(&self, function: TokenStream, first: Option<TokenStream>) -> TokenStream {
+    let Self {
+      args, turbofish, sig, ..
+    } = self;
+    let first = first.map(|first| quote!(#first,));
+    let mut call = quote!(#function #turbofish(#first #(#args),*));
+    if sig.asyncness.is_some() {
+      call = quote!(#call.await);
+    }
+    if sig.unsafety.is_some() {
+      call = quote!(unsafe { #call });
+    }
+    call
+  }
+}
+
+fn has_impl_trait(sig: &Signature) -> bool {
+  struct Find(bool);
+
+  impl Fold for Find {
+    fn fold_type(&mut self, ty: Type) -> Type {
+      self.0 |= matches!(ty, Type::ImplTrait(_));
+      fold::fold_type(self, ty)
+    }
+  }
+
+  let mut find = Find(false);
+  for arg in &sig.inputs {
+    if let FnArg::Typed(arg) = arg {
+      find.fold_type(*arg.ty.clone());
+    }
+  }
+  find.0
 }

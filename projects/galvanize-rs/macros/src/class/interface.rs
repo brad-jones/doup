@@ -11,13 +11,12 @@
 //! traits and generates their impls once it knows about all of them.
 
 use super::Model;
-use super::methods::{Kind, Method};
+use super::methods::{ConstItem, Forward, Kind, Method, Static, StaticItem};
 use proc_macro2::{Group, Literal, TokenStream};
 use quote::{ToTokens, format_ident, quote, quote_spanned};
 use syn::{
-  Error, FnArg, GenericParam, Ident, ItemTrait, LitBool, Pat, Path, PathArguments, Result, Token, TraitItem, Type,
-  Visibility, braced, bracketed,
-  fold::{self, Fold},
+  Attribute, Error, Ident, ItemTrait, LitBool, Path, PathArguments, Result, Token, TraitItem, Type, Visibility, braced,
+  bracketed,
   parse::{Parse, ParseStream, Parser},
   parse_quote,
   spanned::Spanned,
@@ -48,6 +47,7 @@ pub fn class_interface(attr: TokenStream, item: TokenStream) -> Result<TokenStre
   let descriptor = format_ident!("__class_interface_{}", ident);
   let names = item.items.iter().filter_map(|item| match item {
     TraitItem::Fn(method) => Some(&method.sig.ident),
+    TraitItem::Const(constant) => Some(&constant.ident),
     _ => None,
   });
   // Only `#[macro_export]` can make a `macro_rules!` visible to other crates, and it requires the trait to
@@ -107,6 +107,32 @@ pub fn trait_impls(model: &Model) -> Result<TokenStream> {
     })
   });
   let (ig, _, wc) = model.generics.full.split_for_impl();
+  // An open class's interfaces that have class-level members are implemented for every class that
+  // implements its class trait, i.e. for its descendants too, see `statics`.
+  let own_trait = super::statics::own_class_trait(model).filter(|_| model.open);
+  let blanket = own_trait.as_ref().map(|own_trait| Blanket {
+    own: model.own(),
+    own_trait,
+    model,
+  });
+  let blanket_generics = own_trait.as_ref().map(|own_trait| {
+    let mut generics = model.generics.full.clone();
+    generics.params.insert(0, parse_quote!(__K: #own_trait));
+    let (ig, _, wc) = generics.split_for_impl();
+    (ig.to_token_stream(), wc.to_token_stream())
+  });
+  let candidates = model
+    .methods
+    .iter()
+    .map(|m| Candidate::method(m, blanket.as_ref()))
+    .chain(
+      model
+        .statics
+        .iter()
+        .map(|s| Candidate::class_level(s, blanket.as_ref())),
+    )
+    .chain(model.consts.iter().map(|c| Candidate::constant(c, blanket.as_ref())))
+    .collect();
   let state = State {
     krate: krate.to_token_stream(),
     traits: model.implements.clone(),
@@ -115,7 +141,8 @@ pub fn trait_impls(model: &Model) -> Result<TokenStream> {
     impl_generics: ig.to_token_stream(),
     own: model.own(),
     where_clause: wc.to_token_stream(),
-    candidates: model.methods.iter().map(Candidate::new).collect(),
+    blanket: blanket_generics,
+    candidates,
   };
   let first = &aliases[0];
   // The invocation is nested once more, as one in the same block as the imports could shadow them.
@@ -172,18 +199,24 @@ struct State {
   impl_generics: TokenStream,
   own: Type,
   where_clause: TokenStream,
+  /// The generics and where clause of the blanket impls, `__K` first, if the class has them.
+  blanket: Option<(TokenStream, TokenStream)>,
   candidates: Vec<Candidate>,
 }
 
 impl State {
   fn generate(&self) -> Result<TokenStream> {
-    let mut bodies = vec![TokenStream::new(); self.traits.len()];
+    let mut direct = vec![TokenStream::new(); self.traits.len()];
+    let mut blanket = vec![TokenStream::new(); self.traits.len()];
+    let mut class_level = vec![false; self.traits.len()];
     let mut errors: Option<Error> = None;
     for candidate in &self.candidates {
       match self.traits_of(candidate) {
         Ok(indices) => {
           for index in indices {
-            bodies[index].extend(candidate.forwarder.clone());
+            direct[index].extend(candidate.forwarder.clone());
+            blanket[index].extend(candidate.blanket.clone());
+            class_level[index] |= candidate.class_level;
           }
         }
         Err(error) => match errors.as_mut() {
@@ -202,10 +235,21 @@ impl State {
       where_clause,
       ..
     } = self;
-    let impls = self.traits.iter().zip(bodies).map(|(path, body)| {
-      quote_spanned! {path.span()=>
-        impl #impl_generics #path for #own #where_clause {
-          #body
+    let impls = self.traits.iter().enumerate().map(|(index, path)| match &self.blanket {
+      Some((ig, wc)) if class_level[index] => {
+        let body = &blanket[index];
+        quote_spanned! {path.span()=>
+          impl #ig #path for __K #wc {
+            #body
+          }
+        }
+      }
+      _ => {
+        let body = &direct[index];
+        quote_spanned! {path.span()=>
+          impl #impl_generics #path for #own #where_clause {
+            #body
+          }
         }
       }
     });
@@ -302,6 +346,19 @@ impl Parse for State {
       content.parse()?
     };
     let where_clause = bracket()?;
+    let blanket = {
+      let content;
+      bracketed!(content in input);
+      if content.is_empty() {
+        None
+      } else {
+        let ig;
+        bracketed!(ig in content);
+        let wc;
+        bracketed!(wc in content);
+        Some((ig.parse()?, wc.parse()?))
+      }
+    };
     let candidates = {
       let content;
       bracketed!(content in input);
@@ -319,6 +376,7 @@ impl Parse for State {
       impl_generics,
       own,
       where_clause,
+      blanket,
       candidates,
     })
   }
@@ -334,20 +392,22 @@ impl ToTokens for State {
       impl_generics,
       own,
       where_clause,
+      blanket,
       candidates,
     } = self;
     let resolved = resolved.iter().map(|names| match names {
       None => quote!(_),
       Some(names) => quote!([#(#names)*]),
     });
+    let blanket = blanket.as_ref().map(|(ig, wc)| quote!([#ig] [#wc]));
     tokens.extend(quote! {
       [#krate] [#([#traits])*] [#(#pending)*] [#(#resolved)*] [#impl_generics] [#own] [#where_clause]
-      [#(#candidates)*]
+      [#blanket] [#(#candidates)*]
     });
   }
 }
 
-/// A method of the class that may implement one of its traits.
+/// A member of the class that may implement one of its traits.
 struct Candidate {
   name: Ident,
   /// The index of the trait its marker names.
@@ -355,18 +415,107 @@ struct Candidate {
   /// Whether it implements a trait without a descriptor: a virtual method without a visibility.
   by_visibility: bool,
   is_abstract: bool,
-  /// The method of the trait impl, forwarding to the class's.
+  /// Whether it's a class-level member, which only the class's class trait implementors have.
+  class_level: bool,
+  /// The item of a trait impl for the class itself, forwarding to the class's.
   forwarder: TokenStream,
+  /// The item of a blanket trait impl for the implementors of the class's class trait, `__K`.
+  blanket: TokenStream,
+}
+
+/// What the blanket impls of an open class with a class trait forward through.
+struct Blanket<'a> {
+  own: Type,
+  own_trait: &'a Path,
+  model: &'a Model,
 }
 
 impl Candidate {
-  fn new(method: &Method) -> Self {
+  fn method(method: &Method, blanket: Option<&Blanket<'_>>) -> Self {
+    let item = &method.item;
+    let forward = Forward::new(&item.sig);
+    let name = &item.sig.ident;
+    let blanket = blanket.map(|Blanket { own, own_trait, .. }| {
+      let first = item.sig.receiver().map(|r| {
+        let this = r.self_token;
+        let view = quote!(<__K as #own_trait>::__view(#this));
+        if r.reference.is_some() {
+          view
+        } else {
+          quote!(::core::clone::Clone::clone(#view))
+        }
+      });
+      let call = forward.call_with(quote!(<#own>::#name), first);
+      wrap_fn(&item.attrs, &forward.sig, call)
+    });
     Self {
-      name: method.name().clone(),
+      name: name.clone(),
       named: method.named_trait,
-      by_visibility: method.kind == Kind::Virtual && matches!(method.item.vis, Visibility::Inherited),
+      by_visibility: method.kind == Kind::Virtual && matches!(item.vis, Visibility::Inherited),
       is_abstract: method.is_abstract,
-      forwarder: forwarder(method),
+      class_level: false,
+      forwarder: wrap_fn(
+        &item.attrs,
+        &forward.sig,
+        forward.call(quote_spanned!(name.span()=> Self::#name)),
+      ),
+      blanket: blanket.unwrap_or_default(),
+    }
+  }
+
+  fn class_level(member: &Static, blanket: Option<&Blanket<'_>>) -> Self {
+    let name = member.name();
+    let declaring = blanket.map(|Blanket { own_trait, model, .. }| {
+      if member.kind == Kind::Virtual {
+        Some((*own_trait).clone())
+      } else {
+        model.ancestors[model.declaring_ancestor_of(name)].class_trait.clone()
+      }
+    });
+    let (forwarder, blanket) = match &member.item {
+      StaticItem::Fn(item) => {
+        let forward = Forward::new(&item.sig);
+        let forwarder = wrap_fn(
+          &item.attrs,
+          &forward.sig,
+          forward.call(quote_spanned!(name.span()=> Self::#name)),
+        );
+        let blanket = declaring
+          .flatten()
+          .map(|path| wrap_fn(&item.attrs, &forward.sig, forward.call(quote!(<__K as #path>::#name))));
+        (forwarder, blanket)
+      }
+      StaticItem::Const(item) => {
+        let forwarder = wrap_const(item, quote!(Self::#name));
+        let blanket = declaring
+          .flatten()
+          .map(|path| wrap_const(item, quote!(<__K as #path>::#name)));
+        (forwarder, blanket)
+      }
+    };
+    Self {
+      name: name.clone(),
+      named: member.named_trait,
+      by_visibility: false,
+      is_abstract: member.is_abstract,
+      class_level: true,
+      forwarder,
+      blanket: blanket.unwrap_or_default(),
+    }
+  }
+
+  fn constant(item: &ConstItem, blanket: Option<&Blanket<'_>>) -> Self {
+    let name = &item.ident;
+    Self {
+      name: name.clone(),
+      named: None,
+      by_visibility: false,
+      is_abstract: false,
+      class_level: false,
+      forwarder: wrap_const(item, quote!(Self::#name)),
+      blanket: blanket
+        .map(|Blanket { own, .. }| wrap_const(item, quote!(<#own>::#name)))
+        .unwrap_or_default(),
     }
   }
 }
@@ -387,14 +536,19 @@ impl Parse for Candidate {
     };
     let by_visibility = content.parse::<LitBool>()?.value;
     let is_abstract = content.parse::<LitBool>()?.value;
+    let class_level = content.parse::<LitBool>()?.value;
     let forwarder;
     braced!(forwarder in content);
+    let blanket;
+    braced!(blanket in content);
     Ok(Self {
       name,
       named,
       by_visibility,
       is_abstract,
+      class_level,
       forwarder: forwarder.parse()?,
+      blanket: blanket.parse()?,
     })
   }
 }
@@ -406,73 +560,45 @@ impl ToTokens for Candidate {
       named,
       by_visibility,
       is_abstract,
+      class_level,
       forwarder,
+      blanket,
     } = self;
     let named = named.map(Literal::usize_unsuffixed);
-    tokens.extend(quote!({ #name [#named] #by_visibility #is_abstract { #forwarder } }));
+    tokens.extend(quote!({ #name [#named] #by_visibility #is_abstract #class_level { #forwarder } { #blanket } }));
   }
 }
 
-/// A trait method calling the class's method of the same name, which `Self::x` names in preference to the
-/// trait's. Only the method's docs and `cfg`s are repeated. Without docs of its own, rustdoc shows the
-/// trait's.
-fn forwarder(method: &Method) -> TokenStream {
-  let item = &method.item;
-  let mut sig = item.sig.clone();
-  sig.constness = None;
-  let mut receiver = None;
-  let mut args = Vec::new();
-  for (index, arg) in sig.inputs.iter_mut().enumerate() {
-    match arg {
-      FnArg::Receiver(r) => {
-        if r.reference.is_none() {
-          r.mutability = None;
-        }
-        receiver = Some(r.self_token);
-      }
-      FnArg::Typed(arg) => {
-        // Patterns are only for the class's method; the forwarder just passes the arguments on.
-        let ident = match &*arg.pat {
-          Pat::Ident(pat) if pat.by_ref.is_none() && pat.subpat.is_none() => pat.ident.clone(),
-          _ => format_ident!("__arg{}", index),
-        };
-        *arg.pat = parse_quote!(#ident);
-        args.push(ident);
-      }
-    }
-  }
-  // Explicit generic arguments aren't allowed alongside `impl Trait` parameters, which infer them anyway.
-  let params: Vec<&Ident> = sig
-    .generics
-    .params
-    .iter()
-    .filter_map(|param| match param {
-      GenericParam::Type(param) => Some(&param.ident),
-      GenericParam::Const(param) => Some(&param.ident),
-      GenericParam::Lifetime(_) => None,
-    })
-    .collect();
-  let turbofish = (!params.is_empty() && !has_impl_trait(&sig)).then(|| quote!(::<#(#params),*>));
-  let name = &sig.ident;
-  let receiver = receiver.map(|r| quote!(#r,));
-  let mut call = quote_spanned!(name.span()=> Self::#name #turbofish(#receiver #(#args),*));
-  if sig.asyncness.is_some() {
-    call = quote!(#call.await);
-  }
-  if sig.unsafety.is_some() {
-    call = quote!(unsafe { #call });
-  }
-  let attrs = item.attrs.iter().filter(|a| {
+/// The docs and `cfg`s of a member, which are all a forwarding item repeats. Without docs of its own,
+/// rustdoc shows the trait's.
+fn forwarded_attrs(attrs: &[Attribute]) -> impl Iterator<Item = &Attribute> {
+  attrs.iter().filter(|a| {
     let path = a.path();
     path.is_ident("doc") || path.is_ident("cfg") || path.is_ident("cfg_attr")
-  });
+  })
+}
+
+/// A trait method calling the class's member of the same name. `Self::x` names the class's in preference
+/// to the trait's.
+fn wrap_fn(attrs: &[Attribute], sig: &syn::Signature, call: TokenStream) -> TokenStream {
+  let attrs = forwarded_attrs(attrs);
   // Spanned so that errors about a method, e.g. that the trait doesn't have it, point at it.
-  quote_spanned! {name.span()=>
+  quote_spanned! {sig.ident.span()=>
     #(#attrs)*
     #[inline]
     #sig {
       #call
     }
+  }
+}
+
+/// A trait constant with the value of the class's constant of the same name.
+fn wrap_const(item: &ConstItem, value: TokenStream) -> TokenStream {
+  let attrs = forwarded_attrs(&item.attrs);
+  let (ident, ty) = (&item.ident, &item.ty);
+  quote_spanned! {ident.span()=>
+    #(#attrs)*
+    const #ident: #ty = #value;
   }
 }
 
@@ -482,23 +608,4 @@ fn parse_idents(input: ParseStream<'_>) -> Result<Vec<Ident>> {
     idents.push(input.parse()?);
   }
   Ok(idents)
-}
-
-fn has_impl_trait(sig: &syn::Signature) -> bool {
-  struct Find(bool);
-
-  impl Fold for Find {
-    fn fold_type(&mut self, ty: Type) -> Type {
-      self.0 |= matches!(ty, Type::ImplTrait(_));
-      fold::fold_type(self, ty)
-    }
-  }
-
-  let mut find = Find(false);
-  for arg in &sig.inputs {
-    if let FnArg::Typed(arg) = arg {
-      find.fold_type(*arg.ty.clone());
-    }
-  }
-  find.0
 }

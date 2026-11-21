@@ -14,6 +14,7 @@ mod interface;
 mod methods;
 mod options;
 mod safe_runtime;
+mod statics;
 mod unsafe_runtime;
 
 pub use interface::{class_interface, implement, no_interface};
@@ -21,7 +22,7 @@ pub use interface::{class_interface, implement, no_interface};
 use descriptor::{Ancestor, Inheritance, Input, Substitute, VirtualMethod};
 use fields::{ClassField, RESERVED_NAMES, SelfType, names_in};
 use generics::ClassGenerics;
-use methods::{Context, Inherited, InheritedMethod, Kind, Method};
+use methods::{ConstItem, Context, Inherited, InheritedMethod, Kind, MemberKind, Method, Static, StaticItem};
 use options::{ClassOptions, Runtime, parse_class_options};
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -268,33 +269,35 @@ fn validate_declaration(options: &ClassOptions, item: &ItemStruct) -> Result<Cla
   generics::class_generics(&item.generics, &fields, options.extends.as_ref())
 }
 
-/// Requires a concrete class to implement every abstract method it inherits without an implementation.
+/// Requires a concrete class to implement every abstract member it inherits without an implementation.
 fn require_implementations(
   class: &Ident,
   ancestors: &[Ancestor],
   unimplemented: &HashMap<String, usize>,
-  methods: &[Method],
+  implemented: &HashSet<String>,
+  class_level: &HashSet<String>,
 ) -> Result<()> {
   let mut missing: Vec<(usize, &String)> = unimplemented
     .iter()
-    .filter(|(name, _)| {
-      !methods
-        .iter()
-        .any(|m| m.kind == Kind::Override && m.name() == name.as_str())
-    })
+    .filter(|(name, _)| !implemented.contains(name.as_str()))
     .map(|(name, index)| (*index, name))
     .collect();
   if missing.is_empty() {
     return Ok(());
   }
   missing.sort();
+  let word = if missing.iter().any(|(_, name)| class_level.contains(name.as_str())) {
+    "member"
+  } else {
+    "method"
+  };
   let names: Vec<String> = missing
     .iter()
     .map(|(index, name)| format!("`{}::{name}`", descriptor::class_name(&ancestors[*index].handle)))
     .collect();
   let (noun, list) = match names.split_last() {
-    Some((last, [])) => ("method", last.clone()),
-    Some((last, rest)) => ("methods", format!("{} and {last}", rest.join(", "))),
+    Some((last, [])) => (word.to_string(), last.clone()),
+    Some((last, rest)) => (format!("{word}s"), format!("{} and {last}", rest.join(", "))),
     None => unreachable!("missing isn't empty"),
   };
   Err(Error::new(
@@ -341,9 +344,16 @@ pub struct Model {
   generics: ClassGenerics,
   fields: Vec<ClassField>,
   methods: Vec<Method>,
+  /// The class-level members it declares or overrides.
+  statics: Vec<Static>,
+  /// Its ordinary constants.
+  consts: Vec<ConstItem>,
   /// The root first, the parent last.
   ancestors: Vec<Ancestor>,
   inherited: Inherited,
+  /// Whether no abstract class-level member is left unimplemented, so that the class implements its
+  /// ancestors' class traits and its own, see `statics`.
+  class_level_complete: bool,
 }
 
 impl Model {
@@ -386,9 +396,11 @@ impl Model {
     methods::validate_impl(&input.methods, &own, &generics.full)?;
 
     let mut inherited = Inherited::new();
-    // The inherited abstract methods that no ancestor implements, and the ancestor declaring each.
+    // The inherited abstract members that no ancestor implements, and the ancestor declaring each.
     let mut unimplemented = HashMap::new();
+    let mut class_level = HashSet::new();
     for (index, ancestor) in ancestors.iter().enumerate() {
+      let class = descriptor::class_name(&ancestor.handle);
       for method in &ancestor.methods {
         let name = method.name.to_string();
         if method.is_abstract {
@@ -398,13 +410,35 @@ impl Model {
           name,
           InheritedMethod {
             index,
-            class: descriptor::class_name(&ancestor.handle),
+            class: class.clone(),
             is_async: method.is_async,
             vis: method.vis.clone(),
+            member: MemberKind::Instance,
           },
         );
       }
-      for name in &ancestor.overrides {
+      for member in &ancestor.statics {
+        let name = member.name().to_string();
+        if member.is_abstract {
+          unimplemented.insert(name.clone(), index);
+        }
+        class_level.insert(name.clone());
+        let (is_async, kind) = match &member.sig {
+          descriptor::StaticSig::Fn(sig) => (sig.asyncness.is_some(), MemberKind::Static),
+          descriptor::StaticSig::Const(..) => (false, MemberKind::Const),
+        };
+        inherited.insert(
+          name,
+          InheritedMethod {
+            index,
+            class: class.clone(),
+            is_async,
+            vis: member.vis.clone(),
+            member: kind,
+          },
+        );
+      }
+      for name in ancestor.overrides.iter().chain(&ancestor.static_overrides) {
         unimplemented.remove(&name.to_string());
       }
     }
@@ -419,14 +453,34 @@ impl Model {
       implements: &implements,
       is_abstract,
     };
-    let methods = methods::collect(input.methods, &mut reserved, &context)?;
+    let members = methods::collect(input.methods, &mut reserved, &context)?;
+    let (methods, statics, consts) = (members.methods, members.statics, members.consts);
+    let implemented: HashSet<String> = methods
+      .iter()
+      .filter(|m| m.kind == Kind::Override)
+      .map(|m| m.name().to_string())
+      .chain(
+        statics
+          .iter()
+          .filter(|s| s.kind == Kind::Override)
+          .map(|s| s.name().to_string()),
+      )
+      .collect();
     if !is_abstract {
-      require_implementations(&name, &ancestors, &unimplemented, &methods)?;
+      require_implementations(&name, &ancestors, &unimplemented, &implemented, &class_level)?;
     }
+    let class_level_complete = !statics.iter().any(|s| s.is_abstract)
+      && !unimplemented
+        .keys()
+        .any(|name| class_level.contains(name) && !implemented.contains(name));
     // Like Java, a concrete class only gets a default constructor when it doesn't declare one. A field
     // named `new` would clash with it.
-    let default_new =
-      !is_abstract && !methods.iter().any(|m| m.is_constructor(&name)) && !fields.iter().any(|f| f.bare() == "new");
+    let declares_constructor = methods.iter().any(|m| m.is_constructor(&name))
+      || statics.iter().any(|s| match &s.item {
+        StaticItem::Fn(item) => methods::is_constructor(&item.sig, &name),
+        StaticItem::Const(_) => false,
+      });
+    let default_new = !is_abstract && !declares_constructor && !fields.iter().any(|f| f.bare() == "new");
 
     // Doc comments document the class, which `#[class]` already declared.
     let data_attrs = item.attrs.into_iter().filter(|a| !a.path().is_ident("doc")).collect();
@@ -445,8 +499,11 @@ impl Model {
       generics,
       fields,
       methods,
+      statics,
+      consts,
       ancestors,
       inherited,
+      class_level_complete,
     })
   }
 
@@ -511,6 +568,11 @@ impl Model {
 
   /// The index of the ancestor that declares the virtual method an override overrides.
   fn declaring_ancestor(&self, method: &Method) -> usize {
-    self.inherited[&method.name().to_string()].index
+    self.declaring_ancestor_of(method.name())
+  }
+
+  /// The index of the ancestor that declares the inherited virtual member `name`.
+  fn declaring_ancestor_of(&self, name: &Ident) -> usize {
+    self.inherited[&name.to_string()].index
   }
 }

@@ -961,3 +961,106 @@ fn generic_subclasses_get_default_constructors() {
   assert_eq!(unboxed.get(), 0);
   assert_eq!(format!("{unboxed:?}"), "Unboxed { value: 0, opened: true }");
 }
+
+// ---------- class-level members ----------
+
+use fixtures::{FileFormat, Format, Json, Registry, Yaml};
+
+/// An open subclass in another crate, overriding an inherited override and calling its parent's.
+#[class(open, extends = Yaml)]
+pub struct Kube {}
+
+#[class_methods]
+impl Kube {
+  #[class_override]
+  pub fn indent() -> usize {
+    Self::super_indent() * 2
+  }
+
+  #[class_override]
+  pub fn label() -> String {
+    format!("kube {}", Self::super_label())
+  }
+}
+
+/// Inherits everything but its extensions, which `Format`'s inherited bodies pick up.
+#[class(extends = Kube)]
+pub struct Chart {}
+
+#[class_methods]
+impl Chart {
+  #[class_override]
+  pub const EXTENSIONS: &'static [&'static str] = &["chart.yaml"];
+}
+
+#[class(extends = Registry<u8>)]
+pub struct Bytes {}
+
+#[class_methods]
+impl Bytes {
+  #[class_override]
+  pub fn capacity() -> usize {
+    Self::super_capacity() * 2
+  }
+}
+
+fn file_name_of<T: FileFormat>(stem: &str) -> String {
+  format!("{} of {:?}", T::file_name(stem), T::EXTENSIONS)
+}
+
+#[test]
+fn class_level_members_are_late_bound() {
+  assert_eq!(Yaml::EXTENSIONS, ["yaml", "yml"]);
+  assert_eq!(Yaml::PRIMARY, "yaml");
+  assert_eq!(Yaml::file_name("ci"), "ci.yaml");
+  assert_eq!(Yaml::label(), "yaml format");
+  assert_eq!(Yaml::indent(), 2);
+
+  assert_eq!(Json::MIME, "application/json");
+  assert_eq!(Json::PRIMARY, "JSON");
+  assert_eq!(Json::file_name("package"), "PACKAGE.JSON");
+  assert_eq!(Json::label(), "format");
+}
+
+#[test]
+fn class_level_members_are_inherited_across_crates() {
+  assert_eq!(Kube::file_name("deploy"), "deploy.yaml");
+  assert_eq!(Kube::label(), "kube yaml format");
+  assert_eq!(Kube::indent(), 4);
+
+  assert_eq!(Chart::PRIMARY, "chart.yaml");
+  assert_eq!(Chart::file_name("app"), "app.chart.yaml");
+  assert_eq!(Chart::label(), "kube yaml format");
+  assert_eq!(Chart::indent(), 4);
+
+  assert_eq!(Registry::<u8>::wrap(1).capacity(), 4);
+  assert_eq!(Bytes::capacity(), 8);
+  assert_eq!(Bytes::wrap(1), [1]);
+  assert!(Bytes::wrap(1).capacity() >= 8);
+}
+
+#[test]
+fn interfaces_with_class_level_members_are_implemented_by_subclasses() {
+  assert_eq!(file_name_of::<Yaml>("a"), r#"a.yaml of ["yaml", "yml"]"#);
+  assert_eq!(file_name_of::<Json>("b"), r#"B.JSON of ["json"]"#);
+  assert_eq!(file_name_of::<Chart>("c"), r#"c.chart.yaml of ["chart.yaml"]"#);
+
+  let chart = Chart::new();
+  chart.set_text("apiVersion: v2");
+  assert_eq!(FileFormat::preview(&chart), "format: apiVersion: v2");
+  let format: Format = chart.upcast();
+  assert_eq!(format.text(), "apiVersion: v2");
+}
+
+#[test]
+fn class_level_functions_can_be_async() {
+  let future = Chart::fetch("app");
+  let mut future = std::pin::pin!(future);
+  let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+  let value = loop {
+    if let std::task::Poll::Ready(value) = future.as_mut().poll(&mut cx) {
+      break value;
+    }
+  };
+  assert_eq!(value, "fetched app.chart.yaml");
+}

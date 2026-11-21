@@ -235,6 +235,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     }
   });
   let trait_impls = super::interface::trait_impls(model)?;
+  let statics = super::statics::generate(model)?;
   let shared = common::shared_items(model, quote!(self.__inner.__handle.identity()));
   let descriptor = common::descriptor(model, &own_fields, &own_table);
 
@@ -340,6 +341,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     #deref
     #shared
     #trait_impls
+    #statics
     #descriptor
   })
 }

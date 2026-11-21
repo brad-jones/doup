@@ -158,6 +158,44 @@ An `open` class must be declared at the root of its crate (final classes can liv
 inheritance; for multiple inheritance, implement traits as interfaces and mixins, as
 [examples/traits.rs](examples/traits.rs) shows (`cargo run -p galvanize-rs --example traits`).
 
+### Class-level members
+
+Associated functions (without `self`) and constants take the same markers, and are late-bound like Python's `cls` or
+PHP's `static::`: in their bodies, `Self` is the class they're accessed through. Subclasses inherit them as their own
+associated items, and an override calls its parent's implementation with `Self::super_x()`:
+
+```rust
+#[class(abstract)]
+pub struct ConfigFile {}
+
+#[class_methods]
+impl ConfigFile {
+  #[class_abstract]
+  pub const NAMES: &'static [&'static str];
+
+  #[class_virtual]
+  pub fn locate(dir: &str) -> String {
+    format!("{dir}/{}", Self::NAMES[0])
+  }
+}
+
+#[class(extends = ConfigFile)]
+pub struct BotConfigFile {}
+
+#[class_methods]
+impl BotConfigFile {
+  pub const NAMES: &'static [&'static str] = &["bot.yaml"]; // implements the abstract constant
+}
+
+assert_eq!(BotConfigFile::locate("/etc"), "/etc/bot.yaml");
+```
+
+Rust only binds `Self` late in a trait's default methods, so these bodies are generic over the class, and can only reach
+other class-level members through `Self` (a final class's overrides, which nothing inherits, are the exception). A
+`#[class_interface]` trait may declare class-level members too: an open class implementing one with them implements it
+for all its subclasses, so they satisfy `T: Trait`. Subclasses repeat the signatures they inherit, so the types those
+name must also resolve where the subclass is declared.
+
 ### Runtime strategies
 
 How a hierarchy is implemented is chosen by its root, with `#[class(runtime_strategy = ...)]`. Both strategies generate

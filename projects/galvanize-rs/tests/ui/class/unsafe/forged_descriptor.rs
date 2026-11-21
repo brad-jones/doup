@@ -10,7 +10,7 @@ macro_rules! PretendOpen {
       { galvanize_rs_fixtures_unsafe::Puppy;
         galvanize_rs_fixtures_unsafe::__PuppyFields;
         galvanize_rs_fixtures_unsafe::PuppyData;
-        galvanize_rs_fixtures_unsafe::__PuppyVTable; [] [] }
+        galvanize_rs_fixtures_unsafe::__PuppyVTable; [] [] [] [] [] }
     }
   };
 }

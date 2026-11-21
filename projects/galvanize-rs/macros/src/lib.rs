@@ -355,6 +355,115 @@ use proc_macro::TokenStream;
 /// # }
 /// ```
 ///
+/// # Class-level members
+///
+/// Associated functions (without `self`) and constants can be virtual, abstract or overrides too, with
+/// the same markers. They're late-bound like Python's `cls` or PHP's `static::`: in their bodies, `Self` is
+/// the class they're accessed through, so an inherited function sees its subclass's constants. Every
+/// subclass gets them as its own associated items, so `Sub::locate()` and `Sub::NAMES` just work, and
+/// `Self::super_x()` calls the parent's implementation in an override. Ordinary constants are allowed too,
+/// and are neither inherited nor late-bound.
+///
+/// ```
+/// use galvanize_rs::{class, class_methods};
+///
+/// #[class(abstract)]
+/// pub struct ConfigFile {}
+///
+/// #[class_methods]
+/// impl ConfigFile {
+///   #[class_abstract]
+///   pub const NAMES: &'static [&'static str];
+///
+///   #[class_virtual]
+///   pub fn locate(dir: &str) -> String {
+///     format!("{dir}/{}", Self::NAMES[0])
+///   }
+/// }
+///
+/// #[class(open, extends = ConfigFile)]
+/// pub struct BotConfigFile {}
+///
+/// #[class_methods]
+/// impl BotConfigFile {
+///   pub const NAMES: &'static [&'static str] = &["bot.yaml"]; // implements the abstract constant
+/// }
+///
+/// #[class(extends = BotConfigFile)]
+/// pub struct TestConfigFile {}
+///
+/// #[class_methods]
+/// impl TestConfigFile {
+///   #[class_override]
+///   pub const NAMES: &'static [&'static str] = &["test.yaml"];
+///
+///   #[class_override]
+///   pub fn locate(dir: &str) -> String {
+///     format!("{} (test)", Self::super_locate(dir))
+///   }
+/// }
+///
+/// # fn main() {
+/// assert_eq!(BotConfigFile::locate("/etc"), "/etc/bot.yaml");
+/// assert_eq!(TestConfigFile::locate("/tmp"), "/tmp/test.yaml (test)");
+/// # }
+/// ```
+///
+/// Rust only binds `Self` late in a trait's default methods, so these bodies are generic over the class:
+/// through `Self`, they can only reach other class-level members, so name the class to call its ordinary
+/// associated functions. A final class's overrides are the exception, as nothing can inherit them, so
+/// `Self` is the class itself in them. A class only gets its class-level members once none is abstract.
+///
+/// A subclass repeats the signatures of the class-level members it inherits, so the types they name must
+/// resolve where it's declared too (paths starting with `crate::` are adjusted to keep naming the parent's
+/// crate). Class-level functions may be async and generic, and use `Self` and `impl Trait`, but can't be
+/// `const`, `unsafe` or `extern`.
+///
+/// With [`macro@class_interface`], an interface may declare class-level members too. An open class whose
+/// class-level members implement one implements it for every class that inherits them, so subclasses
+/// satisfy `T: Trait`:
+///
+/// ```
+/// use galvanize_rs::{class, class_interface, class_methods};
+///
+/// #[class_interface]
+/// pub trait Named {
+///   const NAME: &'static str;
+///
+///   fn greet() -> String;
+/// }
+///
+/// #[class(abstract, implements = Named)]
+/// pub struct Base {}
+///
+/// #[class_methods]
+/// impl Base {
+///   #[class_abstract]
+///   pub const NAME: &'static str;
+///
+///   #[class_virtual]
+///   pub fn greet() -> String {
+///     format!("hello {}", Self::NAME)
+///   }
+/// }
+///
+/// #[class(extends = Base)]
+/// pub struct World {}
+///
+/// #[class_methods]
+/// impl World {
+///   pub const NAME: &'static str = "world";
+/// }
+///
+/// fn greet<T: Named>() -> String {
+///   T::greet()
+/// }
+///
+/// # fn main() {
+/// assert_eq!(greet::<World>(), "hello world");
+/// # }
+/// ```
+///
 /// # Runtime strategies
 ///
 /// Both strategies generate the same API from the same declarations, so a hierarchy can switch between
@@ -437,7 +546,7 @@ pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// be an inherent impl of the class with the struct's type parameters and no bounds; the struct's bounds
 /// apply to it. Other, ordinary `impl` blocks can be added as usual.
 ///
-/// Within it, mark methods with:
+/// Within it, mark methods, associated functions and constants with:
 ///
 /// * `#[class_virtual]` to declare a virtual method, which subclasses may override.
 /// * `#[class_abstract]` to declare an abstract method, a virtual method without a body
@@ -448,6 +557,10 @@ pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `#[class_override]` to override a virtual method declared by any ancestor. Its signature, including
 ///   whether it's `async`, and its visibility must match. It gets a `super_x` method calling the parent's
 ///   implementation.
+///
+/// The same markers on associated functions without `self` and on constants (`const X: T;` when abstract)
+/// make them late-bound class-level members, see [Class-level members](macro@class#class-level-members).
+/// Their overrides call the parent's implementation with `Self::super_x`.
 ///
 /// A method implementing an abstract method that no ancestor implements is an override without the
 /// marker, and gets no `super_x`. Any other method named after an inherited virtual method is an error.
@@ -469,7 +582,8 @@ pub fn class_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// and abstract methods declared without a visibility as the trait's (see [Interfaces](macro@class#interfaces)).
 /// With `#[class_interface]` on the trait, the methods named after the trait's methods implement it
 /// instead, whether they're ordinary, virtual or abstract, and whatever their visibility. The class's
-/// other methods are just methods of the class.
+/// other methods are just methods of the class. Constants and class-level members are matched by name too,
+/// see [Class-level members](macro@class#class-level-members).
 ///
 /// ```
 /// use galvanize_rs::{class, class_interface, class_methods};

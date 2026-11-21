@@ -362,9 +362,14 @@ pub fn descriptor(model: &Model, fields: &Type, dispatch: &Type) -> TokenStream 
   let data = model.data_ty();
   let virtuals = model.own_virtuals();
   let overrides = model.own_overrides();
+  let class_trait = super::statics::own_class_trait(model).map(|path| quote_spanned!(name.span()=> $crate::#path));
+  let statics = super::statics::own_records(model);
+  let statics = statics.iter().map(|member| member.to_anchored_tokens());
+  let static_overrides = super::statics::own_overrides(model);
   // A callback may run in another crate, so anchor this class's `$crate` to its own declaration.
   let record = quote_spanned! {name.span()=>
-    { $crate::#own; $crate::#fields; $crate::#data; $crate::#dispatch; [#(#virtuals)*] [#(#overrides)*] }
+    { $crate::#own; $crate::#fields; $crate::#data; $crate::#dispatch; [#(#virtuals)*] [#(#overrides)*]
+      [#class_trait] [#(#statics)*] [#(#static_overrides)*] }
   };
   quote! {
     #[doc(hidden)]

@@ -44,6 +44,9 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
       dispatch: own_object.clone(),
       methods: model.own_virtuals(),
       overrides: model.own_overrides(),
+      class_trait: None,
+      statics: Vec::new(),
+      static_overrides: Vec::new(),
     }])
     .collect();
   let root = &chain[0].dispatch;
@@ -97,6 +100,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
 
   let handle_methods = handle_methods(model, &own_object)?;
   let trait_impls = super::interface::trait_impls(model)?;
+  let statics = super::statics::generate(model)?;
   let data_ty = model.data_ty();
   let from_data = (!model.is_abstract).then(|| {
     quote! {
@@ -215,6 +219,7 @@ pub fn generate(model: &Model) -> Result<TokenStream> {
     #deref
     #shared
     #trait_impls
+    #statics
     #descriptor
   })
 }

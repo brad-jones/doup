@@ -1,0 +1,64 @@
+error: only abstract classes can declare abstract constants, declare the class with #[class(abstract)]
+  --> tests/ui/class/statics.rs:79:13
+   |
+79 |   pub const NAME: &'static str;
+   |             ^^^^
+
+error: only #[class_abstract] constants can leave out their value
+  --> tests/ui/class/statics.rs:81:13
+   |
+81 |   pub const VALUELESS: u8;
+   |             ^^^^^^^^^
+
+error: an abstract constant has no value, end it with `;`
+  --> tests/ui/class/statics.rs:84:30
+   |
+84 |   pub const WITH_VALUE: u8 = 1;
+   |                              ^
+
+error: class-level functions can't be `const`, `unsafe` or `extern`
+  --> tests/ui/class/statics.rs:87:7
+   |
+87 |   pub const fn constant() -> u8 {
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: an override must have the same visibility as the method it overrides, `pub`
+  --> tests/ui/class/statics.rs:65:6
+   |
+65 |   fn label() -> String {
+   |      ^^^^^
+
+error: no ancestor declares a virtual constant with this name
+  --> tests/ui/class/statics.rs:70:13
+   |
+70 |   pub const MISSING: u8 = 0;
+   |             ^^^^^^^
+
+error: `Root::label` is a class-level function (without `self`), so this must be one too
+  --> tests/ui/class/statics.rs:47:10
+   |
+47 |   pub fn label(&self) -> String {
+   |          ^^^^^
+
+error: `Root::DEPTH` is a class-level constant, so this must be one too
+  --> tests/ui/class/statics.rs:52:10
+   |
+52 |   pub fn DEPTH() -> u8 {
+   |          ^^^^^
+
+error: `label` would override `Root::label`, mark it #[class_override] or rename it
+  --> tests/ui/class/statics.rs:34:10
+   |
+34 |   pub fn label() -> String {
+   |          ^^^^^
+
+error: `MissingConstant` must implement the abstract member `Root::EXTENSIONS`, or be declared #[class(abstract)]
+  --> tests/ui/class/statics.rs:22:12
+   |
+22 | pub struct MissingConstant {}
+   |            ^^^^^^^^^^^^^^^
+23 |
+24 | #[class_methods]
+   | ---------------- in this attribute macro expansion
+   |
+   = note: this error originates in the macro `__class_methods_for_MissingConstant` which comes from the expansion of the attribute macro `class_methods` (in Nightly builds, run with -Z macro-backtrace for more info)
