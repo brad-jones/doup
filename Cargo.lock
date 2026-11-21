@@ -698,20 +698,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "doup-config-2"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_fs",
- "galvanize-rs",
- "jsonschema",
- "serde",
- "serde-saphyr",
- "serde_json",
- "ssh-key",
-]
-
-[[package]]
 name = "doup-git"
 version = "0.1.0"
 dependencies = [
@@ -1050,37 +1036,8 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "divan",
- "galvanize-rs-fixtures-safe",
- "galvanize-rs-fixtures-unsafe",
- "galvanize-rs-macros",
  "tokio",
  "trybuild",
-]
-
-[[package]]
-name = "galvanize-rs-fixtures-safe"
-version = "0.0.0"
-dependencies = [
- "galvanize-rs",
- "tokio",
-]
-
-[[package]]
-name = "galvanize-rs-fixtures-unsafe"
-version = "0.0.0"
-dependencies = [
- "galvanize-rs",
- "tokio",
-]
-
-[[package]]
-name = "galvanize-rs-macros"
-version = "0.1.0"
-dependencies = [
- "galvanize-rs",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]

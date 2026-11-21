@@ -1,7 +1,10 @@
-use super::GPointer;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use super::MutablePointer;
+use std::{
+  ops::Deref,
+  sync::{Arc, Mutex, MutexGuard, PoisonError},
+};
 
-/// A [`GPointer`] backed by `Arc<Mutex<T>>`.
+/// A [`MutablePointer`] backed by `Arc<Mutex<T>>`.
 ///
 /// Readers and writers are serialised by a single lock, so this suits
 /// write-heavy or short critical sections. A poisoned lock is recovered
@@ -10,7 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 /// # Examples
 ///
 /// ```
-/// use galvanize_rs::{GPointer, ArcMutexPointer};
+/// use galvanize_rs::{MutablePointer, ArcMutexPointer};
 ///
 /// let a = ArcMutexPointer::new(vec![1, 2]);
 /// let b = a.clone(); // same underlying value
@@ -29,7 +32,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 /// a closure deadlocks (or panics):
 ///
 /// ```no_run
-/// # use galvanize_rs::{GPointer, ArcMutexPointer};
+/// # use galvanize_rs::{MutablePointer, ArcMutexPointer};
 /// let c = ArcMutexPointer::new(vec![1]);
 /// // read_with waits on the lock that write_with already holds
 /// c.write_with(|v| v.push(c.read_with(|v2| v2.len())));
@@ -38,7 +41,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 /// Read the value first and then write it instead:
 ///
 /// ```
-/// # use galvanize_rs::{GPointer, ArcMutexPointer};
+/// # use galvanize_rs::{MutablePointer, ArcMutexPointer};
 /// let c = ArcMutexPointer::new(vec![1]);
 /// let n = c.read_with(|v| v.len());
 /// c.write_with(|v| v.push(n));
@@ -53,7 +56,7 @@ impl<T> ArcMutexPointer<T> {
   }
 }
 
-impl<T: Clone> GPointer<T> for ArcMutexPointer<T> {
+impl<T: Clone> MutablePointer<T> for ArcMutexPointer<T> {
   fn new(value: T) -> Self {
     Self(Arc::new(Mutex::new(value)))
   }

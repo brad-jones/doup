@@ -1,7 +1,7 @@
-use super::GPointer;
+use super::MutablePointer;
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-/// A [`GPointer`] backed by `Arc<RwLock<T>>`.
+/// A [`MutablePointer`] backed by `Arc<RwLock<T>>`.
 ///
 /// Multiple readers may hold the value concurrently, while a writer gets
 /// exclusive access. A poisoned lock is recovered rather than propagated as
@@ -10,7 +10,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// # Examples
 ///
 /// ```
-/// use galvanize_rs::{GPointer, ArcRwLockPointer};
+/// use galvanize_rs::{MutablePointer, ArcRwLockPointer};
 ///
 /// let a = ArcRwLockPointer::new(vec![1, 2]);
 /// let b = a.clone(); // same underlying value
@@ -29,7 +29,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// a conflicting guard is held deadlocks (or panics):
 ///
 /// ```no_run
-/// # use galvanize_rs::{GPointer, ArcRwLockPointer};
+/// # use galvanize_rs::{MutablePointer, ArcRwLockPointer};
 /// let c = ArcRwLockPointer::new(vec![1]);
 /// // read_with waits on the exclusive lock that write_with already holds
 /// c.write_with(|v| v.push(c.read_with(|v2| v2.len())));
@@ -39,7 +39,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// the read guard that is still held.
 ///
 /// ```no_run
-/// # use galvanize_rs::{GPointer, ArcRwLockPointer};
+/// # use galvanize_rs::{MutablePointer, ArcRwLockPointer};
 /// let c = ArcRwLockPointer::new(vec![1]);
 /// // write_with waits for all readers, including this one, to finish
 /// c.read_with(|v| c.write_with(|v2| v2.push(v.len())));
@@ -51,7 +51,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// Read the value first and then write it instead:
 ///
 /// ```
-/// # use galvanize_rs::{GPointer, ArcRwLockPointer};
+/// # use galvanize_rs::{MutablePointer, ArcRwLockPointer};
 /// let c = ArcRwLockPointer::new(vec![1]);
 /// let n = c.read_with(|v| v.len());
 /// c.write_with(|v| v.push(n));
@@ -71,7 +71,7 @@ impl<T> ArcRwLockPointer<T> {
   }
 }
 
-impl<T: Clone> GPointer<T> for ArcRwLockPointer<T> {
+impl<T: Clone> MutablePointer<T> for ArcRwLockPointer<T> {
   fn new(value: T) -> Self {
     Self(Arc::new(RwLock::new(value)))
   }

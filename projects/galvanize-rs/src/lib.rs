@@ -12,12 +12,3 @@ pub use crate::path::GPath;
 
 mod dict;
 pub use crate::dict::GDict;
-
-mod class;
-pub use crate::class::{
-  DefaultRuntimeStrategy, Extends, RuntimeStrategy, SafeRuntimeStrategy, UnsafeRuntimeStrategy, class, class_interface,
-  class_methods,
-};
-
-#[doc(hidden)]
-pub use crate::class::__private;

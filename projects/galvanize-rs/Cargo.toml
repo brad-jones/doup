@@ -8,19 +8,12 @@ description = "Write Rust like a higher-level language. Trades runtime performan
 
 [dependencies]
 arc-swap = "1.9.5"
-galvanize-rs-macros = { path = "macros" }
 
 [dev-dependencies]
 divan = "0.1.21"
-galvanize-rs-fixtures-safe = { path = "fixtures/safe" }
-galvanize-rs-fixtures-unsafe = { path = "fixtures/unsafe" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
 trybuild = "1.0.125"
 
 [[bench]]
 name = "pointers"
-harness = false
-
-[[bench]]
-name = "inheritance"
 harness = false

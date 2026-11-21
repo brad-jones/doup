@@ -3,7 +3,7 @@
 mod test_support;
 
 mod mutable_pointer;
-pub use mutable_pointer::GPointer;
+pub use mutable_pointer::MutablePointer;
 
 mod arc_mutex_pointer;
 pub use arc_mutex_pointer::ArcMutexPointer;

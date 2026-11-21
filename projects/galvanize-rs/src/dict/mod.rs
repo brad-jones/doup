@@ -1,9 +1,9 @@
-use crate::pointers::{DefaultPointerStrategy, GPointer, PointerStrategy};
+use crate::pointers::{DefaultPointerStrategy, MutablePointer, PointerStrategy};
 use std::{borrow::Borrow, collections::BTreeMap, ops::RangeBounds};
 
 /// A shared, sorted map. Cloning yields another handle to the same map.
 ///
-/// The `S` [`PointerStrategy`] picks the [`GPointer`] the data lives in and
+/// The `S` [`PointerStrategy`] picks the [`MutablePointer`] the data lives in and
 /// defaults to [`DefaultPointerStrategy`]. Use [`GDict::with_strategy`] to pick another.
 /// Keys and values must be [`Clone`] because the pointers may need to copy the
 /// whole map. Values are stored by value, so accessors such as [`GDict::get`]

@@ -1,8 +1,8 @@
-use crate::pointers::{DefaultPointerStrategy, GPointer, PointerStrategy};
+use crate::pointers::{DefaultPointerStrategy, MutablePointer, PointerStrategy};
 
 /// A shared, growable list. Cloning yields another handle to the same list.
 ///
-/// The `S` [`PointerStrategy`] picks the [`GPointer`] the data lives in and
+/// The `S` [`PointerStrategy`] picks the [`MutablePointer`] the data lives in and
 /// defaults to [`DefaultPointerStrategy`]. Use [`GList::with_strategy`] to pick another.
 ///
 /// Elements are stored by value and must be [`Clone`]: accessors such as
