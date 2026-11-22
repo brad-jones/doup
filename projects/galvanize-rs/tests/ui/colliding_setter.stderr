@@ -1,0 +1,5 @@
+error: the generated method `set_x` for this field collides with another method or field
+ --> tests/ui/colliding_setter.rs:6:3
+  |
+6 |   set_x: i32,
+  |   ^^^^^

@@ -1,10 +1,10 @@
 {
   "benchmark": "pointers",
   "source": "projects/galvanize-rs/benches/pointers.rs",
-  "generatedAt": "2026-11-20T01:10:31.143Z",
-  "gitCommit": "79bde368ae806d6244519f5d1d37283ad07f1a26",
+  "generatedAt": "2026-11-22T05:42:09.444Z",
+  "gitCommit": "66b8641c07372b4b175ab97b4a1a55a695aaae4b",
   "filter": null,
-  "timerPrecision": "14 ns",
+  "timerPrecision": "13 ns",
   "units": "Time values are in nanoseconds.",
   "machine": {
     "os": "Linux 6.18.58.1-microsoft-standard-WSL2",
@@ -16,7 +16,7 @@
       "speedMHz": 0
     },
     "memory": {
-      "totalBytes": 16577822720,
+      "totalBytes": 16577830912,
       "totalGiB": 15.44
     },
     "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)\nbinary: rustc\ncommit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a\ncommit-date: 2026-11-09\nhost: x86_64-unknown-linux-gnu\nrelease: 1.100.0\nLLVM version: 23.1.5",
@@ -28,10 +28,10 @@
         "clone",
         "ArcMutexPointer<alloc::vec::Vec<u64>>"
       ],
-      "fastest": 5.25,
-      "slowest": 5.953,
-      "median": 5.507,
-      "mean": 5.534,
+      "fastest": 5.913,
+      "slowest": 10.44,
+      "median": 6.089,
+      "mean": 6.232,
       "samples": 100,
       "iters": 25600
     },
@@ -40,100 +40,100 @@
         "clone",
         "ArcRwLockPointer<alloc::vec::Vec<u64>>"
       ],
-      "fastest": 5.107,
-      "slowest": 5.236,
-      "median": 5.123,
-      "mean": 5.127,
+      "fastest": 5.901,
+      "slowest": 131.5,
+      "median": 7.919,
+      "mean": 9.605,
       "samples": 100,
-      "iters": 51200
+      "iters": 25600
     },
     {
       "path": [
         "clone",
         "ArcSwapPointer<alloc::vec::Vec<u64>>"
       ],
-      "fastest": 5.107,
-      "slowest": 16.9,
-      "median": 5.123,
-      "mean": 5.241,
+      "fastest": 7.147,
+      "slowest": 80.93,
+      "median": 8.181,
+      "mean": 9.593,
       "samples": 100,
-      "iters": 51200
+      "iters": 25600
     },
     {
       "path": [
-        "deep_clone",
+        "duplicate",
         "ArcMutexPointer<alloc::vec::Vec<u64>>",
         "16"
       ],
-      "fastest": 19.23,
-      "slowest": 24.54,
-      "median": 19.56,
-      "mean": 19.66,
-      "samples": 100,
-      "iters": 6400
-    },
-    {
-      "path": [
-        "deep_clone",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096"
-      ],
-      "fastest": 560.8,
-      "slowest": 9039,
-      "median": 713.8,
-      "mean": 749.4,
-      "samples": 100,
-      "iters": 100
-    },
-    {
-      "path": [
-        "deep_clone",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16"
-      ],
-      "fastest": 21.03,
-      "slowest": 89.29,
-      "median": 21.68,
-      "mean": 22.4,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "deep_clone",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096"
-      ],
-      "fastest": 530.3,
-      "slowest": 5088,
-      "median": 571.8,
-      "mean": 610.5,
-      "samples": 100,
-      "iters": 200
-    },
-    {
-      "path": [
-        "deep_clone",
-        "ArcSwapPointer<alloc::vec::Vec<u64>>",
-        "16"
-      ],
-      "fastest": 25.31,
-      "slowest": 131,
-      "median": 26.21,
+      "fastest": 20.64,
+      "slowest": 191.5,
+      "median": 20.95,
       "mean": 27.62,
       "samples": 100,
       "iters": 6400
     },
     {
       "path": [
-        "deep_clone",
+        "duplicate",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096"
+      ],
+      "fastest": 610.8,
+      "slowest": 9795,
+      "median": 735.8,
+      "mean": 792.8,
+      "samples": 100,
+      "iters": 100
+    },
+    {
+      "path": [
+        "duplicate",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16"
+      ],
+      "fastest": 21.81,
+      "slowest": 45.08,
+      "median": 23.55,
+      "mean": 23.76,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "duplicate",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096"
+      ],
+      "fastest": 534.3,
+      "slowest": 6349,
+      "median": 551.8,
+      "mean": 647.5,
+      "samples": 100,
+      "iters": 200
+    },
+    {
+      "path": [
+        "duplicate",
+        "ArcSwapPointer<alloc::vec::Vec<u64>>",
+        "16"
+      ],
+      "fastest": 24.86,
+      "slowest": 118.4,
+      "median": 25.74,
+      "mean": 26.87,
+      "samples": 100,
+      "iters": 6400
+    },
+    {
+      "path": [
+        "duplicate",
         "ArcSwapPointer<alloc::vec::Vec<u64>>",
         "4096"
       ],
-      "fastest": 535.6,
-      "slowest": 8717,
-      "median": 557.6,
-      "mean": 643.2,
+      "fastest": 583.8,
+      "slowest": 7211,
+      "median": 602.3,
+      "mean": 700.1,
       "samples": 100,
       "iters": 400
     },
@@ -144,10 +144,10 @@
         "16",
         "t=1"
       ],
-      "fastest": 9.261,
-      "slowest": 9.531,
-      "median": 9.304,
-      "mean": 9.343,
+      "fastest": 9.093,
+      "slowest": 13.75,
+      "median": 9.325,
+      "mean": 9.424,
       "samples": 100,
       "iters": 25600
     },
@@ -158,12 +158,12 @@
         "16",
         "t=2"
       ],
-      "fastest": 10.2,
-      "slowest": 35.89,
-      "median": 11.24,
-      "mean": 11.63,
+      "fastest": 9.245,
+      "slowest": 108.6,
+      "median": 9.415,
+      "mean": 15.92,
       "samples": 100,
-      "iters": 6400
+      "iters": 25600
     },
     {
       "path": [
@@ -172,10 +172,10 @@
         "16",
         "t=8"
       ],
-      "fastest": 10.02,
-      "slowest": 57.71,
-      "median": 10.64,
-      "mean": 11.91,
+      "fastest": 9.636,
+      "slowest": 88.57,
+      "median": 10.33,
+      "mean": 13.81,
       "samples": 104,
       "iters": 13312
     },
@@ -186,10 +186,10 @@
         "4096",
         "t=1"
       ],
-      "fastest": 10.15,
-      "slowest": 10.3,
-      "median": 10.2,
-      "mean": 10.2,
+      "fastest": 9.097,
+      "slowest": 9.249,
+      "median": 9.132,
+      "mean": 9.137,
       "samples": 100,
       "iters": 25600
     },
@@ -200,10 +200,10 @@
         "4096",
         "t=2"
       ],
-      "fastest": 10.77,
-      "slowest": 129.5,
-      "median": 11.46,
-      "mean": 20.56,
+      "fastest": 9.526,
+      "slowest": 226.9,
+      "median": 9.929,
+      "mean": 13.61,
       "samples": 100,
       "iters": 12800
     },
@@ -214,10 +214,10 @@
         "4096",
         "t=8"
       ],
-      "fastest": 11,
-      "slowest": 12.1,
-      "median": 11.51,
-      "mean": 11.54,
+      "fastest": 9.745,
+      "slowest": 83.1,
+      "median": 10.32,
+      "mean": 11.16,
       "samples": 104,
       "iters": 13312
     },
@@ -228,10 +228,10 @@
         "16",
         "t=1"
       ],
-      "fastest": 11.92,
-      "slowest": 12.18,
-      "median": 11.98,
-      "mean": 11.99,
+      "fastest": 10.68,
+      "slowest": 10.87,
+      "median": 10.72,
+      "mean": 10.73,
       "samples": 100,
       "iters": 12800
     },
@@ -242,10 +242,10 @@
         "16",
         "t=2"
       ],
-      "fastest": 12.61,
-      "slowest": 162.9,
-      "median": 21.13,
-      "mean": 25.85,
+      "fastest": 10.36,
+      "slowest": 12.05,
+      "median": 11.14,
+      "mean": 11.05,
       "samples": 100,
       "iters": 12800
     },
@@ -256,10 +256,10 @@
         "16",
         "t=8"
       ],
-      "fastest": 14.53,
-      "slowest": 310.4,
-      "median": 15.56,
-      "mean": 28.97,
+      "fastest": 11.37,
+      "slowest": 75.58,
+      "median": 12.03,
+      "mean": 16.66,
       "samples": 104,
       "iters": 13312
     },
@@ -270,10 +270,10 @@
         "4096",
         "t=1"
       ],
-      "fastest": 13.5,
-      "slowest": 13.85,
-      "median": 13.57,
-      "mean": 13.57,
+      "fastest": 10.68,
+      "slowest": 10.83,
+      "median": 10.73,
+      "mean": 10.74,
       "samples": 100,
       "iters": 12800
     },
@@ -284,10 +284,10 @@
         "4096",
         "t=2"
       ],
-      "fastest": 13.52,
-      "slowest": 112.9,
-      "median": 13.96,
-      "mean": 16.97,
+      "fastest": 10.36,
+      "slowest": 13.3,
+      "median": 11.34,
+      "mean": 11.39,
       "samples": 100,
       "iters": 12800
     },
@@ -298,10 +298,10 @@
         "4096",
         "t=8"
       ],
-      "fastest": 14.25,
-      "slowest": 26.03,
-      "median": 15.43,
-      "mean": 15.83,
+      "fastest": 12.45,
+      "slowest": 150.4,
+      "median": 13.3,
+      "mean": 16.86,
       "samples": 104,
       "iters": 6656
     },
@@ -312,12 +312,12 @@
         "16",
         "t=1"
       ],
-      "fastest": 18.62,
-      "slowest": 440.6,
-      "median": 23,
-      "mean": 41.19,
+      "fastest": 19.78,
+      "slowest": 21.61,
+      "median": 20,
+      "mean": 20.5,
       "samples": 100,
-      "iters": 400
+      "iters": 6400
     },
     {
       "path": [
@@ -326,10 +326,10 @@
         "16",
         "t=2"
       ],
-      "fastest": 42.87,
-      "slowest": 3366,
-      "median": 111.8,
-      "mean": 214,
+      "fastest": 34.89,
+      "slowest": 11780,
+      "median": 105.8,
+      "mean": 282.8,
       "samples": 100,
       "iters": 100
     },
@@ -340,10 +340,10 @@
         "16",
         "t=8"
       ],
-      "fastest": 105.8,
-      "slowest": 1933,
-      "median": 171.3,
-      "mean": 368.5,
+      "fastest": 87.89,
+      "slowest": 2244,
+      "median": 150.3,
+      "mean": 332,
       "samples": 104,
       "iters": 104
     },
@@ -354,24 +354,10 @@
         "4096",
         "t=1"
       ],
-      "fastest": 15,
-      "slowest": 296.1,
-      "median": 125.1,
-      "mean": 115.8,
-      "samples": 100,
-      "iters": 800
-    },
-    {
-      "path": [
-        "mixed",
-        "ArcSwapPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=2"
-      ],
-      "fastest": 22.37,
-      "slowest": 4473,
-      "median": 69.62,
-      "mean": 308.5,
+      "fastest": 15.14,
+      "slowest": 630.3,
+      "median": 20.39,
+      "mean": 109.7,
       "samples": 100,
       "iters": 400
     },
@@ -380,12 +366,26 @@
         "mixed",
         "ArcSwapPointer<alloc::vec::Vec<u64>>",
         "4096",
+        "t=2"
+      ],
+      "fastest": 24.39,
+      "slowest": 6935,
+      "median": 63.89,
+      "mean": 363.9,
+      "samples": 100,
+      "iters": 200
+    },
+    {
+      "path": [
+        "mixed",
+        "ArcSwapPointer<alloc::vec::Vec<u64>>",
+        "4096",
         "t=8"
       ],
-      "fastest": 60.37,
-      "slowest": 15920,
-      "median": 106.1,
-      "mean": 943.1,
+      "fastest": 58.39,
+      "slowest": 12090,
+      "median": 105.6,
+      "mean": 793.3,
       "samples": 104,
       "iters": 208
     },
@@ -396,10 +396,10 @@
         "16",
         "t=1"
       ],
-      "fastest": 11.62,
-      "slowest": 11.98,
-      "median": 11.67,
-      "mean": 11.68,
+      "fastest": 11.12,
+      "slowest": 11.25,
+      "median": 11.15,
+      "mean": 11.16,
       "samples": 100,
       "iters": 12800
     },
@@ -410,10 +410,10 @@
         "16",
         "t=2"
       ],
-      "fastest": 12.98,
-      "slowest": 23.28,
-      "median": 13.33,
-      "mean": 14.8,
+      "fastest": 11.51,
+      "slowest": 70.93,
+      "median": 11.85,
+      "mean": 13.09,
       "samples": 100,
       "iters": 12800
     },
@@ -424,136 +424,136 @@
         "16",
         "t=8"
       ],
-      "fastest": 17.2,
-      "slowest": 301.5,
-      "median": 21.32,
-      "mean": 24.77,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "read",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=1"
-      ],
-      "fastest": 14.72,
-      "slowest": 14.89,
-      "median": 14.78,
-      "mean": 14.79,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "read",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=2"
-      ],
-      "fastest": 14.39,
-      "slowest": 17.5,
-      "median": 15.42,
-      "mean": 15.35,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "read",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=8"
-      ],
-      "fastest": 12.8,
-      "slowest": 27.53,
-      "median": 13.54,
-      "mean": 13.83,
+      "fastest": 11.96,
+      "slowest": 77.99,
+      "median": 12.39,
+      "mean": 13.76,
       "samples": 104,
       "iters": 13312
     },
     {
       "path": [
         "read",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
         "t=1"
       ],
-      "fastest": 13.86,
-      "slowest": 14.14,
-      "median": 13.92,
-      "mean": 13.93,
+      "fastest": 11.13,
+      "slowest": 11.4,
+      "median": 11.19,
+      "mean": 11.21,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "read",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
         "t=2"
       ],
-      "fastest": 13.59,
-      "slowest": 15.71,
-      "median": 13.96,
-      "mean": 14,
+      "fastest": 11.52,
+      "slowest": 12.08,
+      "median": 11.76,
+      "mean": 11.78,
       "samples": 100,
       "iters": 12800
     },
     {
       "path": [
         "read",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
         "t=8"
       ],
-      "fastest": 16.96,
-      "slowest": 102.6,
-      "median": 18.07,
-      "mean": 21.1,
+      "fastest": 33.64,
+      "slowest": 453.3,
+      "median": 46.39,
+      "mean": 54.99,
       "samples": 104,
-      "iters": 3328
+      "iters": 416
     },
     {
       "path": [
         "read",
         "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
+        "16",
         "t=1"
       ],
-      "fastest": 13.23,
-      "slowest": 160,
-      "median": 13.35,
-      "mean": 14.95,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "read",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=2"
-      ],
-      "fastest": 13.36,
-      "slowest": 14.46,
-      "median": 13.78,
-      "mean": 13.8,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "read",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=8"
-      ],
-      "fastest": 13.68,
-      "slowest": 134.4,
+      "fastest": 14.23,
+      "slowest": 14.7,
       "median": 14.35,
-      "mean": 21.58,
+      "mean": 14.39,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "read",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=2"
+      ],
+      "fastest": 12.97,
+      "slowest": 99.65,
+      "median": 13.69,
+      "mean": 15.91,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "read",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=8"
+      ],
+      "fastest": 13.48,
+      "slowest": 20.38,
+      "median": 13.8,
+      "mean": 14,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "read",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=1"
+      ],
+      "fastest": 12.65,
+      "slowest": 129.3,
+      "median": 12.71,
+      "mean": 13.88,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "read",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=2"
+      ],
+      "fastest": 13.05,
+      "slowest": 14.58,
+      "median": 13.4,
+      "mean": 13.51,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "read",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=8"
+      ],
+      "fastest": 13.22,
+      "slowest": 165.5,
+      "median": 13.73,
+      "mean": 18.65,
       "samples": 104,
       "iters": 13312
     },
@@ -564,10 +564,10 @@
         "16",
         "t=1"
       ],
-      "fastest": 12.04,
-      "slowest": 14.77,
-      "median": 12.1,
-      "mean": 12.34,
+      "fastest": 11.58,
+      "slowest": 51.6,
+      "median": 11.62,
+      "mean": 12.02,
       "samples": 100,
       "iters": 12800
     },
@@ -578,10 +578,10 @@
         "16",
         "t=2"
       ],
-      "fastest": 12.28,
-      "slowest": 21.57,
-      "median": 12.8,
-      "mean": 13.18,
+      "fastest": 11.73,
+      "slowest": 15.8,
+      "median": 12.19,
+      "mean": 12.56,
       "samples": 100,
       "iters": 12800
     },
@@ -592,12 +592,12 @@
         "16",
         "t=8"
       ],
-      "fastest": 106.8,
-      "slowest": 3254,
-      "median": 172.8,
-      "mean": 260.5,
+      "fastest": 12.05,
+      "slowest": 14.4,
+      "median": 12.66,
+      "mean": 12.72,
       "samples": 104,
-      "iters": 104
+      "iters": 13312
     },
     {
       "path": [
@@ -606,10 +606,10 @@
         "4096",
         "t=1"
       ],
-      "fastest": 12.04,
-      "slowest": 12.3,
-      "median": 12.08,
-      "mean": 12.09,
+      "fastest": 11.33,
+      "slowest": 180.3,
+      "median": 11.38,
+      "mean": 13.08,
       "samples": 100,
       "iters": 12800
     },
@@ -620,10 +620,10 @@
         "4096",
         "t=2"
       ],
-      "fastest": 12.35,
-      "slowest": 156.4,
-      "median": 12.79,
-      "mean": 16.07,
+      "fastest": 11.46,
+      "slowest": 14.22,
+      "median": 11.96,
+      "mean": 12.22,
       "samples": 100,
       "iters": 12800
     },
@@ -634,9 +634,177 @@
         "4096",
         "t=8"
       ],
-      "fastest": 12.94,
-      "slowest": 23.34,
-      "median": 13.36,
+      "fastest": 12.08,
+      "slowest": 49.3,
+      "median": 12.65,
+      "mean": 13.62,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=1"
+      ],
+      "fastest": 10.92,
+      "slowest": 11.04,
+      "median": 10.96,
+      "mean": 10.96,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=2"
+      ],
+      "fastest": 11.23,
+      "slowest": 13.37,
+      "median": 11.99,
+      "mean": 12.12,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=8"
+      ],
+      "fastest": 11.86,
+      "slowest": 453.6,
+      "median": 12.33,
+      "mean": 34.22,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=1"
+      ],
+      "fastest": 10.92,
+      "slowest": 11.18,
+      "median": 10.97,
+      "mean": 10.98,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=2"
+      ],
+      "fastest": 11.51,
+      "slowest": 12.62,
+      "median": 11.72,
+      "mean": 11.74,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcMutexPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=8"
+      ],
+      "fastest": 11.82,
+      "slowest": 12.83,
+      "median": 12.11,
+      "mean": 12.17,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=1"
+      ],
+      "fastest": 11.12,
+      "slowest": 11.29,
+      "median": 11.17,
+      "mean": 11.18,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=2"
+      ],
+      "fastest": 11.64,
+      "slowest": 13.51,
+      "median": 12.05,
+      "mean": 12.21,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "16",
+        "t=8"
+      ],
+      "fastest": 12.16,
+      "slowest": 13.58,
+      "median": 12.6,
+      "mean": 12.62,
+      "samples": 104,
+      "iters": 13312
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=1"
+      ],
+      "fastest": 11.38,
+      "slowest": 11.53,
+      "median": 11.42,
+      "mean": 11.42,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=2"
+      ],
+      "fastest": 11.98,
+      "slowest": 13.15,
+      "median": 12.27,
+      "mean": 12.35,
+      "samples": 100,
+      "iters": 12800
+    },
+    {
+      "path": [
+        "write",
+        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
+        "4096",
+        "t=8"
+      ],
+      "fastest": 12.09,
+      "slowest": 86.64,
+      "median": 12.33,
       "mean": 13.75,
       "samples": 104,
       "iters": 13312
@@ -644,182 +812,14 @@
     {
       "path": [
         "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=1"
-      ],
-      "fastest": 12.24,
-      "slowest": 12.92,
-      "median": 12.29,
-      "mean": 12.3,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=2"
-      ],
-      "fastest": 12.96,
-      "slowest": 160.3,
-      "median": 13.56,
-      "mean": 31.41,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=8"
-      ],
-      "fastest": 12.78,
-      "slowest": 39.63,
-      "median": 13.36,
-      "mean": 14.05,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=1"
-      ],
-      "fastest": 11.94,
-      "slowest": 12.21,
-      "median": 11.99,
-      "mean": 12,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=2"
-      ],
-      "fastest": 12.57,
-      "slowest": 19.61,
-      "median": 12.72,
-      "mean": 13.09,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcMutexPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=8"
-      ],
-      "fastest": 12.44,
-      "slowest": 93.14,
-      "median": 12.94,
-      "mean": 14.88,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=1"
-      ],
-      "fastest": 11.87,
-      "slowest": 12.13,
-      "median": 11.91,
-      "mean": 11.92,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=2"
-      ],
-      "fastest": 13.59,
-      "slowest": 15.56,
-      "median": 14.17,
-      "mean": 14.27,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "16",
-        "t=8"
-      ],
-      "fastest": 15.59,
-      "slowest": 185.4,
-      "median": 16.93,
-      "mean": 23.09,
-      "samples": 104,
-      "iters": 6656
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=1"
-      ],
-      "fastest": 13.46,
-      "slowest": 13.96,
-      "median": 13.53,
-      "mean": 13.53,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=2"
-      ],
-      "fastest": 14.3,
-      "slowest": 16.63,
-      "median": 15.22,
-      "mean": 15.36,
-      "samples": 100,
-      "iters": 12800
-    },
-    {
-      "path": [
-        "write",
-        "ArcRwLockPointer<alloc::vec::Vec<u64>>",
-        "4096",
-        "t=8"
-      ],
-      "fastest": 14.28,
-      "slowest": 211.5,
-      "median": 15.24,
-      "mean": 21.17,
-      "samples": 104,
-      "iters": 13312
-    },
-    {
-      "path": [
-        "write",
         "ArcSwapPointer<alloc::vec::Vec<u64>>",
         "16",
         "t=1"
       ],
-      "fastest": 238.8,
-      "slowest": 2009.9999999999998,
-      "median": 244.8,
-      "mean": 264.9,
+      "fastest": 199.8,
+      "slowest": 1379,
+      "median": 201.8,
+      "mean": 215.6,
       "samples": 100,
       "iters": 100
     },
@@ -830,12 +830,12 @@
         "16",
         "t=2"
       ],
-      "fastest": 384.3,
-      "slowest": 1322,
-      "median": 470.1,
-      "mean": 511.2,
+      "fastest": 393.8,
+      "slowest": 1644,
+      "median": 582.8,
+      "mean": 692.3,
       "samples": 100,
-      "iters": 200
+      "iters": 100
     },
     {
       "path": [
@@ -844,12 +844,12 @@
         "16",
         "t=8"
       ],
-      "fastest": 515.3,
-      "slowest": 1216,
-      "median": 590.3,
-      "mean": 629.9,
+      "fastest": 560.8,
+      "slowest": 2219,
+      "median": 732.3,
+      "mean": 860.5,
       "samples": 104,
-      "iters": 208
+      "iters": 104
     },
     {
       "path": [
@@ -858,10 +858,10 @@
         "4096",
         "t=1"
       ],
-      "fastest": 882.8,
-      "slowest": 2463,
-      "median": 1141,
-      "mean": 1115,
+      "fastest": 760.8,
+      "slowest": 2064,
+      "median": 796.3,
+      "mean": 811.5,
       "samples": 100,
       "iters": 100
     },
@@ -872,10 +872,10 @@
         "4096",
         "t=2"
       ],
-      "fastest": 1451,
-      "slowest": 19900,
-      "median": 2426,
-      "mean": 2850,
+      "fastest": 1876,
+      "slowest": 10760,
+      "median": 2086,
+      "mean": 2200,
       "samples": 100,
       "iters": 100
     },
@@ -886,10 +886,10 @@
         "4096",
         "t=8"
       ],
-      "fastest": 1587,
-      "slowest": 24300,
-      "median": 2622,
-      "mean": 4461,
+      "fastest": 1865,
+      "slowest": 17210,
+      "median": 2157,
+      "mean": 2587,
       "samples": 104,
       "iters": 104
     }

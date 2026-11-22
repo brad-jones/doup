@@ -1,0 +1,13 @@
+[package]
+name = "galvanize-rs-macros"
+version = "0.1.0"
+edition = "2024"
+description = "Procedural macros for galvanize-rs. Use them via the galvanize-rs re-exports."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = "2.0.119"

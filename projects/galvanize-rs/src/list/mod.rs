@@ -117,9 +117,10 @@ impl<T: Clone, S: PointerStrategy> GList<T, S> {
 
   /// Returns an independent list holding clones of the elements.
   ///
-  /// Unlike [`Clone::clone`], changes to the copy do not affect the original.
-  pub fn deep_clone(&self) -> Self {
-    Self(self.0.deep_clone())
+  /// Unlike [`Clone::clone`], changes to the copy do not affect the original. The copy is
+  /// one level deep: elements that are themselves handles are still shared with the original.
+  pub fn duplicate(&self) -> Self {
+    Self(self.0.duplicate())
   }
 }
 
@@ -131,7 +132,7 @@ impl<T: Clone, S: PointerStrategy> Default for GList<T, S> {
 }
 
 /// Clones the handle, not the data; both handles refer to the same list.
-/// Use [`GList::deep_clone`] for an independent copy.
+/// Use [`GList::duplicate`] for an independent copy.
 impl<T: Clone, S: PointerStrategy> Clone for GList<T, S> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
@@ -189,7 +190,7 @@ mod tests {
     shared.push(4);
     assert_eq!(list.len(), 3);
 
-    let copy = list.deep_clone();
+    let copy = list.duplicate();
     copy.clear();
     assert_eq!(list.len(), 3);
   }

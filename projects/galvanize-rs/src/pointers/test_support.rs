@@ -30,9 +30,18 @@ macro_rules! pointer_contract_tests {
     }
 
     #[test]
-    fn deep_clone_is_independent() {
+    fn ptr_eq_is_true_only_for_shared_handles() {
+      let a = $pointer::new(vec![1]);
+      let b = a.clone();
+      let c = a.duplicate();
+      assert!(a.ptr_eq(&b));
+      assert!(!a.ptr_eq(&c));
+    }
+
+    #[test]
+    fn duplicate_is_independent() {
       let a = $pointer::new(vec![1, 2]);
-      let b = a.deep_clone();
+      let b = a.duplicate();
       assert_eq!(b.read_with(|v| v.clone()), vec![1, 2]);
 
       b.write_with(|v| v.clear());

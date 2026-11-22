@@ -58,7 +58,7 @@ fn mixed<P: MutablePointer<Vec<u64>> + Sync>(bencher: Bencher, len: usize) {
   });
 }
 
-/// Cost of `clone()` (an `Arc` bump) versus `deep_clone()` (copies the value).
+/// Cost of `clone()` (an `Arc` bump) versus `duplicate()` (copies the value).
 #[divan::bench(types = [ArcMutexPointer<Vec<u64>>, ArcRwLockPointer<Vec<u64>>, ArcSwapPointer<Vec<u64>>])]
 fn clone<P: MutablePointer<Vec<u64>> + Sync>(bencher: Bencher) {
   let p = pointer::<P>(16);
@@ -66,7 +66,7 @@ fn clone<P: MutablePointer<Vec<u64>> + Sync>(bencher: Bencher) {
 }
 
 #[divan::bench(types = [ArcMutexPointer<Vec<u64>>, ArcRwLockPointer<Vec<u64>>, ArcSwapPointer<Vec<u64>>], args = SIZES)]
-fn deep_clone<P: MutablePointer<Vec<u64>> + Sync>(bencher: Bencher, len: usize) {
+fn duplicate<P: MutablePointer<Vec<u64>> + Sync>(bencher: Bencher, len: usize) {
   let p = pointer::<P>(len);
-  bencher.bench(|| black_box(&p).deep_clone());
+  bencher.bench(|| black_box(&p).duplicate());
 }

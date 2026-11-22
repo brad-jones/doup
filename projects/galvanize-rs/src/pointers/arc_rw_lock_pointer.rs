@@ -18,7 +18,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 /// b.write_with(|v| v.push(3));
 /// assert_eq!(a.read_with(|v| v.len()), 3);
 ///
-/// let c = a.deep_clone(); // independent copy
+/// let c = a.duplicate(); // independent copy
 /// c.write_with(|v| v.clear());
 /// assert_eq!(a.read_with(|v| v.len()), 3);
 /// ```
@@ -82,6 +82,10 @@ impl<T: Clone> MutablePointer<T> for ArcRwLockPointer<T> {
 
   fn write_with<R>(&self, mut f: impl FnMut(&mut T) -> R) -> R {
     f(&mut self.write())
+  }
+
+  fn ptr_eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
   }
 }
 

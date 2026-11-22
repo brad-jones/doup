@@ -11,7 +11,7 @@ use std::borrow::Borrow;
 /// the closure passed to `read/write_with` you should be deadlock free.
 ///
 /// Cloning the pointer yields another handle to the *same* value, whereas
-/// [`MutablePointer::deep_clone`] copies the value into an independent pointer.
+/// [`MutablePointer::duplicate`] copies the value into an independent pointer.
 pub trait MutablePointer<T: Clone>: Clone {
   /// Creates a new pointer owning `value`.
   fn new(value: T) -> Self;
@@ -51,8 +51,15 @@ pub trait MutablePointer<T: Clone>: Clone {
     self.write_with(|current| *current = next.clone())
   }
 
+  /// Returns `true` if both handles share the same underlying value (one is a
+  /// clone of the other), as opposed to merely holding equal values.
+  fn ptr_eq(&self, other: &Self) -> bool;
+
   /// Copies the current value into a new, independent pointer.
-  fn deep_clone(&self) -> Self {
+  ///
+  /// This is one level deep: the value itself is cloned with [`Clone`], so any handles inside it (nested
+  /// pointers, lists, classes) are still shared with the original.
+  fn duplicate(&self) -> Self {
     Self::new(self.get())
   }
 }

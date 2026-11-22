@@ -1,215 +1,193 @@
 # galvanize-rs
 
-## Classes
+Write Rust like a higher-level language. galvanize-rs trades some runtime performance for a simpler model without the
+borrow checker pain: every type is a cheaply cloneable, shared handle, like an object reference in Python, Go or C#.
+Cloning a handle yields another handle to the _same_ value.
 
-The `#[class]` attribute turns a struct into a shared handle, like an object reference in Python, Go or C#. Each field
-gets a getter, a setter and an updater with the field's visibility. Every class is followed by one `#[class_methods]`
-block (which may be empty), where you write its constructor using plain values:
+Reads and writes go through closures that you can call from anywhere, you never _(or rarely)_ hold a reference & `mut`
+is basically never needed.
+
+I know the purest will cringe at this, but sometimes practicality wins & it's worth the trade-off. Hot paths can still
+be optimized with Rust's usual low level control & safety, but everyday code becomes simpler and faster to reason about.
+
+I'm sure in another 1-2 years I will look back this project and think this is utter garbage as I have done for many
+other experiments, it's just part of my learning process.
+
+> **Whats with the name?** Rust's name comes from oxidation, so the best names for this idea are about what you do to
+> metal to make it easier to handle. Top pick: Galvanize. Galvanizing coats metal in a protective layer so it doesn't
+> rust. That's what your framework does: it wraps the borrow checker's sharp edges in a protective runtime layer. It's
+> also a verb, so use galvanize::prelude::*; reads well.
+>
+> _NB: Thats from Claude of course, and it looks like there are a million other crates called galvanize so we might have
+> a name change in the future but for now I'm rolling with it._
+
+## Types
+
+| Type                         | Like                   | Notes                                              |
+| ---------------------------- | ---------------------- | -------------------------------------------------- |
+| `GPointer<T>`                | a shared variable      | `read_with`, `write_with`, `get`, `set`            |
+| `GList<T>`                   | `Vec<T>`               | `list![1, 2, 3]`                                   |
+| `GDict<K, V>`                | `BTreeMap<K, V>`       | `dict! { "a" => 1 }`                               |
+| `GString`, `GOsStr`, `GPath` | `str`, `OsStr`, `Path` | immutable and `Arc` backed, `s!("x")`, `sf!("{}")` |
+
+Elements are stored by value and must be `Clone`, so accessors such as `GList::get` return clones rather than
+references. Make the elements themselves handles (another `GList`, `GPointer`, ...) when you want that to be cheap.
 
 ```rust
-use galvanize_rs::{GList, GString, class, class_methods, sf};
+use galvanize_rs::{GList, GPointer, GString, list, sf};
+
+#[derive(Clone)]
+struct Counter {
+  count: GPointer<i32>,
+}
+
+let counter = Counter { count: GPointer::new(0) };
+let alias = counter.clone(); // the same counter
+alias.count.write_with(|n| *n += 1);
+assert_eq!(counter.count.get(), 1);
+
+let names: GList<GString> = list![sf!("{}-{}", "a", 1)];
+names.push("b");
+```
+
+## Class-like objects
+
+`#[class]` turns a struct into a heap allocated object handle with Java/C#-style identity: cloning it yields another
+handle to the same object. It generates a getter and `set_` setter per field, identity `PartialEq`, and `Deref` to the
+inner `GPointer` for multi-field `read_with`/`write_with`. See [examples/classes.rs](examples/classes.rs).
+
+```rust
+use galvanize_rs::class;
 
 #[class]
-pub struct Person {
-  pub name: GString,      // pub fn name(), set_name(), update_name()
-  cities: GList<GString>, // private fn cities(), set_cities(), update_cities()
+#[derive(Default)]
+struct Counter {
+  count: i32,
 }
 
-#[class_methods]
-impl Person {
-  pub fn new(first_name: impl Into<GString>, last_name: impl Into<GString>) -> Self {
-    Self::from_data(PersonData {
-      name: sf!("{} {}", first_name.into(), last_name.into()),
-      cities: GList::new(),
-    })
-  }
+let a = Counter::default(); // count starts at 0
+let b = a.clone();
+b.set_count(b.count() + 1);
+assert_eq!(a.count(), 1);
+assert_eq!(a, b); // identity, not field values
+```
 
-  pub fn visit(&self, city: impl Into<GString>) {
-    self.cities().push(city);
-  }
+## Traits and `#[any]`
+
+A trait can't see the fields of the class implementing it, so a default method that needs data must call a required
+method that returns a handle to a class holding it (see [examples/shapes.rs](examples/shapes.rs)). To store different
+classes behind one trait in a `GList`, put `#[any]` on the trait. It generates a cloneable `AnyShape` wrapper for `trait
+Shape`, so `let shapes: GList<AnyShape> = list![&circle, &rect];` just works.
+
+## Cloning: shared handles vs copies
+
+There are three levels, and it's worth being precise about which one you want:
+
+| Call             | Result                                                                      |
+| ---------------- | --------------------------------------------------------------------------- |
+| `clone()`        | Another handle to the _same_ object. Cheap (an `Arc` bump).                 |
+| `duplicate()`    | A new, independent object with its own copy of the fields (one level deep). |
+| _(not provided)_ | A recursive copy of everything reachable from the object.                   |
+
+`duplicate()` is **one level deep**. It clones the object's own fields with `Clone`, and cloning a field that is itself
+a handle (another class, a `GList`, a `GDict`, a `GPointer`, ...) just yields another handle to the same thing. So the
+copy is independent of the original for plain fields, but still shares everything nested inside it:
+
+```rust
+let followup = task.duplicate();
+followup.set_title("Something else".into()); // independent: `task` keeps its title
+followup.assignee().unwrap().set_name("Zed".into()); // shared: `task`'s assignee is renamed too
+```
+
+If you need independence for a nested handle, copy it yourself and set it on the copy:
+
+```rust
+let followup = task.duplicate();
+if let Some(user) = task.assignee() {
+  followup.set_assignee(Some(user.duplicate()));
 }
 ```
 
-Each field lives in its own pointer, chosen by a `PointerStrategy` (`ArcRwLockStrategy` by default). Pick another for
-the whole class with `#[class(pointer_strategy = ArcSwapStrategy)]`, or for a single field with
-`#[class_prop(pointer_strategy = ...)]`. Mark a public field `#[class_prop(readonly)]` to keep its setter private.
+A fully recursive deep clone is deliberately not provided. It would need every field type to opt in to a `DeepClone`
+trait (so plain std types and foreign types would need wrappers), and it would have to handle cycles (a task pointing at
+a user who points back at the task) and diamonds (two tasks sharing one user should still share one user in the copy),
+which means tracking object identity during the copy.
 
-Like in Java or C#, a concrete class that doesn't declare a constructor (a `new`, or any associated function returning
-`Self`) gets a default one: `new()`, plus a `Default` impl, which set every field, including inherited ones, to its
-`Default::default()`. It's only callable when all those fields implement `Default`.
+## Pointer strategies
+
+Every type above lives in a `MutablePointer`, chosen by a `PointerStrategy` type parameter that defaults to
+`ArcRwLockStrategy`. Pick another to change the trade-off:
+
+- **`ArcRwLockStrategy`** (the default): many concurrent readers, one writer.
+- **`ArcMutexStrategy`**: one accessor at a time, readers included.
+- **`ArcSwapStrategy`**: lock-free reads, but every write copies the value and the write closure may be retried.
+
+```rust
+use galvanize_rs::{ArcSwapStrategy, GList, GPointer};
+
+let a: GPointer<i32, ArcSwapStrategy> = GPointer::with_strategy(0);
+let b: GList<i32, ArcSwapStrategy> = GList::with_strategy();
+```
+
+[benches/pointers.rs](benches/pointers.rs) compares them (`task bench -- pointers`).
+
+### Deadlocks
+
+The locking strategies (`ArcRwLockStrategy`, the default, and `ArcMutexStrategy`) are **not reentrant**. While a
+`read_with`, `write_with`, `with_x` or `update_x` closure is running, the object is locked, and so is every other handle
+to it. Touching the same object again from inside the closure blocks forever. There is no panic or error, the thread
+just hangs.
+
+The catch is that the generated class accessors (`x()`, `set_x()`, `with_x()`, `update_x()`) and `get()`/`set()` all
+take the lock too. They look like plain field access, so it's easy to call one by accident:
 
 ```rust
 #[class]
-pub struct Settings {
-  pub verbose: bool,
-  pub tags: GList<GString>,
+#[derive(Default)]
+struct Counter {
+  count: i32,
 }
 
-#[class_methods]
-impl Settings {}
+let counter = Counter::default();
+let alias = counter.clone(); // a handle to the same object, so it shares the lock
 
-let settings = Settings::new(); // verbose: false, tags: []
+// DEADLOCK: `count()` needs the lock that `write_with` already holds.
+counter.write_with(|data| data.count = counter.count() + 1);
+
+// DEADLOCK: so does a setter inside a read, and so does going through any alias.
+counter.read_with(|_| alias.set_count(1));
+
+// DEADLOCK: `update_count` holds the lock while `count()` tries to take it.
+counter.update_count(|n| *n = counter.count() + 1);
 ```
 
-Classes can be generic, e.g. `struct Node<T> { value: T, next: Option<Self> }`. Type parameters are bounded with
-`Clone + Send + Sync + 'static` for you, like `#[derive]` does with `Clone`.
-
-### Inheritance
-
-A class declared `#[class(open)]` can be extended with `#[class(extends = Parent)]`, naming only the immediate parent.
-Mark methods `#[class_virtual]` to let subclasses override them with `#[class_override]` (with the same signature and
-visibility), and call the parent's version with `super_x()`. Calls are late-bound, like in Python, Java or C#:
+The same goes for any call that reaches the object indirectly, such as a method on another class that holds a handle
+back to this one. Keep the closure self-contained, either by using only the value the closure is handed:
 
 ```rust
-#[class(open)]
-pub struct Animal {
-  pub name: GString,
-}
-
-#[class_methods]
-impl Animal {
-  pub fn init(name: &str) -> AnimalData {
-    AnimalData { name: name.into() }
-  }
-
-  #[class_virtual]
-  pub fn speak(&self) -> GString {
-    "...".into()
-  }
-
-  pub fn describe(&self) -> GString {
-    sf!("{} says {}", self.name(), self.speak())
-  }
-}
-
-#[class(extends = Animal)]
-pub struct Dog {
-  pub good: bool,
-}
-
-#[class_methods]
-impl Dog {
-  pub fn new(name: &str) -> Self {
-    Self::from_data(DogData { base: Animal::init(name), good: true })
-  }
-
-  #[class_override]
-  pub fn speak(&self) -> GString {
-    sf!("Woof (not {})", self.super_speak())
-  }
-}
-
-let animal: Animal = Dog::new("Rex").upcast();
-assert_eq!(animal.describe(), "Rex says Woof (not ...)");
-assert!(animal.downcast::<Dog>().unwrap().good());
+counter.write_with(|data| data.count += 1);
+counter.update_count(|n| *n += 1);
 ```
 
-A subclass dereferences to its parent, so the parent's accessors and methods work on it, and `upcast`, `is` and
-`downcast` convert between the classes of a hierarchy. Virtual methods can be `async`.
-
-A `#[class(abstract)]` class can't be instantiated, and may declare `#[class_abstract] fn x(&self);` methods without a
-body, which every concrete subclass must implement (checked at compile time). As in Scala, implementing an abstract
-method doesn't need `#[class_override]`, but replacing an implementation does, so a method can never silently shadow an
-inherited virtual one. With `implements = Trait`, and `#[class_interface]` on the trait, the class's methods named after
-the trait's methods implement `Trait`, whether they're ordinary, virtual or abstract:
+or by reading first, then writing, with the lock released in between:
 
 ```rust
-#[class_interface]
-pub trait Shape {
-  fn area(&self) -> f64;
-}
-
-#[class(abstract, implements = Shape)]
-pub struct Polygon {}
-
-#[class_methods]
-impl Polygon {
-  #[class_abstract]
-  fn area(&self) -> f64;
-
-  #[class_abstract]
-  fn corners(&self) -> u64; // not part of `Shape`, which doesn't declare it
-}
-
-#[class(extends = Polygon)]
-pub struct Square {
-  pub side: f64,
-}
-
-#[class_methods]
-impl Square {
-  fn area(&self) -> f64 {
-    self.side() * self.side()
-  }
-
-  fn corners(&self) -> u64 {
-    4
-  }
-}
-
-let square = Square::new(); // a default constructor, as `Square` declares none
-square.set_side(2.0);
+let next = counter.count() + 1;
+counter.set_count(next);
 ```
 
-A proc macro can't see the methods of a trait without `#[class_interface]`, such as one from another crate, so the
-class's virtual and abstract methods declared without a visibility, like those of a trait impl, implement it instead.
+Reading then writing as two steps isn't atomic: another thread can change the value in between. If you need the whole
+read-modify-write to be atomic, do it inside one closure using the value it is given, as above.
 
-An `open` class must be declared at the root of its crate (final classes can live anywhere). Classes get single
-inheritance; for multiple inheritance, implement traits as interfaces and mixins, as
-[examples/traits.rs](examples/traits.rs) shows (`cargo run -p galvanize-rs --example traits`).
+Calls on _different_ objects are fine, so `a.update_count(|n| *n += b.count())` is safe as long as nothing inside `b`
+ends up locking `a`, and as long as no other thread locks `a` then `b` in the opposite order (that's the classic
+lock-ordering deadlock).
 
-### Class-level members
+`ArcSwapStrategy` reads never block, so the examples above don't hang with it. The write closure may still be retried
+and sees a snapshot, which is why it shouldn't have side effects. Don't rely on this if you might change strategy later.
+See the docs on `ArcRwLockPointer` for more on the underlying pointers.
 
-Associated functions (without `self`) and constants take the same markers, and are late-bound like Python's `cls` or
-PHP's `static::`: in their bodies, `Self` is the class they're accessed through. Subclasses inherit them as their own
-associated items, and an override calls its parent's implementation with `Self::super_x()`:
+### Thread safety
 
-```rust
-#[class(abstract)]
-pub struct ConfigFile {}
-
-#[class_methods]
-impl ConfigFile {
-  #[class_abstract]
-  pub const NAMES: &'static [&'static str];
-
-  #[class_virtual]
-  pub fn locate(dir: &str) -> String {
-    format!("{dir}/{}", Self::NAMES[0])
-  }
-}
-
-#[class(extends = ConfigFile)]
-pub struct BotConfigFile {}
-
-#[class_methods]
-impl BotConfigFile {
-  pub const NAMES: &'static [&'static str] = &["bot.yaml"]; // implements the abstract constant
-}
-
-assert_eq!(BotConfigFile::locate("/etc"), "/etc/bot.yaml");
-```
-
-Rust only binds `Self` late in a trait's default methods, so these bodies are generic over the class, and can only reach
-other class-level members through `Self` (a final class's overrides, which nothing inherits, are the exception). A
-`#[class_interface]` trait may declare class-level members too: an open class implementing one with them implements it
-for all its subclasses, so they satisfy `T: Trait`. Subclasses repeat the signatures they inherit, so the types those
-name must also resolve where the subclass is declared.
-
-### Runtime strategies
-
-How a hierarchy is implemented is chosen by its root, with `#[class(runtime_strategy = ...)]`. Both strategies generate
-the same API, so switching is a one-line change:
-
-- **`SafeRuntimeStrategy`** (the default) generates no `unsafe` code. Its handles grow with the depth of the hierarchy,
-  and calling an override clones an `Arc`, which contends when many threads share an object.
-- **`UnsafeRuntimeStrategy`** uses a small, Miri-tested `unsafe` kernel with C++ style layouts and vtables. Its handles
-  are four words at any depth, and virtual calls take about a nanosecond without contending.
-
-[benches/inheritance.rs](benches/inheritance.rs) compares them (`task bench -- inheritance`), and
-[the research behind them](../../docs/research/galvanize-rs-true-inheritance/README.md) explains the trade-offs.
-
-See the `class` macro docs for everything that's generated and its limitations, and the runnable examples:
-[examples/class.rs](examples/class.rs) (`cargo run -p galvanize-rs --example class`),
-[examples/generic_class.rs](examples/generic_class.rs) (`--example generic_class`) and
-[examples/inheritance.rs](examples/inheritance.rs) (`--example inheritance`).
+The handles are `Send + Sync` whenever the value they hold is, so they work in both threaded and async code. No bounds
+are imposed on the value otherwise.

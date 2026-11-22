@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// b.write_with(|v| v.push(3));
 /// assert_eq!(a.read_with(|v| v.len()), 3);
 ///
-/// let c = a.deep_clone(); // independent copy
+/// let c = a.duplicate(); // independent copy
 /// c.write_with(|v| v.clear());
 /// assert_eq!(a.read_with(|v| v.len()), 3);
 /// ```
@@ -45,6 +45,10 @@ impl<T: Clone> MutablePointer<T> for ArcSwapPointer<T> {
     });
 
     result.expect("rcu runs the closure at least once")
+  }
+
+  fn ptr_eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
   }
 }
 

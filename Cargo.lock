@@ -1036,8 +1036,18 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "divan",
+ "galvanize-rs-macros",
  "tokio",
  "trybuild",
+]
+
+[[package]]
+name = "galvanize-rs-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

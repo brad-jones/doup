@@ -1,0 +1,5 @@
+error: the generated method `get` for this field collides with another method or field
+ --> tests/ui/reserved_field_name.rs:5:3
+  |
+5 |   get: i32,
+  |   ^^^

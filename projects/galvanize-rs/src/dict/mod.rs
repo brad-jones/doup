@@ -193,9 +193,10 @@ impl<K: Ord + Clone, V: Clone, S: PointerStrategy> GDict<K, V, S> {
 
   /// Returns an independent dict holding clones of the entries.
   ///
-  /// Unlike [`Clone::clone`], changes to the copy do not affect the original.
-  pub fn deep_clone(&self) -> Self {
-    Self(self.0.deep_clone())
+  /// Unlike [`Clone::clone`], changes to the copy do not affect the original. The copy is
+  /// one level deep: values that are themselves handles are still shared with the original.
+  pub fn duplicate(&self) -> Self {
+    Self(self.0.duplicate())
   }
 }
 
@@ -207,7 +208,7 @@ impl<K: Ord + Clone, V: Clone, S: PointerStrategy> Default for GDict<K, V, S> {
 }
 
 /// Clones the handle, not the data; both handles refer to the same dict.
-/// Use [`GDict::deep_clone`] for an independent copy.
+/// Use [`GDict::duplicate`] for an independent copy.
 impl<K: Clone, V: Clone, S: PointerStrategy> Clone for GDict<K, V, S> {
   fn clone(&self) -> Self {
     Self(self.0.clone())
@@ -272,7 +273,7 @@ mod tests {
     shared.remove("a");
     assert_eq!(dict.len(), 1);
 
-    let copy = dict.deep_clone();
+    let copy = dict.duplicate();
     copy.clear();
     assert_eq!(dict.len(), 1);
   }
