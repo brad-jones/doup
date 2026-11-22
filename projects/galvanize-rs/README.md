@@ -120,6 +120,8 @@ Every type above lives in a `MutablePointer`, chosen by a `PointerStrategy` type
 
 - **`ArcRwLockStrategy`** (the default): many concurrent readers, one writer.
 - **`ArcMutexStrategy`**: one accessor at a time, readers included.
+- **`ParkingLotRwLockStrategy`** / **`ParkingLotMutexStrategy`**: the same shapes using `parking_lot` locks, which never
+  poison.
 - **`ArcSwapStrategy`**: lock-free reads, but every write copies the value and the write closure may be retried.
 
 ```rust

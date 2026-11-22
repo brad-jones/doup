@@ -260,7 +260,9 @@ macro_rules! dict {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::pointers::{ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy};
+  use crate::pointers::{
+    ArcMutexStrategy, ArcRwLockStrategy, ArcSwapStrategy, ParkingLotMutexStrategy, ParkingLotRwLockStrategy,
+  };
 
   fn exercise<S: PointerStrategy>() {
     let dict: GDict<String, i32, S> = GDict::with_strategy();
@@ -282,6 +284,8 @@ mod tests {
   fn works_with_every_strategy() {
     exercise::<ArcRwLockStrategy>();
     exercise::<ArcMutexStrategy>();
+    exercise::<ParkingLotRwLockStrategy>();
+    exercise::<ParkingLotMutexStrategy>();
     exercise::<ArcSwapStrategy>();
   }
 }

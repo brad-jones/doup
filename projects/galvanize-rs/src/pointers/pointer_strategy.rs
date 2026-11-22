@@ -1,4 +1,6 @@
-use super::{ArcMutexPointer, ArcRwLockPointer, ArcSwapPointer, MutablePointer};
+use super::{
+  ArcMutexPointer, ArcRwLockPointer, ArcSwapPointer, MutablePointer, ParkingLotMutexPointer, ParkingLotRwLockPointer,
+};
 
 /// Selects which [`MutablePointer`] a collection such as [`crate::GList`] or
 /// [`crate::GDict`], store their data in.
@@ -25,6 +27,22 @@ pub struct ArcMutexStrategy;
 
 impl PointerStrategy for ArcMutexStrategy {
   type Ptr<T: Clone> = ArcMutexPointer<T>;
+}
+
+/// Backs a collection with [`ParkingLotRwLockPointer`] (`parking_lot::RwLock`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ParkingLotRwLockStrategy;
+
+impl PointerStrategy for ParkingLotRwLockStrategy {
+  type Ptr<T: Clone> = ParkingLotRwLockPointer<T>;
+}
+
+/// Backs a collection with [`ParkingLotMutexPointer`] (`parking_lot::Mutex`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ParkingLotMutexStrategy;
+
+impl PointerStrategy for ParkingLotMutexStrategy {
+  type Ptr<T: Clone> = ParkingLotMutexPointer<T>;
 }
 
 /// Backs a collection with [`ArcSwapPointer`].
