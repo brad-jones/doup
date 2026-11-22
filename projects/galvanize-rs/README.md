@@ -1,22 +1,36 @@
-# galvanize-rs
+<p align="center">
+  <img src="./docs/images/hero.png" alt="galvanize-rs" width="100%">
+</p>
 
-Write Rust like a higher-level language. galvanize-rs trades some runtime performance for a simpler model without the
-borrow checker pain: every type is a cheaply cloneable, shared handle, like an object reference in Python, Go or C#.
-Cloning a handle yields another handle to the _same_ value.
+<h1 align="center">galvanize-rs</h1>
 
-Reads and writes go through closures that you can call from anywhere, you never _(or rarely)_ hold a reference & `mut`
-is basically never needed.
+<p align="center">
+  <a href="https://github.com/brad-jones/doup/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/brad-jones/doup/ci.yaml?branch=main&logo=github&label=CI" alt="CI"></a>
+  <a href="https://crates.io/crates/galvanize-rs"><img src="https://img.shields.io/crates/v/galvanize-rs?logo=rust" alt="crates.io"></a>
+  <a href="https://docs.rs/galvanize-rs"><img src="https://img.shields.io/docsrs/galvanize-rs?logo=docs.rs" alt="docs.rs"></a>
+  <a href="https://crates.io/crates/galvanize-rs"><img src="https://img.shields.io/crates/d/galvanize-rs" alt="downloads"></a>
+  <img src="https://img.shields.io/badge/edition-2024-orange?logo=rust" alt="Rust edition 2024">
+  <a href="https://github.com/brad-jones/doup"><img src="https://img.shields.io/github/last-commit/brad-jones/doup?logo=git" alt="last commit"></a>
+</p>
 
-I know the purest will cringe at this, but sometimes practicality wins & it's worth the trade-off. Hot paths can still
-be optimized with Rust's usual low level control & safety, but everyday code becomes simpler and faster to reason about.
+Write Rust like a higher-level language. galvanize-rs trades some runtime performance for a simpler model based on the
+[interior mutability](https://doc.rust-lang.org/reference/interior-mutability.html) pattern without the borrow checker
+pain: every type is a cheaply cloneable, shared handle, like an object reference in Python, Go or C#. Cloning a handle
+yields another handle to the _same_ value.
 
-I'm sure in another 1-2 years I will look back this project and think this is utter garbage as I have done for many
-other experiments, it's just part of my learning process.
+Reads and writes go through closures that you can call from anywhere, you never _(or rarely)_ hold a direct reference to
+a value & `mut` is basically never needed. I know the purest will cringe at this, but sometimes practicality wins & it's
+worth the trade-off. Hot paths can still be optimized with Rust's usual low level control & safety, but everyday code
+becomes simpler and faster to reason about.
+
+I'm sure in another 1-2 years I will look back at this project and think this is utter garbage as I have done for many
+other experiments _(eg: [goerr](https://github.com/brad-jones/goerr)🤦 - to clarify if I was building a Go project today
+I would happily use `if err != nil { ... }` and not the mess I built here)_, it's just part of my learning process. 😂
 
 > **Whats with the name?** Rust's name comes from oxidation, so the best names for this idea are about what you do to
 > metal to make it easier to handle. Top pick: Galvanize. Galvanizing coats metal in a protective layer so it doesn't
 > rust. That's what your framework does: it wraps the borrow checker's sharp edges in a protective runtime layer. It's
-> also a verb, so use galvanize::prelude::*; reads well.
+> also a verb, so use `galvanize::prelude::*;` reads well.
 >
 > _NB: Thats from Claude of course, and it looks like there are a million other crates called galvanize so we might have
 > a name change in the future but for now I'm rolling with it._
