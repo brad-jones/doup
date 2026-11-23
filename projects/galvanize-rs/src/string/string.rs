@@ -88,6 +88,12 @@ impl AsRef<Path> for GString {
   }
 }
 
+impl AsRef<[u8]> for GString {
+  fn as_ref(&self) -> &[u8] {
+    &*self.0.as_bytes()
+  }
+}
+
 impl Borrow<str> for GString {
   fn borrow(&self) -> &str {
     &self.0
