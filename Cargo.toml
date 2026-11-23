@@ -5,4 +5,5 @@ members = [
   "projects/galvanize-rs",
   "projects/galvanize-rs/macros",
   "projects/git",
+  "projects/plugins/host",
 ]

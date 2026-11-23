@@ -8,13 +8,15 @@ bindgen!({
 
 pub use doup::plugin::host_api;
 
+use crate::plugin::IState;
+
 pub struct HostState {
   wasi: WasiCtx,
   table: ResourceTable,
 }
 
-impl HostState {
-  pub fn new(configure: impl FnOnce(&mut WasiCtxBuilder)) -> Self {
+impl IState for HostState {
+  fn new(configure: impl FnOnce(&mut WasiCtxBuilder)) -> Self {
     let mut builder = WasiCtxBuilder::new();
     configure(&mut builder);
     Self {
