@@ -4,6 +4,7 @@ members = [
   "projects/cli",
   "projects/config",
   "projects/git",
+  "projects/plugins/ecosystem/cargo",
   "projects/plugins/ecosystem/doup",
   "projects/plugins/host",
   "projects/plugins/platform/github",

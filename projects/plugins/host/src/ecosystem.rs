@@ -57,22 +57,40 @@ pub struct EcosystemPlugin {
 }
 
 impl EcosystemPlugin {
-  /// Creates a plugin handle for `plugin`, resolving its module from
-  /// `module_search_dirs`.
+  /// Creates a plugin handle for `plugin`, resolving its module from `module_search_dirs`.
   pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
     Self {
       session_pool: PluginSessionPool::new(None, plugin, module_search_dirs),
     }
   }
 
-  /// Calls the plugin's `hello-world` export and returns its greeting.
+  /// Like [`Self::new`], but eagerly checks a session out and straight back in.
+  ///
+  /// This exercises the plugin (compilation, instantiation and configuration) so that
+  /// failures surface here rather than during real work. The warmed session stays pooled.
   ///
   /// # Errors
   ///
-  /// Returns an error if a session cannot be checked out or the call traps.
-  pub async fn hello_world(&self) -> Result<String> {
+  /// Returns an error if the plugin cannot be loaded, instantiated or configured.
+  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self> {
+    let instance = Self::new(plugin, module_search_dirs);
+    let session = instance.session_pool.checkout_session().await?;
+    instance.session_pool.checkin_session(session, Ok(()))?;
+    Ok(instance)
+  }
+
+  /// Calls the plugin's `discover-deps` export.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a session cannot be checked out, the call traps, or the plugin
+  /// itself reports an error.
+  pub async fn discover_deps(&self) -> Result<Vec<Dependency>> {
     let mut session = self.session_pool.checkout_session().await?;
-    let result = session.bindings.call_hello_world(&mut session.store).await;
-    self.session_pool.checkin_session(session, result)
+    let result = session.bindings.call_discover_deps(&mut session.store).await;
+    self
+      .session_pool
+      .checkin_session(session, result)?
+      .map_err(anyhow::Error::msg)
   }
 }

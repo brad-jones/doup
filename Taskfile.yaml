@@ -155,6 +155,7 @@ tasks:
       - init:rustup
     cmds:
       - cargo build -p doup-ecosystem-plugin-doup --release --target wasm32-wasip2
+      - cargo build -p doup-ecosystem-plugin-cargo --release --target wasm32-wasip2
       - cargo build -p doup-platform-plugin-github --release --target wasm32-wasip2
 
   run:update:

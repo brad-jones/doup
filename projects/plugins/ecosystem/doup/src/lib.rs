@@ -3,7 +3,6 @@ wit_bindgen::generate!({
     path: "../../wit",
 });
 
-use doup::plugin::host_api;
 use std::sync::OnceLock;
 
 static CONFIG: OnceLock<serde_json::Value> = OnceLock::new();
@@ -16,13 +15,8 @@ impl Guest for Plugin {
     CONFIG.set(value).map_err(|_| "already configured".to_string())
   }
 
-  fn hello_world() -> String {
-    let version = host_api::host_version();
-    let config = CONFIG
-      .get()
-      .map_or_else(|| "unconfigured".to_string(), |c| c.to_string());
-    println!("[plugin DOUP] Hello, {version}! config: {config}");
-    "hello world".to_string()
+  fn discover_deps() -> Result<Vec<Dependency>, String> {
+    todo!()
   }
 }
 

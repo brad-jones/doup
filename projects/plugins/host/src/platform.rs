@@ -57,12 +57,26 @@ pub struct PlatformPlugin {
 }
 
 impl PlatformPlugin {
-  /// Creates a plugin handle for `plugin`, resolving its module from
-  /// `module_search_dirs`.
+  /// Creates a plugin handle for `plugin`, resolving its module from `module_search_dirs`.
   pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
     Self {
       session_pool: PluginSessionPool::new(None, plugin, module_search_dirs),
     }
+  }
+
+  /// Like [`Self::new`], but eagerly checks a session out and straight back in.
+  ///
+  /// This exercises the plugin (compilation, instantiation and configuration) so that
+  /// failures surface here rather than during real work. The warmed session stays pooled.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the plugin cannot be loaded, instantiated or configured.
+  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self> {
+    let instance = Self::new(plugin, module_search_dirs);
+    let session = instance.session_pool.checkout_session().await?;
+    instance.session_pool.checkin_session(session, Ok(()))?;
+    Ok(instance)
   }
 
   /// Calls the plugin's `hello-world` export and returns its greeting.

@@ -32,7 +32,7 @@ pub struct DoupRepoConfigFile {
   source: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DoupRepoPlugin {
   /// Either a plugin package reference in wkg format (namespace:package@version) or a path to an
   /// explicit wasm module (eg: ./plugin.wasm).

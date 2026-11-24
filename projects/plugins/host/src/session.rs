@@ -206,6 +206,8 @@ impl<W: PluginWorld> PluginSessionPool<W> {
       return Ok(found.clone());
     }
 
+    // TODO: Remember we also need to somehow handle doup.lock
+    // when we start downloading packages from the internet
     if is_wkg_reference(plugin_ref) {
       bail!("wkg package references are not supported yet: {plugin_ref}");
     }

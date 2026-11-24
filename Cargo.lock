@@ -914,6 +914,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "doup-ecosystem-plugin-cargo"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "wit-bindgen 0.63.0",
+]
+
+[[package]]
 name = "doup-ecosystem-plugin-doup"
 version = "0.1.0"
 dependencies = [

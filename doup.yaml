@@ -7,3 +7,4 @@ platform:
 
 ecosystems:
   - use: ./target/wasm32-wasip2/release/doup_ecosystem_plugin_doup.wasm
+  - use: ./target/wasm32-wasip2/release/doup_ecosystem_plugin_cargo.wasm

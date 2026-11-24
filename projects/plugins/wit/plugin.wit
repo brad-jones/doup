@@ -4,7 +4,7 @@ interface host-api {
   host-version: func() -> string;
 }
 
-// Host-only world used to generate the shared host-api bindings.
+/// Host-only world used to generate the shared host-api bindings.
 world shared {
   import host-api;
 }
@@ -12,7 +12,7 @@ world shared {
 world platform {
   import host-api;
 
-  // Called once, before any other export, with the repo config's `with` as a JSON object string.
+  /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
   export hello-world: func() -> string;
 }
@@ -20,7 +20,34 @@ world platform {
 world ecosystem {
   import host-api;
 
-  // Called once, before any other export, with the repo config's `with` as a JSON object string.
+  record dependency {
+    /// The name of the dependency, unique within this ecosystem, eg: "@types/node".
+    name: string,
+
+    /// A dependency may occur many times, think monorepo with
+    /// many manifests that all depend on a common dependency.
+    occurrences: list<occurrence>,
+  }
+
+  record occurrence {
+    /// Manifest path relative to the workspace root, eg: "apps/web/package.json".
+    manifest-path: string,
+
+    /// Lockfile path relative to the workspace root, eg: "apps/web/package-lock.json".
+    /// Not all ecosystems have a lockfile so this is optional.
+    lock-path: option<string>,
+
+    /// Version as currently declared, eg: "^1.2.3". Opaque to the host.
+    current-version: string,
+
+    /// The version as locked by lock-path, eg: "1.2.3". Opaque to the host.
+    /// No lockfile, then this will also be none.
+    locked-version: option<string>,
+  }
+
+  /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
-  export hello-world: func() -> string;
+
+  /// Returns a list of dependencies discovered in the current workspace.
+  export discover-deps: func() -> result<list<dependency>, string>;
 }
