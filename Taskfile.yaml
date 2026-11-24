@@ -6,11 +6,6 @@ dotenv: [".env"]
 set: [pipefail]
 shopt: [globstar]
 
-vars:
-  # Miri only ships on nightly, pinned so its results are reproducible. Not every nightly has
-  # Miri, check https://rust-lang.github.io/rustup-components-history/ before bumping.
-  MIRI_TOOLCHAIN: nightly-2026-11-19
-
 tasks:
   init:
     desc: Setup dev env (anything that pixi can't install and setup for us).
@@ -139,22 +134,6 @@ tasks:
       - init:rustup
     cmds:
       - cargo test --workspace --test '*' {{if .TARGET}}--target {{.TARGET}}{{end}}
-
-  bench:
-    desc: Runs the benchmarks. Pass a name filter after `--`, eg. `task bench -- mixed`.
-    summary: |
-      Also writes the results as JSON (with machine info) next to each benchmark source,
-      eg. projects/galvanize-rs/benches/pointers.bench.json. See scripts/bench-to-json.ts.
-    deps:
-      - init:rustup
-    cmds:
-      - bun scripts/bench-to-json.ts {{.CLI_ARGS}}
-      - bun scripts/bench-to-html.ts
-
-  bench:html:
-    desc: Re-renders the HTML reports from the existing *.bench.json files without re-running benchmarks.
-    cmds:
-      - bun scripts/bench-to-html.ts
 
   run:cli:
     desc: Runs the cli using `cargo run`.

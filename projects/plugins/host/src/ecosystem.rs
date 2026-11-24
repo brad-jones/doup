@@ -1,12 +1,19 @@
-use super::host::{HostState, host_api};
-use crate::plugin::{IBindings, IPre, Plugin, PluginSession};
+//! Host-side support for `ecosystem` WASM plugins.
+//!
+//! An ecosystem plugin implements the `ecosystem` world defined in the WIT
+//! package (`../wit`) and teaches doup about a package ecosystem. This module
+//! generates the component bindings for that world and exposes
+//! [`EcosystemPlugin`], a handle that runs calls against pooled plugin sessions.
+
+use crate::host::HostState;
+use crate::session::{PluginSessionPool, PluginWorld};
 use anyhow::Result;
-use std::{path::Path, sync::OnceLock};
+use doup_config::repo::DoupRepoPlugin;
+use std::path::{Path, PathBuf};
 use wasmtime::{
-  Engine,
-  component::{HasSelf, Linker, bindgen},
+  Engine, Store,
+  component::{Component, Linker, bindgen},
 };
-use wasmtime_wasi::p2::add_to_linker_async;
 
 bindgen!({
   path: "../wit",
@@ -15,59 +22,57 @@ bindgen!({
   with: { "doup:plugin/host-api": super::host::host_api },
 });
 
-impl IPre<HostState, Ecosystem> for EcosystemPre<HostState> {
-  fn new(instance_pre: wasmtime::component::InstancePre<HostState>) -> wasmtime::Result<Self> {
-    EcosystemPre::new(instance_pre)
+/// Marker type binding the `ecosystem` WIT world to the generic session pool.
+struct EcosystemWorld;
+
+impl PluginWorld for EcosystemWorld {
+  type Pre = EcosystemPre<HostState>;
+  type Bindings = Ecosystem;
+
+  fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
+    let component = Component::from_file(&engine, &path)?;
+    let pre = EcosystemPre::new(linker.instantiate_pre(&component)?)?;
+    Ok(pre)
   }
 
-  async fn instantiate_async(
-    &self,
-    store: impl wasmtime::AsContextMut<Data = HostState>,
-  ) -> wasmtime::Result<Ecosystem> {
-    EcosystemPre::instantiate_async(self, store).await
+  async fn instantiate(pre: &Self::Pre, store: &mut Store<HostState>) -> Result<Self::Bindings> {
+    Ok(pre.instantiate_async(store).await?)
+  }
+
+  async fn configure(
+    bindings: &Self::Bindings,
+    store: &mut Store<HostState>,
+    config: &str,
+  ) -> wasmtime::Result<Result<(), String>> {
+    bindings.call_configure(store, config).await
   }
 }
 
-impl IBindings<HostState> for Ecosystem {
-  async fn call_configure(
-    &self,
-    store: &mut wasmtime::Store<HostState>,
-    arg0: &str,
-  ) -> wasmtime::Result<Result<(), wasmtime::component::__internal::String>> {
-    Ecosystem::call_configure(self, store, arg0).await
-  }
-}
-
-static CACHED_LINKER: OnceLock<Linker<HostState>> = OnceLock::new();
-
-fn linker(engine: &Engine) -> Result<Linker<HostState>> {
-  if let Some(linker) = CACHED_LINKER.get() {
-    return Ok(linker.clone());
-  }
-
-  let mut linker = Linker::new(&engine);
-  add_to_linker_async(&mut linker)?;
-  host_api::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |state| state)?;
-  let _ = CACHED_LINKER.set(linker.clone());
-  Ok(linker)
-}
-
+/// A loaded ecosystem plugin.
+///
+/// Each call checks a session out of an internal pool, invokes the plugin
+/// export, and returns the session to the pool.
 pub struct EcosystemPlugin {
-  plugin: Plugin<HostState, EcosystemPre<HostState>, Ecosystem>,
+  session_pool: PluginSessionPool<EcosystemWorld>,
 }
 
 impl EcosystemPlugin {
-  pub fn new(engine: &Engine, path: &Path) -> Result<Self> {
-    Ok(Self {
-      plugin: Plugin::new(engine, &linker(engine)?, path, |wasi| {
-        wasi.inherit_stdout().inherit_stderr();
-      }),
-    })
+  /// Creates a plugin handle for `plugin`, resolving its module from
+  /// `module_search_dirs`.
+  pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
+    Self {
+      session_pool: PluginSessionPool::new(None, plugin, module_search_dirs),
+    }
   }
 
+  /// Calls the plugin's `hello-world` export and returns its greeting.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a session cannot be checked out or the call traps.
   pub async fn hello_world(&self) -> Result<String> {
-    let PluginSession(mut store, bindings) = self.plugin.checkout_session().await?;
-    let result = bindings.call_hello_world(&mut store).await;
-    self.plugin.checkin_session(PluginSession(store, bindings), result)
+    let mut session = self.session_pool.checkout_session().await?;
+    let result = session.bindings.call_hello_world(&mut session.store).await;
+    self.session_pool.checkin_session(session, result)
   }
 }

@@ -1,6 +1,9 @@
+mod host;
+mod session;
+mod wkg;
+
 mod ecosystem;
 pub use ecosystem::EcosystemPlugin;
 
-mod host;
 mod platform;
-mod plugin;
+pub use platform::PlatformPlugin;

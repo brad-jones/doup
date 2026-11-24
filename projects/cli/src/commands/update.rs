@@ -6,7 +6,7 @@ use doup_config::{
   repo::DoupRepoConfigFile,
 };
 use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
-use doup_plugin_host::{EcosystemPlugin, PlatformPlugin, PluginRuntime};
+use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
 use tempfile::TempDir;
 
 /// Runs the doup update process
@@ -18,8 +18,6 @@ pub struct UpdateArgs {
 }
 
 pub async fn update(_args: UpdateArgs) -> Result<()> {
-  let runtime = PluginRuntime::new()?;
-
   let config = DoupBotConfigFile::load(None, None)?.merged;
   let git = match config.git_backend {
     GitBackendKind::GitCli => Git::new(GitCli),
@@ -56,11 +54,13 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
     println!("Loaded repo config {:#?}", repo_config);
 
-    let mut platform = PlatformPlugin::load(&runtime, &repo_config.platform, Some(destination)).await?;
+    let module_search_dirs = vec![destination.to_path_buf()];
+
+    let platform = PlatformPlugin::new(&repo_config.platform, module_search_dirs.clone());
     println!("Platform says: {}", platform.hello_world().await?);
 
     for ecosystem in &repo_config.ecosystems {
-      let mut plugin = EcosystemPlugin::load(&runtime, ecosystem, Some(destination)).await?;
+      let plugin = EcosystemPlugin::new(ecosystem, module_search_dirs.clone());
       println!("Ecosystem says: {}", plugin.hello_world().await?);
     }
   }
