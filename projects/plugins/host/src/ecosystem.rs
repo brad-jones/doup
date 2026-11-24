@@ -30,7 +30,7 @@ impl PluginWorld for EcosystemWorld {
   type Bindings = Ecosystem;
 
   fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
-    let component = Component::from_file(&engine, &path)?;
+    let component = Component::from_file(engine, path)?;
     let pre = EcosystemPre::new(linker.instantiate_pre(&component)?)?;
     Ok(pre)
   }

@@ -48,7 +48,7 @@ pub trait PluginWorld: 'static {
   ///
   /// ```ignore
   /// fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
-  ///   let component = Component::from_file(&engine, &path)?;
+  ///   let component = Component::from_file(engine, path)?;
   ///   let pre = {{WORLD_NAME}}Pre::new(linker.instantiate_pre(&component)?)?;
   ///   Ok(pre)
   /// }
@@ -87,7 +87,7 @@ pub trait PluginWorld: 'static {
   /// The default linker that will be used, worlds are free to override.
   /// The result of this method is cached into [`WORLD_LINKERS`].
   fn linker(engine: &Engine) -> Result<Linker<HostState>> {
-    let mut linker = Linker::new(&engine);
+    let mut linker = Linker::new(engine);
     add_to_linker_async(&mut linker)?;
     host_api::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |state| state)?;
     Ok(linker)

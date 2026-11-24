@@ -30,7 +30,7 @@ impl PluginWorld for PlatformWorld {
   type Bindings = Platform;
 
   fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
-    let component = Component::from_file(&engine, &path)?;
+    let component = Component::from_file(engine, path)?;
     let pre = PlatformPre::new(linker.instantiate_pre(&component)?)?;
     Ok(pre)
   }

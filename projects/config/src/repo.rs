@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 /// Embed the Json Schema, we will use this for runtime validation.
 #[jsonschema::validator(path = "../../schemas/repo.schema.json")]
-struct SCHEMA;
+struct Schema;
 
 /// Configuration found at the root of a git repo that is to be updated by the
 /// doup dependency updater bot. This is the normalised internal representation
@@ -57,7 +57,7 @@ impl ConfigFile for DoupRepoConfigFile {
 
   const ENV_PREFIX: &'static str = "DOUP_REPO";
 
-  const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = SCHEMA::validate;
+  const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = Schema::validate;
 
   fn source(&self) -> Option<&Path> {
     self.source.as_deref()
@@ -136,7 +136,7 @@ ecosystems:
       json!({ "use": "doup:github", "with": "nope" }),
     ] {
       let instance = json!({ "platform": platform, "ecosystems": [{ "use": "doup:doup" }] });
-      assert!(SCHEMA::validate(&instance).is_err(), "{instance}");
+      assert!(Schema::validate(&instance).is_err(), "{instance}");
     }
   }
 
@@ -144,7 +144,7 @@ ecosystems:
   fn schema_accepts_wasm_paths() {
     for plugin in ["./a.wasm", "../b/c.wasm", "/abs/d.wasm", "target/e.wasm"] {
       let instance = json!({ "platform": { "use": plugin }, "ecosystems": [{ "use": plugin }] });
-      assert!(SCHEMA::validate(&instance).is_ok(), "{instance}");
+      assert!(Schema::validate(&instance).is_ok(), "{instance}");
     }
   }
 
