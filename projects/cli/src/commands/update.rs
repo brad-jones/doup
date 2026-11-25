@@ -45,40 +45,40 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       });
     }
 
-    print!("Cloning {} into {}... ", repo.origin, destination.display());
+    eprint!("Cloning {} into {}... ", repo.origin, destination.display());
     if let Err(err) = git.clone_repo(&options).await {
       eprintln!("Failed to clone {}: {err:#}", repo.origin);
       failed += 1;
       continue;
     }
-    println!("DONE");
+    eprintln!("DONE");
 
     // Load the repo's config
     let env_prefix = DoupRepoConfigFile::repo_env_prefix(index);
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
-    //println!("Loaded repo config {:#?}", repo_config);
+    //eprintln!("Loaded repo config {:#?}", repo_config);
 
     // Load all the repo's plugins before we start work
     // A bad config or bad WASM module should be caught here, not half way through updating the repo.
     let module_search_dirs = vec![destination.to_path_buf()];
 
-    print!("Loading {}... ", repo_config.platform.plugin);
+    eprint!("Loading {}... ", repo_config.platform.plugin);
     let _platform = PlatformPlugin::load(&repo_config.platform, module_search_dirs.clone()).await?;
-    println!("DONE");
+    eprintln!("DONE");
 
     let mut ecosystems = HashMap::new();
     for ecosystem in &repo_config.ecosystems {
-      print!("Loading {}... ", ecosystem.plugin);
+      eprint!("Loading {}... ", ecosystem.plugin);
       ecosystems.insert(ecosystem, EcosystemPlugin::load(ecosystem, module_search_dirs.clone()).await?);
-      println!("DONE");
+      eprintln!("DONE");
     }
 
     // Now discover all the dependencies that may need updating
     let mut dependencies_by_ecosystem = HashMap::new();
     for (&ecosystem_ref, ecosystem_plugin) in &ecosystems {
-      print!("Discovering dependencies for {}... ", ecosystem_ref.plugin);
+      eprint!("Discovering dependencies for {}... ", ecosystem_ref.plugin);
       dependencies_by_ecosystem.insert(ecosystem_ref, ecosystem_plugin.discover_deps(destination).await?);
-      println!("DONE");
+      eprintln!("DONE");
     }
 
     // For each dependency, lookup the next version
@@ -86,12 +86,12 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     for (&ecosystem_ref, dependencies) in &dependencies_by_ecosystem {
       let ecosystem_plugin = &ecosystems[ecosystem_ref];
       for dependency in dependencies {
-        print!("Looking up next version using {} for {}... ", ecosystem_ref.plugin, dependency.name);
+        eprint!("Looking up next version using {} for {}... ", ecosystem_ref.plugin, dependency.name);
         if let Some(next_version) = ecosystem_plugin.lookup_versions(dependency).await? {
           next_versions.push((ecosystem_ref, dependency, next_version.clone()));
-          println!("{}", next_version.next);
+          eprintln!("{}", next_version.next);
         } else {
-          println!("no update needed");
+          eprintln!("no update needed");
         }
       }
     }
@@ -101,9 +101,9 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     for &(ecosystem_ref, dependency, ref versions) in &next_versions {
       let ecosystem_plugin = &ecosystems[ecosystem_ref];
       let to = if let Some(ref latest) = versions.latest { latest } else { &versions.next };
-      print!("Downloading release notes using {} for {}... ", ecosystem_ref.plugin, dependency.name);
+      eprint!("Downloading release notes using {} for {}... ", ecosystem_ref.plugin, dependency.name);
       let notes = ecosystem_plugin.fetch_release_notes(dependency, to).await?;
-      println!("found {} versions", notes.len());
+      eprintln!("found {} versions", notes.len());
       release_notes.push((ecosystem_ref, dependency, versions, notes));
     }
   }
