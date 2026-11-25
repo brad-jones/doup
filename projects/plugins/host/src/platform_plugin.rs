@@ -6,7 +6,8 @@
 //! [`PlatformPlugin`], a handle that runs calls against pooled plugin sessions.
 
 use crate::host::HostState;
-use crate::session::{PluginSessionPool, PluginWorld};
+use crate::session::PluginSessionPool;
+use crate::world::PluginWorld;
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};

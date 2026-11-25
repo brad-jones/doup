@@ -1,18 +1,7 @@
-//! Plugin session management for the WASM plugin host.
-//!
-//! A wasmtime `Store` holds a guest's memory and can only be used by one caller at a time, so
-//! concurrent calls into a plugin need separate instances. This module provides:
-//!
-//! - [`PluginWorld`]: describes what differs between plugin worlds.
-//! - [`PluginSession`]: a set of bindings paired with the `Store` that backs them.
-//! - [`PluginSessionPool`]: resolves and pre-compiles the plugin component once, then hands out
-//!   idle sessions via [`PluginSessionPool::checkout_session`] (creating and configuring new ones
-//!   on demand) and takes them back via [`PluginSessionPool::checkin_session`].
-//!
-//! Sessions that trap or fail are dropped rather than returned to the pool.
-
-use crate::host::{HostState, HttpPolicy, host_api};
+use super::session::PluginSession;
+use crate::host::{HostState, HttpPolicy};
 use crate::wkg::is_wkg_reference;
+use crate::world::PluginWorld;
 use anyhow::{Context, Result, bail};
 use doup_config::repo::DoupRepoPlugin;
 use std::{
@@ -22,12 +11,9 @@ use std::{
   sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError},
 };
 use wasmtime::Config;
-use wasmtime::{
-  Engine, Store,
-  component::{Accessor, HasSelf, Linker},
-};
-use wasmtime_wasi::{WasiCtxBuilder, p3::add_to_linker};
-use wasmtime_wasi_http::p3::add_to_linker as add_http_to_linker;
+use wasmtime::component::Linker;
+use wasmtime::{Engine, Store};
+use wasmtime_wasi::WasiCtxBuilder;
 
 /// Fallback engine for pools that were not given one. Engines are expensive and meant to be shared.
 static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -35,112 +21,6 @@ static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
 /// Linkers are kept here per world as it's possible different worlds may have slightly different requirements.
 /// [`PluginWorld::linker`] provides the default, worlds can override if they wish.
 static WORLD_LINKERS: LazyLock<Mutex<HashMap<TypeId, Arc<Linker<HostState>>>>> = LazyLock::new(Default::default);
-
-/// What differs between plugin worlds. Implemented by a marker type per world.
-/// See EcosystemWorld & PlatformWorld for the two current implemented worlds.
-pub trait PluginWorld: 'static {
-  /// The compiled plugin, cheap to instantiate many times (eg: `EcosystemPre<HostState>`).
-  type Pre;
-
-  /// The generated bindings for one instance (eg: `Ecosystem`).
-  type Bindings;
-
-  /// Factory for [`World::Pre`], typical implementation:
-  ///
-  /// ```ignore
-  /// fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
-  ///   let component = Component::from_file(engine, path)?;
-  ///   let pre = {{WORLD_NAME}}Pre::new(linker.instantiate_pre(&component)?)?;
-  ///   Ok(pre)
-  /// }
-  /// ```
-  fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre>;
-
-  /// Factory for [`World::Bindings`], typical implementation:
-  ///
-  /// ```ignore
-  /// async fn instantiate(pre: &Self::Pre, store: &mut Store<HostState>) -> Result<Self::Bindings> {
-  ///   Ok(pre.instantiate_async(store).await?)
-  /// }
-  /// ```
-  fn instantiate(pre: &Self::Pre, store: &mut Store<HostState>) -> impl Future<Output = Result<Self::Bindings>> + Send;
-
-  /// Calls the world's `configure` export as part of session creation so
-  /// that a guest component is always configured before being used.
-  ///
-  /// Typical implementation:
-  ///
-  /// ```ignore
-  /// async fn configure(
-  ///   bindings: &Self::Bindings,
-  ///   store: &mut Store<HostState>,
-  ///   config: &str,
-  /// ) -> wasmtime::Result<Result<(), String>> {
-  ///   bindings.call_configure(store, config).await
-  /// }
-  /// ```
-  fn configure(
-    bindings: &Self::Bindings,
-    store: &mut Store<HostState>,
-    config: &str,
-  ) -> impl Future<Output = wasmtime::Result<Result<(), String>>> + Send;
-
-  /// The default linker that will be used, worlds are free to override.
-  /// The result of this method is cached into [`WORLD_LINKERS`].
-  ///
-  /// `wasi:http` is always linked because a component that imports it can't be instantiated
-  /// otherwise. Whether requests actually go out is decided per session by [`Http`].
-  fn linker(engine: &Engine) -> Result<Linker<HostState>> {
-    let mut linker = Linker::new(engine);
-    add_to_linker(&mut linker)?;
-    add_http_to_linker(&mut linker)?;
-    host_api::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |state| state)?;
-    Ok(linker)
-  }
-
-  /// Override to give a world different WASI permissions.
-  fn wasi(builder: &mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder> {
-    Ok(builder.inherit_stdout().inherit_stderr())
-  }
-}
-
-/// A session is the combination of a set of bindings and their store.
-/// Exclusive access to the `Store` is what makes concurrent calls need a pool.
-///
-/// The `Store` is what holds the guests memory space, so anytime a new store
-/// is created, the world's `configure` export needs to be called.
-///
-/// [`PluginSessionPool`] ensures this happen anytime a session is checked out of the pool.
-pub struct PluginSession<W: PluginWorld> {
-  pub store: Store<HostState>,
-  pub bindings: W::Bindings,
-}
-
-impl<W: PluginWorld> PluginSession<W> {
-  /// Calls an `async func` export. Their generated `call_*` methods take an [`Accessor`] instead of the
-  /// `Store`, so they can only run inside [`Store::run_concurrent`], this takes care of that.
-  ///
-  /// The result has the same shape as a sync `call_*`, so it feeds straight into
-  /// [`PluginSessionPool::checkin_session`]:
-  ///
-  /// ```ignore
-  /// let mut session = self.session_pool.checkout_session().await?;
-  /// let result = session.call_async(async |bindings, accessor| bindings.call_my_export(accessor).await).await;
-  /// self.session_pool.checkin_session(session, result)
-  /// ```
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if the guest traps or the call otherwise fails at the wasmtime level,
-  /// the guest's own `result<_, string>` is left for the caller to handle.
-  pub async fn call_async<R>(
-    &mut self,
-    call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<R>,
-  ) -> wasmtime::Result<R> {
-    let bindings = &self.bindings;
-    self.store.run_concurrent(async |accessor| call(bindings, accessor).await).await?
-  }
-}
 
 /// Hands out [`PluginSession`] instances, creating more whenever none are idle.
 ///
@@ -278,7 +158,6 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     wasi: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<PluginSession<W>> {
     let mut store = Store::new(self.engine()?, HostState::new(http_policy, |b| wasi(W::wasi(b)?))?);
-
     let bindings = W::instantiate(self.component_pre()?, &mut store).await?;
 
     let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())?;
