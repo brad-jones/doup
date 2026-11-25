@@ -1,26 +1,18 @@
-//! Works out where a dependency's sparse index lives and the path of a crate within it.
+//! Resolves cargo registry aliases and works out where a crate lives within a sparse index.
 //!
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::Dependency;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs, path::Path};
 
 const CRATES_IO_INDEX: &str = "https://index.crates.io/";
 
-/// Returns the URL of the sparse index file describing `dependency`.
+/// Returns the URL of the sparse index file describing the crate `name`.
 ///
-/// The default registry is crates.io. An alternate registry is an alias that is resolved through the
-/// `registries.<alias>.index` key of a `.cargo/config.toml` (or `.cargo/config`) found by walking up from
-/// the dependency's manifest to `root`, so the closest config wins as it does in cargo.
-/// Only sparse (`sparse+https://…`) indexes are supported, there is no way to clone a git index from the sandbox.
-pub fn index_url(root: &Path, dependency: &Dependency) -> Result<String, String> {
-  let base = match &dependency.registry {
-    None => CRATES_IO_INDEX.to_string(),
-    Some(alias) => alternate_index(root, dependency, alias)?,
-  };
-  Ok(format!("{base}{}", index_path(&dependency.name)))
+/// `registry` is the index URL produced by [`resolve_index`], `None` is crates.io.
+pub fn index_url(registry: Option<&str>, name: &str) -> String {
+  format!("{}{}", registry.unwrap_or(CRATES_IO_INDEX), index_path(name))
 }
 
 /// The path of a crate inside a cargo index, eg: `se/rd/serde`.
@@ -33,16 +25,17 @@ fn index_path(name: &str) -> String {
   }
 }
 
-fn alternate_index(root: &Path, dependency: &Dependency, alias: &str) -> Result<String, String> {
-  let url = dependency
-    .occurrences
-    .iter()
-    .find_map(|occurrence| {
-      let manifest_dir = Path::new(&occurrence.manifest_path).parent().unwrap_or(Path::new(""));
-      manifest_dir.ancestors().find_map(|dir| registry_index(&root.join(dir).join(".cargo"), alias).transpose())
-    })
+/// Resolves the registry `alias` used by the manifest at `manifest_dir` (relative to `root`) to its sparse index URL.
+///
+/// The alias is looked up through the `registries.<alias>.index` key of a `.cargo/config.toml` (or `.cargo/config`)
+/// found by walking up from `manifest_dir` to `root`, so the closest config wins as it does in cargo.
+/// Only sparse (`sparse+https://…`) indexes are supported, there is no way to clone a git index from the sandbox.
+pub fn resolve_index(root: &Path, manifest_dir: &Path, alias: &str) -> Result<String, String> {
+  let url = manifest_dir
+    .ancestors()
+    .find_map(|dir| registry_index(&root.join(dir).join(".cargo"), alias).transpose())
     .transpose()?
-    .ok_or_else(|| format!("registry `{alias}` of {} is not defined in any .cargo/config.toml", dependency.name))?;
+    .ok_or_else(|| format!("registry `{alias}` is not defined in any .cargo/config.toml"))?;
 
   let Some(url) = url.strip_prefix("sparse+") else {
     return Err(format!("registry `{alias}` uses `{url}`, only sparse+https:// indexes are supported"));
@@ -78,21 +71,7 @@ fn registry_index(cargo_dir: &Path, alias: &str) -> Result<Option<String>, Strin
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::Occurrence;
   use tempfile::TempDir;
-
-  fn dependency(name: &str, registry: Option<&str>, manifest_path: &str) -> Dependency {
-    Dependency {
-      name: name.to_string(),
-      registry: registry.map(str::to_string),
-      occurrences: vec![Occurrence {
-        manifest_path: manifest_path.to_string(),
-        lock_path: None,
-        current_version: "1".to_string(),
-        locked_version: None,
-      }],
-    }
-  }
 
   fn write(root: &Path, path: &str, content: &str) {
     let path = root.join(path);
@@ -110,9 +89,15 @@ mod tests {
 
   #[test]
   fn default_registry_is_crates_io() {
-    let dir = TempDir::new().unwrap();
-    let url = index_url(dir.path(), &dependency("serde", None, "Cargo.toml")).unwrap();
-    assert_eq!(url, "https://index.crates.io/se/rd/serde");
+    assert_eq!(index_url(None, "serde"), "https://index.crates.io/se/rd/serde");
+  }
+
+  #[test]
+  fn resolved_registry_is_used_as_the_index_base() {
+    assert_eq!(
+      index_url(Some("https://corp.example.com/index/"), "internal"),
+      "https://corp.example.com/index/in/te/internal"
+    );
   }
 
   #[test]
@@ -121,17 +106,17 @@ mod tests {
     write(dir.path(), ".cargo/config.toml", "[registries.corp]\nindex = \"sparse+https://root.example.com/index\"\n");
     write(dir.path(), "tool/.cargo/config", "[registries.corp]\nindex = \"sparse+https://tool.example.com/index/\"\n");
 
-    let root = index_url(dir.path(), &dependency("internal", Some("corp"), "Cargo.toml")).unwrap();
-    assert_eq!(root, "https://root.example.com/index/in/te/internal");
+    let root = resolve_index(dir.path(), Path::new(""), "corp").unwrap();
+    assert_eq!(root, "https://root.example.com/index/");
 
-    let nested = index_url(dir.path(), &dependency("internal", Some("corp"), "tool/Cargo.toml")).unwrap();
-    assert_eq!(nested, "https://tool.example.com/index/in/te/internal");
+    let nested = resolve_index(dir.path(), Path::new("tool"), "corp").unwrap();
+    assert_eq!(nested, "https://tool.example.com/index/");
   }
 
   #[test]
   fn undefined_alias_is_an_error() {
     let dir = TempDir::new().unwrap();
-    let err = index_url(dir.path(), &dependency("internal", Some("corp"), "Cargo.toml")).unwrap_err();
+    let err = resolve_index(dir.path(), Path::new(""), "corp").unwrap_err();
     assert!(err.contains("corp"), "{err}");
   }
 
@@ -139,7 +124,7 @@ mod tests {
   fn git_indexes_are_not_supported() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".cargo/config.toml", "[registries.corp]\nindex = \"https://git.example.com/index.git\"\n");
-    let err = index_url(dir.path(), &dependency("internal", Some("corp"), "Cargo.toml")).unwrap_err();
+    let err = resolve_index(dir.path(), Path::new(""), "corp").unwrap_err();
     assert!(err.contains("sparse"), "{err}");
   }
 }

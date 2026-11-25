@@ -3,7 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, Occurrence};
+use crate::{Dependency, Occurrence, registry};
 use ignore::WalkBuilder;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
@@ -31,6 +31,13 @@ pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
     let lock = nearest_lock(&manifest_dir, &locks);
 
     for dep in declared {
+      let registry = match &dep.registry {
+        Some(alias) => Some(
+          registry::resolve_index(root, &manifest_dir, alias)
+            .map_err(|err| format!("{} (dependency {}): {err}", manifest_file.display(), dep.name))?,
+        ),
+        None => None,
+      };
       let occurrence = Occurrence {
         manifest_path: to_slash(&manifest_file),
         lock_path: lock.map(|(dir, _)| to_slash(&dir.join("Cargo.lock"))),
@@ -38,7 +45,7 @@ pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
           .and_then(|(_, packages)| locked_version(packages, &dep.name, dep.registry.is_some(), &dep.version)),
         current_version: dep.version,
       };
-      let occurrences = by_key.entry((dep.name, dep.registry)).or_default();
+      let occurrences = by_key.entry((dep.name, registry)).or_default();
       if !occurrences.iter().any(|o| same_declaration(o, &occurrence)) {
         occurrences.push(occurrence);
       }
@@ -389,6 +396,7 @@ winapi = "0.3"
   #[test]
   fn same_name_from_different_registries_are_separate_dependencies() {
     let dir = TempDir::new().unwrap();
+    write(dir.path(), ".cargo/config.toml", "[registries.corp]\nindex = \"sparse+https://corp.example.com/index\"\n");
     write(
       dir.path(),
       "Cargo.toml",
@@ -410,10 +418,33 @@ winapi = "0.3"
         (d.name.as_str(), d.registry.as_deref(), o[0].locked_version.as_deref())
       })
       .collect();
+    let corp = Some("https://corp.example.com/index/");
     assert_eq!(
       summary,
-      [("foo", None, Some("1.0.1")), ("foo", Some("corp"), Some("1.4.0")), ("internal", Some("corp"), Some("3.1.0")),]
+      [("foo", None, Some("1.0.1")), ("foo", corp, Some("1.4.0")), ("internal", corp, Some("3.1.0"))]
     );
+  }
+
+  #[test]
+  fn an_alias_is_resolved_by_the_config_closest_to_each_manifest() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), ".cargo/config.toml", "[registries.corp]\nindex = \"sparse+https://a.example.com/\"\n");
+    write(dir.path(), "tool/.cargo/config.toml", "[registries.corp]\nindex = \"sparse+https://b.example.com/\"\n");
+    write(dir.path(), "Cargo.toml", "[dependencies]\ninternal = { version = \"1\", registry = \"corp\" }\n");
+    write(dir.path(), "tool/Cargo.toml", "[dependencies]\ninternal = { version = \"1\", registry = \"corp\" }\n");
+
+    let deps = discover(dir.path()).unwrap();
+    let registries: Vec<_> = deps.iter().map(|d| d.registry.as_deref()).collect();
+    assert_eq!(registries, [Some("https://a.example.com/"), Some("https://b.example.com/")]);
+  }
+
+  #[test]
+  fn an_undefined_alias_is_an_error() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "Cargo.toml", "[dependencies]\ninternal = { version = \"1\", registry = \"corp\" }\n");
+
+    let err = discover(dir.path()).unwrap_err();
+    assert!(err.contains("corp") && err.contains("internal"), "{err}");
   }
 
   #[test]

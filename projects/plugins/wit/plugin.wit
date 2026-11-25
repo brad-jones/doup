@@ -25,9 +25,10 @@ world ecosystem {
     name: string,
 
     /// The registry the dependency is resolved from, opaque to the host and defined by the ecosystem,
-    /// eg: the alias of an alternate cargo registry. None means the ecosystem's default registry.
-    /// The same name from different registries are different dependencies, so a dependency
-    /// is unique within this ecosystem by the pair (name, registry).
+    /// eg: the index URL of an alternate cargo registry. None means the ecosystem's default registry.
+    ///
+    /// The same name from different registries are different dependencies,
+    /// so a dependency is unique within this ecosystem by the pair (name, registry).
     registry: option<string>,
 
     /// A dependency may occur many times, think monorepo with

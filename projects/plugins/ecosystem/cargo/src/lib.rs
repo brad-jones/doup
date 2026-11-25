@@ -25,7 +25,7 @@ impl Guest for Plugin {
   }
 
   fn lookup_versions(dependency: Dependency) -> Result<Option<Versions>, String> {
-    let url = registry::index_url(Path::new("/workspace"), &dependency)?;
+    let url = registry::index_url(dependency.registry.as_deref(), &dependency.name);
     let index = wstd::runtime::block_on(fetch(&url))?;
     lookup::select(&dependency, &index)
   }

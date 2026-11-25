@@ -87,7 +87,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       let ecosystem_plugin = &ecosystems[ecosystem_ref];
       for dependency in dependencies {
         print!("Looking up next version using {} for {}... ", &ecosystem_ref.plugin, &dependency.name);
-        if let Some(next_version) = ecosystem_plugin.lookup_versions(destination, dependency).await? {
+        if let Some(next_version) = ecosystem_plugin.lookup_versions(dependency).await? {
           next_versions.push((ecosystem_ref, dependency, next_version.clone()));
           println!("{}", next_version.next);
         } else {

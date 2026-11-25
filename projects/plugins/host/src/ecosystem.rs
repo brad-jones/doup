@@ -7,6 +7,7 @@
 
 use crate::host::{HostState, HttpPolicy};
 use crate::session::{PluginSessionPool, PluginWorld};
+use crate::wasi;
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};
@@ -78,31 +79,20 @@ impl EcosystemPlugin {
     Ok(instance)
   }
 
-  /// Lists the dependencies found in `workspace_dir`. The guest gets a read-only view of the
-  /// workspace and no HTTP access.
+  /// Lists the dependencies found in `workspace_dir`.
+  /// The guest gets a read-only view of the workspace.
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
-    let mut session = self
-      .session_pool
-      .create_session(HttpPolicy::Denied, |wasi| {
-        Ok(wasi.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?)
-      })
-      .await?;
-
-    session.bindings.call_discover_deps(&mut session.store).await?.map_err(anyhow::Error::msg)
+    let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
+    let mut session = self.session_pool.create_session(HttpPolicy::Denied, permissions).await?;
+    let result = session.bindings.call_discover_deps(&mut session.store).await?;
+    result.map_err(anyhow::Error::msg)
   }
 
-  /// Looks up the versions available for `dependency`. This is the only call whose guest
-  /// gets HTTP access, along with a read-only view of `workspace_dir` (eg: for registry config).
-  ///
-  /// Each call uses a fresh, unpooled session so that HTTP access never leaks into pooled sessions.
-  pub async fn lookup_versions(&self, workspace_dir: &Path, dependency: &Dependency) -> Result<Option<Versions>> {
-    let mut session = self
-      .session_pool
-      .create_session(HttpPolicy::Allowed, |wasi| {
-        Ok(wasi.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?)
-      })
-      .await?;
-
-    session.bindings.call_lookup_versions(&mut session.store, dependency).await?.map_err(anyhow::Error::msg)
+  /// Looks up the versions available for `dependency`.
+  /// The guest is able to make HTTP calls but no other I/O is granted.
+  pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>> {
+    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let result = session.bindings.call_lookup_versions(&mut session.store, dependency).await?;
+    result.map_err(anyhow::Error::msg)
   }
 }
