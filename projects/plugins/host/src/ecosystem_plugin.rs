@@ -97,4 +97,14 @@ impl EcosystemPlugin {
     let result = session.call_async(async |b, a| b.call_lookup_versions(a, dependency).await).await?;
     result.map_err(anyhow::Error::msg)
   }
+
+  /// Downloads release notes for for `dependency`.
+  /// The guest is able to make HTTP calls but no other I/O is granted.
+  pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>> {
+    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let dependency = dependency.clone();
+    let to = to.to_string();
+    let result = session.call_async(async |b, a| b.call_fetch_release_notes(a, dependency, to).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
 }

@@ -1,6 +1,6 @@
 wit_bindgen::generate!({
-    world: "ecosystem",
-    path: "../../wit",
+  world: "ecosystem",
+  path: "../../wit",
 });
 
 use std::sync::OnceLock;
@@ -21,6 +21,10 @@ impl Guest for DoupEcosystemPluginDoup {
 
   async fn lookup_versions(_dependency: Dependency) -> Result<Option<Versions>, String> {
     Ok(None)
+  }
+
+  async fn fetch_release_notes(_dependency: Dependency, _to: String) -> Result<Vec<ReleaseNote>, String> {
+    Ok(Vec::new())
   }
 }
 

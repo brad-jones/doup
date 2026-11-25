@@ -95,6 +95,17 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
         }
       }
     }
+
+    // Fetch release notes for all versions between current and next
+    let mut release_notes = Vec::new();
+    for &(ecosystem_ref, dependency, ref versions) in &next_versions {
+      let ecosystem_plugin = &ecosystems[ecosystem_ref];
+      let to = if let Some(ref latest) = versions.latest { latest } else { &versions.next };
+      print!("Downloading release notes using {} for {}... ", ecosystem_ref.plugin, dependency.name);
+      let notes = ecosystem_plugin.fetch_release_notes(dependency, to).await?;
+      println!("found {} versions", notes.len());
+      release_notes.push((ecosystem_ref, dependency, versions, notes));
+    }
   }
 
   if failed > 0 {

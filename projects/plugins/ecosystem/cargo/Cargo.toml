@@ -7,6 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+garde = { version = "0.23.0", features = ["derive", "regex"] }
 ignore = "0.4.35"
 semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }

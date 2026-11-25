@@ -14,16 +14,20 @@ struct IndexEntry {
   yanked: bool,
 }
 
-/// Chooses the versions to offer for `dependency` from the newline delimited JSON `index` entry of its crate.
-///
-/// - Yanked versions are never offered, and pre-releases only when the dependency already uses one.
-/// - `next` is the highest version satisfying the requirement of every occurrence.
-/// - `latest` is the highest version overall, if it is newer than `next`.
-///
-/// Returns `None` when nothing newer than the installed version exists. The installed version is the
-/// lowest locked version, or the lower bound of the requirement when there's no lock, as an
-/// occurrence that lags behind needs updating even if others are current.
-pub fn select(dependency: &Dependency, index: &str) -> Result<Option<Versions>, String> {
+/// What is installed and what could be installed for a dependency, derived from its crate's index entry.
+pub struct Analysis {
+  /// The lowest locked version, or the lower bound of the requirement when there's no lock, as an
+  /// occurrence that lags behind needs updating even if others are current. None without occurrences.
+  pub installed: Option<Version>,
+  /// The requirement of every occurrence.
+  pub requirements: Vec<VersionReq>,
+  /// Every version that may be offered: yanked versions are never included, and pre-releases
+  /// only when the dependency already uses one.
+  pub candidates: Vec<Version>,
+}
+
+/// Parses the newline delimited JSON `index` entry of the crate behind `dependency`.
+pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String> {
   let requirements = dependency
     .occurrences
     .iter()
@@ -60,6 +64,18 @@ pub fn select(dependency: &Dependency, index: &str) -> Result<Option<Versions>, 
       _ => {}
     }
   }
+
+  Ok(Analysis { installed, requirements, candidates })
+}
+
+/// Chooses the versions to offer for `dependency` from the newline delimited JSON `index` entry of its crate.
+///
+/// - `next` is the highest candidate satisfying the requirement of every occurrence.
+/// - `latest` is the highest candidate overall, if it is newer than `next`.
+///
+/// Returns `None` when nothing newer than the installed version exists.
+pub fn select(dependency: &Dependency, index: &str) -> Result<Option<Versions>, String> {
+  let Analysis { installed, requirements, candidates } = analyse(dependency, index)?;
 
   let next = candidates.iter().filter(|v| requirements.iter().all(|r| r.matches(v))).max();
   let (Some(next), Some(installed)) = (next, installed) else {

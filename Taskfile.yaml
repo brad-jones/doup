@@ -169,5 +169,7 @@ tasks:
       DOUP_BOT_REPOS_0_AUTH_USER: x-access-token
       DOUP_BOT_REPOS_0_AUTH_PASS:
         sh: gh auth token -u brad-jones
+      DOUP_REPO_0__ECOSYSTEMS__1__WITH__GITHUB_TOKEN:
+        sh: gh auth token -u brad-jones
     cmds:
       - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update

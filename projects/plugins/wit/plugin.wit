@@ -64,6 +64,28 @@ world ecosystem {
     latest: option<string>,
   }
 
+  record release-note {
+    /// The version number for this release note.
+    ///
+    /// Opaque to the host but typically a semver - eg: "1.2.3".
+    /// Every release-note should have a unique version, consider this field to
+    /// be it's primary identity, with-in the context of a given dependency.
+    version: string,
+
+    /// The URL where the full release notes can be found.
+    ///
+    /// If this points at a file that contains release notes for several versions, eg: CHANGELOG.md
+    /// Then ideally use HTML anchors where possible to link to the relevant part of the document.
+    url: string,
+
+    /// The full body of the release notes for this specific version.
+    ///
+    /// To clarify if the URL pointed at a single CHANGELOG.md, the value here
+    /// would be a sub-string of the full document, not the entire document with
+    /// all versions ever released.
+    body: string,
+  }
+
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
 
@@ -74,4 +96,8 @@ world ecosystem {
   /// Looks up the latest version for a given dependency.
   /// If the latest version matches what is already installed then return `None`.
   export lookup-versions: async func(dependency: dependency) -> result<option<versions>, string>;
+
+  /// Downloads release notes for every version between the dependencies lowest recorded version & `to`.
+  /// Where `to` is `versions.latest` if returned by `lookup-versions`, otherwise `versions.next`.
+  export fetch-release-notes: async func(dependency: dependency, to: string) -> result<list<release-note>, string>;
 }
