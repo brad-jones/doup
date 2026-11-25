@@ -15,11 +15,11 @@ impl Guest for Plugin {
     CONFIG.set(value).map_err(|_| "already configured".to_string())
   }
 
-  fn discover_deps() -> Result<Vec<Dependency>, String> {
+  async fn discover_deps() -> Result<Vec<Dependency>, String> {
     Ok(Vec::new())
   }
 
-  fn lookup_versions(_dependency: Dependency) -> Result<Option<Versions>, String> {
+  async fn lookup_versions(_dependency: Dependency) -> Result<Option<Versions>, String> {
     Ok(None)
   }
 }

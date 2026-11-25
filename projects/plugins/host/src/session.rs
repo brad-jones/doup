@@ -24,10 +24,10 @@ use std::{
 use wasmtime::Config;
 use wasmtime::{
   Engine, Store,
-  component::{HasSelf, Linker},
+  component::{Accessor, HasSelf, Linker},
 };
-use wasmtime_wasi::{WasiCtxBuilder, p2::add_to_linker_async};
-use wasmtime_wasi_http::p2::add_only_http_to_linker_async;
+use wasmtime_wasi::{WasiCtxBuilder, p3::add_to_linker};
+use wasmtime_wasi_http::p3::add_to_linker as add_http_to_linker;
 
 /// Fallback engine for pools that were not given one. Engines are expensive and meant to be shared.
 static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -92,8 +92,8 @@ pub trait PluginWorld: 'static {
   /// otherwise. Whether requests actually go out is decided per session by [`Http`].
   fn linker(engine: &Engine) -> Result<Linker<HostState>> {
     let mut linker = Linker::new(engine);
-    add_to_linker_async(&mut linker)?;
-    add_only_http_to_linker_async(&mut linker)?;
+    add_to_linker(&mut linker)?;
+    add_http_to_linker(&mut linker)?;
     host_api::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |state| state)?;
     Ok(linker)
   }
@@ -114,6 +114,32 @@ pub trait PluginWorld: 'static {
 pub struct PluginSession<W: PluginWorld> {
   pub store: Store<HostState>,
   pub bindings: W::Bindings,
+}
+
+impl<W: PluginWorld> PluginSession<W> {
+  /// Calls an `async func` export. Their generated `call_*` methods take an [`Accessor`] instead of the
+  /// `Store`, so they can only run inside [`Store::run_concurrent`], this takes care of that.
+  ///
+  /// The result has the same shape as a sync `call_*`, so it feeds straight into
+  /// [`PluginSessionPool::checkin_session`]:
+  ///
+  /// ```ignore
+  /// let mut session = self.session_pool.checkout_session().await?;
+  /// let result = session.call_async(async |bindings, accessor| bindings.call_my_export(accessor).await).await;
+  /// self.session_pool.checkin_session(session, result)
+  /// ```
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the guest traps or the call otherwise fails at the wasmtime level,
+  /// the guest's own `result<_, string>` is left for the caller to handle.
+  pub async fn call_async<R>(
+    &mut self,
+    call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<R>,
+  ) -> wasmtime::Result<R> {
+    let bindings = &self.bindings;
+    self.store.run_concurrent(async |accessor| call(bindings, accessor).await).await?
+  }
 }
 
 /// Hands out [`PluginSession`] instances, creating more whenever none are idle.

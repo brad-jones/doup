@@ -84,7 +84,7 @@ impl EcosystemPlugin {
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
     let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
     let mut session = self.session_pool.create_session(HttpPolicy::Denied, permissions).await?;
-    let result = session.bindings.call_discover_deps(&mut session.store).await?;
+    let result = session.call_async(async |b, a| b.call_discover_deps(a).await).await?;
     result.map_err(anyhow::Error::msg)
   }
 
@@ -92,7 +92,8 @@ impl EcosystemPlugin {
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>> {
     let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
-    let result = session.bindings.call_lookup_versions(&mut session.store, dependency).await?;
+    let dependency = dependency.clone();
+    let result = session.call_async(async |b, a| b.call_lookup_versions(a, dependency).await).await?;
     result.map_err(anyhow::Error::msg)
   }
 }

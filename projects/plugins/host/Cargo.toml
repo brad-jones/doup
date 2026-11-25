@@ -11,6 +11,6 @@ http = "1"
 http-body-util = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 serde_json = "1.0.154"
-wasmtime = "50.0.0"
-wasmtime-wasi = "50.0.0"
-wasmtime-wasi-http = { version = "50.0.0", default-features = false, features = ["p2", "default-send-request"] }
+wasmtime = "51.0.0"
+wasmtime-wasi = "51.0.0"
+wasmtime-wasi-http = { version = "51.0.0", default-features = false, features = ["p3", "default-send-request"] }

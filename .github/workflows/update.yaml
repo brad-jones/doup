@@ -54,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: plugins
-          path: ./target/wasm32-wasip2/release/*.wasm
+          path: ./target/wasm32-wasip3/release/*.wasm
           retention-days: 1
 
   update:
@@ -77,8 +77,8 @@ jobs:
         with:
           name: plugins
       - run: |
-          mkdir -p ./target/wasm32-wasip2/release
-          mv ./*.wasm ./target/wasm32-wasip2/release/.
+          mkdir -p ./target/wasm32-wasip3/release
+          mv ./*.wasm ./target/wasm32-wasip3/release/.
 
       - name: 🚀 Update Dependencies with Doup
         run: doup update

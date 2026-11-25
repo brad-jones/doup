@@ -68,9 +68,10 @@ world ecosystem {
   export configure: func(config: string) -> result<_, string>;
 
   /// Returns a list of dependencies discovered in the current workspace.
-  export discover-deps: func() -> result<list<dependency>, string>;
+  /// Async because under WASI p3 a guest may only block on I/O (eg: reading the workspace) from an async task.
+  export discover-deps: async func() -> result<list<dependency>, string>;
 
   /// Looks up the latest version for a given dependency.
   /// If the latest version matches what is already installed then return `None`.
-  export lookup-versions: func(dependency: dependency) -> result<option<versions>, string>;
+  export lookup-versions: async func(dependency: dependency) -> result<option<versions>, string>;
 }

@@ -154,9 +154,9 @@ tasks:
     deps:
       - init:rustup
     cmds:
-      - cargo build -p doup-ecosystem-plugin-doup --release --target wasm32-wasip2
-      - cargo build -p doup-ecosystem-plugin-cargo --release --target wasm32-wasip2
-      - cargo build -p doup-platform-plugin-github --release --target wasm32-wasip2
+      - cargo build -p doup-ecosystem-plugin-doup --release --target wasm32-wasip3
+      - cargo build -p doup-ecosystem-plugin-cargo --release --target wasm32-wasip3
+      - cargo build -p doup-platform-plugin-github --release --target wasm32-wasip3
 
   run:update:
     desc: Local version of .github/workflows/update.yaml

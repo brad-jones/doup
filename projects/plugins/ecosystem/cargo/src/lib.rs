@@ -8,7 +8,7 @@ mod lookup;
 mod registry;
 
 use std::{path::Path, sync::OnceLock};
-use wstd::http::{Body, Client, Request};
+use wasi_fetch::Client;
 
 static CONFIG: OnceLock<serde_json::Value> = OnceLock::new();
 
@@ -20,31 +20,30 @@ impl Guest for Plugin {
     CONFIG.set(value).map_err(|_| "already configured".to_string())
   }
 
-  fn discover_deps() -> Result<Vec<Dependency>, String> {
+  async fn discover_deps() -> Result<Vec<Dependency>, String> {
     discover::discover(Path::new("/workspace"))
   }
 
-  fn lookup_versions(dependency: Dependency) -> Result<Option<Versions>, String> {
+  async fn lookup_versions(dependency: Dependency) -> Result<Option<Versions>, String> {
     let url = registry::index_url(dependency.registry.as_deref(), &dependency.name);
-    let index = wstd::runtime::block_on(fetch(&url))?;
+    let index = fetch(&url).await?;
     lookup::select(&dependency, &index)
   }
 }
 
 /// Fetches `url`, the host only allows this for `lookup-versions`.
 async fn fetch(url: &str) -> Result<String, String> {
-  let request = Request::get(url)
+  let response = Client::new()
+    .get(url)
     .header("User-Agent", concat!("doup/", env!("CARGO_PKG_VERSION")))
-    .body(Body::empty())
-    .map_err(|err| format!("invalid request for {url}: {err}"))?;
-
-  let mut response = Client::new().send(request).await.map_err(|err| format!("request to {url} failed: {err}"))?;
+    .send()
+    .await
+    .map_err(|err| format!("request to {url} failed: {err}"))?;
   if !response.status().is_success() {
     return Err(format!("request to {url} returned {}", response.status()));
   }
 
-  let body = response.body_mut().str_contents().await.map_err(|err| format!("failed to read {url}: {err}"))?;
-  Ok(body.to_string())
+  response.into_body().text().await.map_err(|err| format!("failed to read {url}: {err}"))
 }
 
 export!(Plugin);

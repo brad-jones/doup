@@ -1,10 +1,10 @@
 $schema: ./schemas/repo.schema.json
 
 platform:
-  use: ./target/wasm32-wasip2/release/doup_platform_plugin_github.wasm
+  use: ./target/wasm32-wasip3/release/doup_platform_plugin_github.wasm
   with:
     foo: bar
 
 ecosystems:
-  - use: ./target/wasm32-wasip2/release/doup_ecosystem_plugin_doup.wasm
-  - use: ./target/wasm32-wasip2/release/doup_ecosystem_plugin_cargo.wasm
+  - use: ./target/wasm32-wasip3/release/doup_ecosystem_plugin_doup.wasm
+  - use: ./target/wasm32-wasip3/release/doup_ecosystem_plugin_cargo.wasm
