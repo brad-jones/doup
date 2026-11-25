@@ -59,9 +59,7 @@ pub struct PlatformPlugin {
 impl PlatformPlugin {
   /// Creates a plugin handle for `plugin`, resolving its module from `module_search_dirs`.
   pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
-    Self {
-      session_pool: PluginSessionPool::new(None, plugin, module_search_dirs),
-    }
+    Self { session_pool: PluginSessionPool::new(None, plugin, module_search_dirs) }
   }
 
   /// Like [`Self::new`], but eagerly checks a session out and straight back in.

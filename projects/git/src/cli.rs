@@ -36,10 +36,8 @@ impl GitBackend for GitCli {
     }
     let stderr = String::from_utf8_lossy(&output.stderr);
     Err(
-      classify_failure(options, &stderr).unwrap_or_else(|| GitError::CommandFailed {
-        status: output.status,
-        stderr: stderr.trim().to_owned(),
-      }),
+      classify_failure(options, &stderr)
+        .unwrap_or_else(|| GitError::CommandFailed { status: output.status, stderr: stderr.trim().to_owned() }),
     )
   }
 }
@@ -65,9 +63,7 @@ fn clone_invocation(options: &CloneOptions, agent: Option<&SshAgent>) -> Result<
   if let Some(Auth::Https { user, pass }) = options.auth() {
     let key = RemoteUrl::parse(options.url())?
       .extra_header_key()
-      .ok_or_else(|| GitError::InvalidUrl {
-        url: redact(options.url()),
-      })?;
+      .ok_or_else(|| GitError::InvalidUrl { url: redact(options.url()) })?;
     envs.extend([
       ("GIT_CONFIG_COUNT", "1".into()),
       ("GIT_CONFIG_KEY_0", key.into()),
@@ -106,18 +102,11 @@ fn classify_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
       && has(&["remote branch"])
       && has(&["not found"])
     {
-      GitError::BranchNotFound {
-        branch: branch.to_owned(),
-      }
+      GitError::BranchNotFound { branch: branch.to_owned() }
     } else if has(&["already exists and is not an empty directory"]) {
-      GitError::DestinationNotEmpty {
-        path: options.destination().to_path_buf(),
-      }
-    } else if has(&[
-      "repository not found",
-      "does not appear to be a git repository",
-      "returned error: 404",
-    ]) || (has(&["fatal: repository '"]) && has(&["' not found"]))
+      GitError::DestinationNotEmpty { path: options.destination().to_path_buf() }
+    } else if has(&["repository not found", "does not appear to be a git repository", "returned error: 404"])
+      || (has(&["fatal: repository '"]) && has(&["' not found"]))
     {
       GitError::RepositoryNotFound { url }
     } else if has(&[
@@ -128,10 +117,7 @@ fn classify_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
       "unable to access",
       "could not read from remote repository",
     ]) {
-      GitError::RemoteUnreachable {
-        url,
-        reason: last_line(stderr),
-      }
+      GitError::RemoteUnreachable { url, reason: last_line(stderr) }
     } else {
       return None;
     },
@@ -139,11 +125,7 @@ fn classify_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
 }
 
 fn last_line(stderr: &str) -> String {
-  let line = stderr
-    .lines()
-    .map(str::trim)
-    .rfind(|line| !line.is_empty())
-    .unwrap_or_default();
+  let line = stderr.lines().map(str::trim).rfind(|line| !line.is_empty()).unwrap_or_default();
   line.strip_prefix("fatal: ").unwrap_or(line).to_owned()
 }
 
@@ -155,11 +137,7 @@ mod tests {
   backend_contract_tests!(crate::GitCli);
 
   fn env<'a>(invocation: &'a Invocation, key: &str) -> Option<&'a str> {
-    invocation
-      .envs
-      .iter()
-      .find(|(k, _)| *k == key)
-      .and_then(|(_, v)| v.to_str())
+    invocation.envs.iter().find(|(k, _)| *k == key).and_then(|(_, v)| v.to_str())
   }
 
   fn args(invocation: &Invocation) -> Vec<&str> {
@@ -170,10 +148,7 @@ mod tests {
   fn builds_a_plain_clone() {
     let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b");
     let invocation = clone_invocation(&options, None).unwrap();
-    assert_eq!(
-      args(&invocation),
-      ["clone", "--quiet", "--", "https://github.com/a/b.git", "/tmp/b"]
-    );
+    assert_eq!(args(&invocation), ["clone", "--quiet", "--", "https://github.com/a/b.git", "/tmp/b"]);
     assert_eq!(env(&invocation, "GIT_TERMINAL_PROMPT"), Some("0"));
     assert_eq!(env(&invocation, "GIT_CONFIG_COUNT"), None);
     assert_eq!(env(&invocation, "GIT_SSH_COMMAND"), None);
@@ -181,41 +156,24 @@ mod tests {
 
   #[test]
   fn passes_branch_and_depth_as_single_args() {
-    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b")
-      .with_branch("-x")
-      .with_depth(3.try_into().unwrap());
+    let options =
+      CloneOptions::new("https://github.com/a/b.git", "/tmp/b").with_branch("-x").with_depth(3.try_into().unwrap());
     let invocation = clone_invocation(&options, None).unwrap();
     assert_eq!(
       args(&invocation),
-      [
-        "clone",
-        "--quiet",
-        "--branch=-x",
-        "--depth=3",
-        "--",
-        "https://github.com/a/b.git",
-        "/tmp/b"
-      ]
+      ["clone", "--quiet", "--branch=-x", "--depth=3", "--", "https://github.com/a/b.git", "/tmp/b"]
     );
   }
 
   #[test]
   fn https_auth_goes_in_an_extra_header_not_the_args() {
-    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b").with_auth(Auth::Https {
-      user: "user".into(),
-      pass: "hunter2".into(),
-    });
+    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b")
+      .with_auth(Auth::Https { user: "user".into(), pass: "hunter2".into() });
     let invocation = clone_invocation(&options, None).unwrap();
     assert!(args(&invocation).iter().all(|arg| !arg.contains("hunter2")));
     assert_eq!(env(&invocation, "GIT_CONFIG_COUNT"), Some("1"));
-    assert_eq!(
-      env(&invocation, "GIT_CONFIG_KEY_0"),
-      Some("http.https://github.com/.extraheader")
-    );
-    assert_eq!(
-      env(&invocation, "GIT_CONFIG_VALUE_0"),
-      Some(basic_auth_header("user", "hunter2").as_str())
-    );
+    assert_eq!(env(&invocation, "GIT_CONFIG_KEY_0"), Some("http.https://github.com/.extraheader"));
+    assert_eq!(env(&invocation, "GIT_CONFIG_VALUE_0"), Some(basic_auth_header("user", "hunter2").as_str()));
   }
 
   #[tokio::test]
@@ -224,10 +182,7 @@ mod tests {
     let agent = SshAgent::new(&key).unwrap();
     let options = CloneOptions::new("git@github.com:a/b.git", "/tmp/b").with_auth(Auth::Ssh { key });
     let invocation = clone_invocation(&options, Some(&agent)).unwrap();
-    assert_eq!(
-      env(&invocation, "GIT_SSH_COMMAND"),
-      Some(agent.ssh_command().unwrap().as_str())
-    );
+    assert_eq!(env(&invocation, "GIT_SSH_COMMAND"), Some(agent.ssh_command().unwrap().as_str()));
     assert_eq!(env(&invocation, "GIT_SSH_VARIANT"), Some("ssh"));
     assert_eq!(env(&invocation, "GIT_CONFIG_COUNT"), None);
   }
@@ -237,41 +192,29 @@ mod tests {
     let plain = CloneOptions::new("https://u:secret@github.com/a/b.git", "/tmp/b");
     let branch = plain.clone().with_branch("nope");
     let cases: &[(&CloneOptions, &str, Expect)] = &[
-      (
-        &plain,
-        "fatal: Authentication failed for 'https://github.com/a/b.git/'",
-        |e| matches!(e, GitError::AuthenticationFailed { .. }),
-      ),
-      (
-        &plain,
-        "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
-        |e| matches!(e, GitError::AuthenticationFailed { .. }),
-      ),
-      (
-        &plain,
-        "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.",
-        |e| matches!(e, GitError::AuthenticationFailed { .. }),
-      ),
+      (&plain, "fatal: Authentication failed for 'https://github.com/a/b.git/'", |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
+      (&plain, "fatal: could not read Username for 'https://github.com': terminal prompts disabled", |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
+      (&plain, "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.", |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
       (
         &branch,
         "warning: Could not find remote branch nope to clone.\nfatal: Remote branch nope not found in upstream origin",
         |e| matches!(e, GitError::BranchNotFound { branch } if branch == "nope"),
       ),
-      (
-        &plain,
-        "fatal: destination path '/tmp/b' already exists and is not an empty directory.",
-        |e| matches!(e, GitError::DestinationNotEmpty { .. }),
-      ),
-      (
-        &plain,
-        "fatal: repository 'https://github.com/a/b.git/' not found",
-        |e| matches!(e, GitError::RepositoryNotFound { .. }),
-      ),
-      (
-        &plain,
-        "fatal: '/srv/missing.git' does not appear to be a git repository",
-        |e| matches!(e, GitError::RepositoryNotFound { .. }),
-      ),
+      (&plain, "fatal: destination path '/tmp/b' already exists and is not an empty directory.", |e| {
+        matches!(e, GitError::DestinationNotEmpty { .. })
+      }),
+      (&plain, "fatal: repository 'https://github.com/a/b.git/' not found", |e| {
+        matches!(e, GitError::RepositoryNotFound { .. })
+      }),
+      (&plain, "fatal: '/srv/missing.git' does not appear to be a git repository", |e| {
+        matches!(e, GitError::RepositoryNotFound { .. })
+      }),
       (
         &plain,
         "fatal: unable to access 'https://nope.invalid/a.git/': Could not resolve host: nope.invalid",

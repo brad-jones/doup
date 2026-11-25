@@ -40,10 +40,7 @@ impl SshAgent {
   /// Starts serving `key` (an unencrypted OpenSSH private key); must be called within a tokio runtime.
   pub(crate) fn new(key: &str) -> Result<Self, GitError> {
     let session = KeySession::new(key)?;
-    let dir = tempfile::Builder::new()
-      .prefix("doup-ssh-agent-")
-      .tempdir()
-      .map_err(GitError::SshAgent)?;
+    let dir = tempfile::Builder::new().prefix("doup-ssh-agent-").tempdir().map_err(GitError::SshAgent)?;
     let public_key = dir.path().join("id.pub");
     std::fs::write(&public_key, &session.public_openssh).map_err(GitError::SshAgent)?;
     let (socket, listener) = serve(dir.path(), session).map_err(GitError::SshAgent)?;
@@ -101,9 +98,7 @@ impl Drop for SshAgent {
 }
 
 fn quote(path: &Path) -> Result<String, GitError> {
-  let invalid = || GitError::InvalidSshPath {
-    path: path.to_path_buf(),
-  };
+  let invalid = || GitError::InvalidSshPath { path: path.to_path_buf() };
   let text = path.to_str().ok_or_else(invalid)?;
   Ok(shlex::try_quote(text).map_err(|_| invalid())?.into_owned())
 }
@@ -118,11 +113,7 @@ fn ssh_program() -> Result<PathBuf, GitError> {
 fn ssh_program() -> Result<PathBuf, GitError> {
   let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
   let path = Path::new(&root).join(r"System32\OpenSSH\ssh.exe");
-  if path.is_file() {
-    Ok(path)
-  } else {
-    Err(GitError::SshNotFound { path })
-  }
+  if path.is_file() { Ok(path) } else { Err(GitError::SshNotFound { path }) }
 }
 
 #[cfg(unix)]
@@ -173,16 +164,10 @@ impl KeySession {
       KeypairData::Rsa(rsa) => KeySigner::Rsa(rsa_private_key(rsa).map_err(GitError::InvalidSshKey)?),
       KeypairData::Ed25519(_) | KeypairData::Ecdsa(_) => KeySigner::Ssh(key),
       _ => {
-        return Err(GitError::UnsupportedSshKey {
-          algorithm: key.algorithm().to_string(),
-        });
+        return Err(GitError::UnsupportedSshKey { algorithm: key.algorithm().to_string() });
       }
     };
-    Ok(Self {
-      public,
-      public_openssh,
-      signer: Arc::new(signer),
-    })
+    Ok(Self { public, public_openssh, signer: Arc::new(signer) })
   }
 }
 
@@ -210,9 +195,7 @@ impl KeySigner {
       let signature = SigningKey::<Sha256>::new(key).try_sign_with_rng(&mut OsRng, data);
       (HashAlg::Sha256, signature)
     } else {
-      return Err(AgentError::other(io::Error::other(
-        "ssh-rsa (SHA-1) signatures are not supported",
-      )));
+      return Err(AgentError::other(io::Error::other("ssh-rsa (SHA-1) signatures are not supported")));
     };
     let signature = signature.map_err(AgentError::other)?;
     Signature::new(Algorithm::Rsa { hash: Some(hash) }, signature.to_vec()).map_err(AgentError::other)
@@ -222,10 +205,7 @@ impl KeySigner {
 #[ssh_agent_lib::async_trait]
 impl Session for KeySession {
   async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
-    Ok(vec![Identity {
-      credential: self.public.clone().into(),
-      comment: "doup".into(),
-    }])
+    Ok(vec![Identity { credential: self.public.clone().into(), comment: "doup".into() }])
   }
 
   async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
@@ -247,9 +227,7 @@ mod tests {
     #[cfg(unix)]
     let stream = tokio::net::UnixStream::connect(&agent.socket).await.unwrap();
     #[cfg(windows)]
-    let stream = tokio::net::windows::named_pipe::ClientOptions::new()
-      .open(&agent.socket)
-      .unwrap();
+    let stream = tokio::net::windows::named_pipe::ClientOptions::new().open(&agent.socket).unwrap();
     Box::new(ssh_agent_lib::client::Client::new(stream))
   }
 
@@ -260,11 +238,7 @@ mod tests {
   async fn sign(agent: &SshAgent, public: &PublicKey, flags: u32) -> Result<Signature, AgentError> {
     client(agent)
       .await
-      .sign(SignRequest {
-        credential: public.key_data().clone().into(),
-        data: b"data".to_vec(),
-        flags,
-      })
+      .sign(SignRequest { credential: public.key_data().clone().into(), data: b"data".to_vec(), flags })
       .await
   }
 
@@ -280,13 +254,8 @@ mod tests {
 
   #[tokio::test]
   async fn for_auth_only_starts_an_agent_for_ssh() {
-    let https = Auth::Https {
-      user: "u".into(),
-      pass: "p".into(),
-    };
-    let ssh = Auth::Ssh {
-      key: generate_ssh_key("ed25519", ""),
-    };
+    let https = Auth::Https { user: "u".into(), pass: "p".into() };
+    let ssh = Auth::Ssh { key: generate_ssh_key("ed25519", "") };
     assert!(SshAgent::for_auth(None).unwrap().is_none());
     assert!(SshAgent::for_auth(Some(&https)).unwrap().is_none());
     assert!(SshAgent::for_auth(Some(&ssh)).unwrap().is_some());
@@ -336,10 +305,8 @@ mod tests {
     let agent = SshAgent::new(&key).unwrap();
     let dir = agent._dir.path().to_path_buf();
 
-    let mut names: Vec<_> = std::fs::read_dir(&dir)
-      .unwrap()
-      .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-      .collect();
+    let mut names: Vec<_> =
+      std::fs::read_dir(&dir).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
     #[cfg(unix)]
     assert_eq!(names, ["agent.sock", "id.pub"]);
@@ -367,11 +334,7 @@ mod tests {
       "IdentityAgent=SSH_AUTH_SOCK".into(),
     ];
     #[cfg(windows)]
-    let mut expected = vec![
-      program.to_str().unwrap().into(),
-      "-F".into(),
-      agent.ssh_config.to_str().unwrap().into(),
-    ];
+    let mut expected = vec![program.to_str().unwrap().into(), "-F".into(), agent.ssh_config.to_str().unwrap().into()];
     expected.extend(
       [
         "-o",

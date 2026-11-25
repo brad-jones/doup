@@ -16,7 +16,11 @@ impl Guest for Plugin {
   }
 
   fn discover_deps() -> Result<Vec<Dependency>, String> {
-    todo!()
+    Ok(Vec::new())
+  }
+
+  fn lookup_versions(_dependency: Dependency) -> Result<Option<Versions>, String> {
+    Ok(None)
   }
 }
 

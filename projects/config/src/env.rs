@@ -51,8 +51,7 @@ where
   let vars: Vec<_> = vars.into_iter().collect();
   let needle = needle(prefix);
   let base = vars.iter().filter(|(k, _)| {
-    !k.strip_prefix(&needle)
-      .is_some_and(|rest| matches!(parse_path(rest).first(), Some(Seg::Index(_))))
+    !k.strip_prefix(&needle).is_some_and(|rest| matches!(parse_path(rest).first(), Some(Seg::Index(_))))
   });
   let mut value = vars_to_value(base.cloned(), prefix);
   if let Some(scope) = scope {
@@ -121,11 +120,7 @@ pub fn merge(base: &mut Value, over: Value) {
 
 fn parse_path(s: &str) -> Vec<Seg> {
   // `s` is what follows `<prefix>_`, so `PREFIX__KEY` arrives as `_KEY`.
-  let sep = if s.contains("__") || s.starts_with('_') {
-    "__"
-  } else {
-    "_"
-  };
+  let sep = if s.contains("__") || s.starts_with('_') { "__" } else { "_" };
   s.trim_start_matches('_')
     .split(sep)
     .filter(|p| !p.is_empty())
@@ -219,14 +214,8 @@ mod tests {
 
   #[test]
   fn double_underscore_keeps_single_underscores_in_keys() {
-    let v = run(
-      &[
-        ("APP_REPOS__0__AUTH__KEY_PATH", "/k"),
-        ("APP__PLAIN__SOME_KEY", "v"),
-        ("APP_OTHER_0_NAME", "x"),
-      ],
-      "APP",
-    );
+    let v =
+      run(&[("APP_REPOS__0__AUTH__KEY_PATH", "/k"), ("APP__PLAIN__SOME_KEY", "v"), ("APP_OTHER_0_NAME", "x")], "APP");
     assert_eq!(
       v,
       json!({
@@ -273,11 +262,7 @@ mod tests {
 
   #[test]
   fn layered_scope_wins_over_prefix() {
-    let v = run_layered(
-      &[("APP_X", "1"), ("APP_Y", "y"), ("APP_0_X", "2")],
-      "APP",
-      Some("APP_0"),
-    );
+    let v = run_layered(&[("APP_X", "1"), ("APP_Y", "y"), ("APP_0_X", "2")], "APP", Some("APP_0"));
     assert_eq!(v, json!({"x": "2", "y": "y"}));
   }
 

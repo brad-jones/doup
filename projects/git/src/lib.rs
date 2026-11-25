@@ -60,15 +60,10 @@ impl GitBackend for Git {
 async fn validate(options: &CloneOptions) -> Result<(), GitError> {
   let remote = RemoteUrl::parse(options.url())?;
   if let Some(auth) = options.auth() {
-    let matches_remote = matches!(
-      (auth, &remote),
-      (Auth::Https { .. }, RemoteUrl::Http(_)) | (Auth::Ssh { .. }, RemoteUrl::Ssh)
-    );
+    let matches_remote =
+      matches!((auth, &remote), (Auth::Https { .. }, RemoteUrl::Http(_)) | (Auth::Ssh { .. }, RemoteUrl::Ssh));
     if !matches_remote {
-      return Err(GitError::AuthMismatch {
-        url: redact(options.url()),
-        auth: auth.kind(),
-      });
+      return Err(GitError::AuthMismatch { url: redact(options.url()), auth: auth.kind() });
     }
   }
   if options.branch().is_some_and(|branch| branch.trim().is_empty()) {
@@ -78,9 +73,7 @@ async fn validate(options: &CloneOptions) -> Result<(), GitError> {
 }
 
 async fn ensure_empty_destination(path: &Path) -> Result<(), GitError> {
-  let not_empty = || GitError::DestinationNotEmpty {
-    path: path.to_path_buf(),
-  };
+  let not_empty = || GitError::DestinationNotEmpty { path: path.to_path_buf() };
   match tokio::fs::read_dir(path).await {
     Ok(mut entries) => match entries.next_entry().await? {
       Some(_) => Err(not_empty()),
@@ -98,10 +91,7 @@ mod tests {
   use tempfile::TempDir;
 
   fn https() -> Auth {
-    Auth::Https {
-      user: "u".into(),
-      pass: "p".into(),
-    }
+    Auth::Https { user: "u".into(), pass: "p".into() }
   }
 
   fn ssh() -> Auth {
@@ -118,18 +108,15 @@ mod tests {
   #[tokio::test]
   async fn accepts_valid_options() {
     let dir = TempDir::new().unwrap();
-    let options = CloneOptions::new("https://github.com/a/b.git", dir.path().join("b"))
-      .with_branch("main")
-      .with_auth(https());
+    let options =
+      CloneOptions::new("https://github.com/a/b.git", dir.path().join("b")).with_branch("main").with_auth(https());
     validate(&options).await.unwrap();
   }
 
   #[tokio::test]
   async fn accepts_an_existing_empty_destination() {
     let dir = TempDir::new().unwrap();
-    validate(&CloneOptions::new("git@github.com:a/b.git", dir.path()))
-      .await
-      .unwrap();
+    validate(&CloneOptions::new("git@github.com:a/b.git", dir.path())).await.unwrap();
   }
 
   #[tokio::test]

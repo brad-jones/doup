@@ -24,6 +24,12 @@ world ecosystem {
     /// The name of the dependency, unique within this ecosystem, eg: "@types/node".
     name: string,
 
+    /// The registry the dependency is resolved from, opaque to the host and defined by the ecosystem,
+    /// eg: the alias of an alternate cargo registry. None means the ecosystem's default registry.
+    /// The same name from different registries are different dependencies, so a dependency
+    /// is unique within this ecosystem by the pair (name, registry).
+    registry: option<string>,
+
     /// A dependency may occur many times, think monorepo with
     /// many manifests that all depend on a common dependency.
     occurrences: list<occurrence>,
@@ -45,9 +51,25 @@ world ecosystem {
     locked-version: option<string>,
   }
 
+  record versions {
+    /// The latest version that still satisfies any version constraints from the original manifest.
+    /// eg: If current-version is ^1.2.3 then this value must be  less than 2.0.0
+    next: string,
+
+    /// The very latest version regardless of any original version constraints.
+    /// If this would be the same value as `next` there is no need to supply this.
+    /// Setting this to a value will end up creating a second PR that maintainers
+    /// may elect to merge over the PR created for the `next` version.
+    latest: option<string>,
+  }
+
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
 
   /// Returns a list of dependencies discovered in the current workspace.
   export discover-deps: func() -> result<list<dependency>, string>;
+
+  /// Looks up the latest version for a given dependency.
+  /// If the latest version matches what is already installed then return `None`.
+  export lookup-versions: func(dependency: dependency) -> result<option<versions>, string>;
 }

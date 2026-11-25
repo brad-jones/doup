@@ -7,7 +7,7 @@ use doup_config::{
 };
 use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
 use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
 
 /// Runs the doup update process
@@ -33,14 +33,11 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     // Clone the repo into a new temp dir (auto deleted on drop)
     let dir = TempDir::new()?;
     let destination = dir.path();
-    let mut options = CloneOptions::new(&repo.origin, destination);
+    let mut options = CloneOptions::new(&repo.origin, destination).with_depth(NonZero::new(1).unwrap());
 
     if let Some(auth) = &repo.auth {
       options = options.with_auth(match auth {
-        DoupBotRepoAuth::Https { user, pass } => Auth::Https {
-          user: user.clone(),
-          pass: pass.clone(),
-        },
+        DoupBotRepoAuth::Https { user, pass } => Auth::Https { user: user.clone(), pass: pass.clone() },
         DoupBotRepoAuth::Ssh { key, .. } => match key {
           Some(key) => Auth::Ssh { key: key.clone() },
           None => bail!("ssh key not loaded"),
@@ -48,38 +45,55 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       });
     }
 
-    println!("Cloning {} into {}", repo.origin, destination.display());
+    print!("Cloning {} into {}... ", repo.origin, destination.display());
     if let Err(err) = git.clone_repo(&options).await {
       eprintln!("Failed to clone {}: {err:#}", repo.origin);
       failed += 1;
       continue;
     }
+    println!("DONE");
 
     // Load the repo's config
     let env_prefix = DoupRepoConfigFile::repo_env_prefix(index);
     let repo_config = DoupRepoConfigFile::load(Some(destination), Some(&env_prefix))?.merged;
-    println!("Loaded repo config {:#?}", repo_config);
+    //println!("Loaded repo config {:#?}", repo_config);
 
     // Load all the repo's plugins before we start work
     // A bad config or bad WASM module should be caught here, not half way through updating the repo.
     let module_search_dirs = vec![destination.to_path_buf()];
+
+    print!("Loading {}... ", &repo_config.platform.plugin);
     let _platform = PlatformPlugin::load(&repo_config.platform, module_search_dirs.clone()).await?;
-    let mut ecosystems = vec![];
+    println!("DONE");
+
+    let mut ecosystems = HashMap::new();
     for ecosystem in &repo_config.ecosystems {
-      ecosystems.push((
-        ecosystem,
-        EcosystemPlugin::load(ecosystem, module_search_dirs.clone()).await?,
-      ));
+      print!("Loading {}... ", &ecosystem.plugin);
+      ecosystems.insert(ecosystem, EcosystemPlugin::load(ecosystem, module_search_dirs.clone()).await?);
+      println!("DONE");
     }
 
     // Now discover all the dependencies that may need updating
     let mut dependencies_by_ecosystem = HashMap::new();
-    for (ecosystem_ref, ecosystem_plugin) in ecosystems {
-      dependencies_by_ecosystem.insert(ecosystem_ref, ecosystem_plugin.discover_deps().await?);
+    for (&ecosystem_ref, ecosystem_plugin) in &ecosystems {
+      print!("Discovering dependencies for {}... ", &ecosystem_ref.plugin);
+      dependencies_by_ecosystem.insert(ecosystem_ref, ecosystem_plugin.discover_deps(destination).await?);
+      println!("DONE");
     }
 
-    for (ecosystem_ref, dependencies) in dependencies_by_ecosystem {
-      println!("{:#?}: {:#?}", ecosystem_ref, dependencies)
+    // For each dependency, lookup the next version
+    let mut next_versions = Vec::new();
+    for (&ecosystem_ref, dependencies) in &dependencies_by_ecosystem {
+      let ecosystem_plugin = &ecosystems[ecosystem_ref];
+      for dependency in dependencies {
+        print!("Looking up next version using {} for {}... ", &ecosystem_ref.plugin, &dependency.name);
+        if let Some(next_version) = ecosystem_plugin.lookup_versions(destination, dependency).await? {
+          next_versions.push((ecosystem_ref, dependency, next_version.clone()));
+          println!("{}", next_version.next);
+        } else {
+          println!("no update needed");
+        }
+      }
     }
   }
 

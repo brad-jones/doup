@@ -26,9 +26,7 @@ async fn clones_over_ssh_with_an_in_memory_key(backend: impl Into<Git>) {
   let (url, key) = ssh_remote();
   let dir = TempDir::new().unwrap();
   let dest = dir.path().join("clone");
-  let options = CloneOptions::new(url, &dest)
-    .with_depth(NonZeroU32::new(1).unwrap())
-    .with_auth(Auth::Ssh { key });
+  let options = CloneOptions::new(url, &dest).with_depth(NonZeroU32::new(1).unwrap()).with_auth(Auth::Ssh { key });
   Git::new(backend).clone_repo(&options).await.unwrap();
   assert!(dest.join(".git").is_dir());
   assert!(dest.join("README.md").exists());

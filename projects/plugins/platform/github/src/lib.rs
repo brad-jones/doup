@@ -18,9 +18,7 @@ impl Guest for Plugin {
 
   fn hello_world() -> String {
     let version = host_api::host_version();
-    let config = CONFIG
-      .get()
-      .map_or_else(|| "unconfigured".to_string(), |c| c.to_string());
+    let config = CONFIG.get().map_or_else(|| "unconfigured".to_string(), |c| c.to_string());
     println!("[plugin GITHUB] Hello, {version}! config: {config}");
     "hello world".to_string()
   }

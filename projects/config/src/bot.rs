@@ -136,14 +136,8 @@ impl Serialize for DoupBotRepoAuth {
 
     match self {
       Self::Https { user, pass } => Out::Https { user, pass }.serialize(serializer),
-      Self::Ssh {
-        key_path: Some(key_path),
-        ..
-      } => Out::KeyPath { key_path }.serialize(serializer),
-      Self::Ssh {
-        key: Some(key),
-        key_path: None,
-      } => Out::Key { key }.serialize(serializer),
+      Self::Ssh { key_path: Some(key_path), .. } => Out::KeyPath { key_path }.serialize(serializer),
+      Self::Ssh { key: Some(key), key_path: None } => Out::Key { key }.serialize(serializer),
       Self::Ssh { .. } => Err(S::Error::custom("ssh auth needs a key or a key_path")),
     }
   }
@@ -195,44 +189,23 @@ y5yYJ2PSeOZakF6g==
     let json = config_json(json!({ "origin": "https://github.com/a/b.git" }));
     let config = DoupBotConfigFile::from_json(&json).unwrap();
     assert_eq!(only_repo(config.clone()).auth, None);
-    assert_eq!(
-      DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(),
-      config
-    );
+    assert_eq!(DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(), config);
   }
 
   #[test]
   fn https_auth_round_trips() {
     let json = config_json(json!({ "origin": "https://github.com/a/b.git", "auth": { "user": "u", "pass": "p" } }));
     let config = DoupBotConfigFile::from_json(&json).unwrap();
-    assert_eq!(
-      only_repo(config.clone()).auth,
-      Some(DoupBotRepoAuth::Https {
-        user: "u".into(),
-        pass: "p".into()
-      })
-    );
-    assert_eq!(
-      DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(),
-      config
-    );
+    assert_eq!(only_repo(config.clone()).auth, Some(DoupBotRepoAuth::Https { user: "u".into(), pass: "p".into() }));
+    assert_eq!(DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(), config);
   }
 
   #[test]
   fn inline_ssh_key_round_trips() {
     let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key": KEY } }));
     let config = DoupBotConfigFile::from_json(&json).unwrap();
-    assert_eq!(
-      only_repo(config.clone()).auth,
-      Some(DoupBotRepoAuth::Ssh {
-        key: Some(KEY.into()),
-        key_path: None
-      })
-    );
-    assert_eq!(
-      DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(),
-      config
-    );
+    assert_eq!(only_repo(config.clone()).auth, Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: None }));
+    assert_eq!(DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(), config);
   }
 
   #[test]
@@ -246,10 +219,7 @@ y5yYJ2PSeOZakF6g==
     let config = DoupBotConfigFile::from_json(&json).unwrap();
     assert_eq!(
       only_repo(config.clone()).auth,
-      Some(DoupBotRepoAuth::Ssh {
-        key: Some(KEY.into()),
-        key_path: Some(file.path().to_path_buf())
-      })
+      Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: Some(file.path().to_path_buf()) })
     );
 
     let out: serde_json::Value = serde_json::from_str(&config.to_json().unwrap()).unwrap();
@@ -294,26 +264,13 @@ repos:
       key: |
 {}
 ",
-      KEY
-        .lines()
-        .map(|l| format!("        {l}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+      KEY.lines().map(|l| format!("        {l}")).collect::<Vec<_>>().join("\n")
     );
     let config = DoupBotConfigFile::from_yaml(&yaml).unwrap();
     assert_eq!(config.repos.len(), 3);
     assert_eq!(config.repos[0].auth, None);
-    assert_eq!(
-      config.repos[2].auth,
-      Some(DoupBotRepoAuth::Ssh {
-        key: Some(KEY.into()),
-        key_path: None
-      })
-    );
-    assert_eq!(
-      DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(),
-      config
-    );
+    assert_eq!(config.repos[2].auth, Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: None }));
+    assert_eq!(DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(), config);
   }
 
   #[test]
@@ -326,10 +283,7 @@ repos:
     let json = json!({ "git_backend": "grit", "repos": [{ "origin": "https://github.com/a/b.git" }] });
     let config = DoupBotConfigFile::from_json(&json.to_string()).unwrap();
     assert_eq!(config.git_backend, GitBackendKind::Grit);
-    assert_eq!(
-      DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(),
-      config
-    );
+    assert_eq!(DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(), config);
   }
 
   #[test]
@@ -356,10 +310,7 @@ repos:
       json!({ "origin": "git@github.com:a/b.git", "auth": { "key": "/k" } }),
       json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": "" } }),
     ] {
-      assert!(
-        DoupBotConfigFileSchema::validate(&json!({ "repos": [repo.clone()] })).is_err(),
-        "{repo}"
-      );
+      assert!(DoupBotConfigFileSchema::validate(&json!({ "repos": [repo.clone()] })).is_err(), "{repo}");
     }
   }
 
@@ -375,22 +326,14 @@ repos:
     assert!(valid(KEY));
     assert!(!valid("/home/me/.ssh/id_ed25519"));
     assert!(!valid("not a key"));
-    assert!(!valid(
-      "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----"
-    ));
+    assert!(!valid("-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----"));
   }
 
   /// Writes a config file with one repo, then loads it with the given env vars applied.
   fn load_with(vars: &[(&str, &str)]) -> (TempDir, Loaded<DoupBotConfigFile>) {
     let dir = TempDir::new().unwrap();
-    dir
-      .child("doupbot.json")
-      .write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" })))
-      .unwrap();
-    let env = vars_to_value(
-      vars.iter().map(|(k, v)| (k.to_string(), v.to_string())),
-      DoupBotConfigFile::ENV_PREFIX,
-    );
+    dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" }))).unwrap();
+    let env = vars_to_value(vars.iter().map(|(k, v)| (k.to_string(), v.to_string())), DoupBotConfigFile::ENV_PREFIX);
     let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();
     (dir, loaded)
   }
@@ -412,13 +355,7 @@ repos:
   #[test]
   fn env_can_supply_partial_overrides() {
     let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_AUTH_USER", "u"), ("DOUP_BOT_REPOS_0_AUTH_PASS", "p")]);
-    assert_eq!(
-      loaded.merged.repos[0].auth,
-      Some(DoupBotRepoAuth::Https {
-        user: "u".into(),
-        pass: "p".into()
-      })
-    );
+    assert_eq!(loaded.merged.repos[0].auth, Some(DoupBotRepoAuth::Https { user: "u".into(), pass: "p".into() }));
     assert_eq!(loaded.file.unwrap().repos[0].auth, None);
   }
 
@@ -427,25 +364,16 @@ repos:
     let dir = TempDir::new().unwrap();
     let key_file = dir.child("id_ed25519");
     key_file.write_str(KEY).unwrap();
-    dir
-      .child("doupbot.json")
-      .write_str(&config_json(json!({ "origin": "git@github.com:a/b.git" })))
-      .unwrap();
+    dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "git@github.com:a/b.git" }))).unwrap();
     let env = vars_to_value(
-      [(
-        "DOUP_BOT_REPOS__0__AUTH__KEY_PATH".to_string(),
-        key_file.path().to_string_lossy().into_owned(),
-      )],
+      [("DOUP_BOT_REPOS__0__AUTH__KEY_PATH".to_string(), key_file.path().to_string_lossy().into_owned())],
       DoupBotConfigFile::ENV_PREFIX,
     );
 
     let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();
     assert_eq!(
       loaded.merged.repos[0].auth,
-      Some(DoupBotRepoAuth::Ssh {
-        key: Some(KEY.into()),
-        key_path: Some(key_file.path().to_path_buf())
-      })
+      Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: Some(key_file.path().to_path_buf()) })
     );
     assert_eq!(loaded.file.unwrap().repos[0].auth, None);
   }
@@ -453,14 +381,9 @@ repos:
   #[test]
   fn invalid_env_override_is_rejected() {
     let dir = TempDir::new().unwrap();
-    dir
-      .child("doupbot.json")
-      .write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" })))
-      .unwrap();
-    let env = vars_to_value(
-      [("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())],
-      DoupBotConfigFile::ENV_PREFIX,
-    );
+    dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" }))).unwrap();
+    let env =
+      vars_to_value([("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())], DoupBotConfigFile::ENV_PREFIX);
     assert!(load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).is_err());
   }
 
@@ -479,10 +402,7 @@ repos:
   fn loads_from_env_alone_when_no_file_exists() {
     let dir = TempDir::new().unwrap();
     let env = vars_to_value(
-      [(
-        "DOUP_BOT_REPOS_0_ORIGIN".to_string(),
-        "https://github.com/c/d.git".to_string(),
-      )],
+      [("DOUP_BOT_REPOS_0_ORIGIN".to_string(), "https://github.com/c/d.git".to_string())],
       DoupBotConfigFile::ENV_PREFIX,
     );
     let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();

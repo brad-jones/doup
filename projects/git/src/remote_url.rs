@@ -69,11 +69,7 @@ mod tests {
 
   #[test]
   fn classifies_http_urls() {
-    for url in [
-      "https://github.com/a/b.git",
-      "http://example.com:8080/a/b",
-      "HTTPS://github.com/a/b",
-    ] {
+    for url in ["https://github.com/a/b.git", "http://example.com:8080/a/b", "HTTPS://github.com/a/b"] {
       assert!(matches!(RemoteUrl::parse(url), Ok(RemoteUrl::Http(_))), "{url}");
     }
   }
@@ -107,37 +103,22 @@ mod tests {
   #[test]
   fn rejects_invalid_urls() {
     for url in ["", "   ", "ftp://example.com/repo", "https://"] {
-      assert!(
-        matches!(RemoteUrl::parse(url), Err(GitError::InvalidUrl { .. })),
-        "{url}"
-      );
+      assert!(matches!(RemoteUrl::parse(url), Err(GitError::InvalidUrl { .. })), "{url}");
     }
   }
 
   #[test]
   fn extra_header_key_uses_the_origin() {
     let key = |url: &str| RemoteUrl::parse(url).unwrap().extra_header_key();
-    assert_eq!(
-      key("https://github.com/a/b.git").as_deref(),
-      Some("http.https://github.com/.extraheader")
-    );
-    assert_eq!(
-      key("https://user@example.com:8443/a/b").as_deref(),
-      Some("http.https://example.com:8443/.extraheader")
-    );
-    assert_eq!(
-      key("https://example.com:443/a").as_deref(),
-      Some("http.https://example.com/.extraheader")
-    );
+    assert_eq!(key("https://github.com/a/b.git").as_deref(), Some("http.https://github.com/.extraheader"));
+    assert_eq!(key("https://user@example.com:8443/a/b").as_deref(), Some("http.https://example.com:8443/.extraheader"));
+    assert_eq!(key("https://example.com:443/a").as_deref(), Some("http.https://example.com/.extraheader"));
     assert_eq!(key("git@github.com:a/b.git"), None);
   }
 
   #[test]
   fn redact_removes_passwords_only() {
-    assert_eq!(
-      redact("https://user:secret@example.com/a.git"),
-      "https://user@example.com/a.git"
-    );
+    assert_eq!(redact("https://user:secret@example.com/a.git"), "https://user@example.com/a.git");
     assert_eq!(redact("https://example.com/a.git"), "https://example.com/a.git");
     assert_eq!(redact("git@github.com:a/b.git"), "git@github.com:a/b.git");
   }

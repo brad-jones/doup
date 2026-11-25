@@ -31,11 +31,7 @@ impl fmt::Debug for Auth {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     const REDACTED: &str = "<redacted>";
     match self {
-      Self::Https { user, .. } => f
-        .debug_struct("Https")
-        .field("user", user)
-        .field("pass", &REDACTED)
-        .finish(),
+      Self::Https { user, .. } => f.debug_struct("Https").field("user", user).field("pass", &REDACTED).finish(),
       Self::Ssh { .. } => f.debug_struct("Ssh").field("key", &REDACTED).finish(),
     }
   }
@@ -54,10 +50,7 @@ mod tests {
 
   #[test]
   fn debug_redacts_secrets() {
-    let https = Auth::Https {
-      user: "me".into(),
-      pass: "hunter2".into(),
-    };
+    let https = Auth::Https { user: "me".into(), pass: "hunter2".into() };
     let ssh = Auth::Ssh { key: KEY.into() };
     let out = format!("{https:?} {ssh:?}");
     assert!(!out.contains("hunter2"), "{out}");

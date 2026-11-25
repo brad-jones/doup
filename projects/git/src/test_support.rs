@@ -83,11 +83,7 @@ pub(crate) fn head_branch(repo: &Path) -> String {
 }
 
 pub(crate) fn commit_count(repo: &Path) -> u32 {
-  let output = Command::new("git")
-    .current_dir(repo)
-    .args(["rev-list", "--count", "HEAD"])
-    .output()
-    .unwrap();
+  let output = Command::new("git").current_dir(repo).args(["rev-list", "--count", "HEAD"]).output().unwrap();
   assert!(output.status.success(), "{output:?}");
   String::from_utf8(output.stdout).unwrap().trim().parse().unwrap()
 }

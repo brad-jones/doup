@@ -15,13 +15,7 @@ pub struct CloneOptions {
 impl CloneOptions {
   /// Clone `url` into `destination`, which must not exist or be an empty directory.
   pub fn new(url: impl Into<String>, destination: impl Into<PathBuf>) -> Self {
-    Self {
-      url: url.into(),
-      destination: destination.into(),
-      branch: None,
-      depth: None,
-      auth: None,
-    }
+    Self { url: url.into(), destination: destination.into(), branch: None, depth: None, auth: None }
   }
 
   /// Check out this branch instead of the remote's default branch.

@@ -49,10 +49,8 @@ fn clone_blocking(options: &CloneOptions, ssh_command: Option<String>, cancel: &
   grit_options.branch = options.branch().map(str::to_owned);
   grit_options.depth = options.depth().map(NonZeroU32::get);
   if let Some(ssh_command) = ssh_command {
-    grit_options.environment = grit_options
-      .environment
-      .with_var("GIT_SSH_COMMAND", ssh_command)
-      .with_var("GIT_SSH_VARIANT", "ssh");
+    grit_options.environment =
+      grit_options.environment.with_var("GIT_SSH_COMMAND", ssh_command).with_var("GIT_SSH_VARIANT", "ssh");
   }
   let http_factory = match (options.auth(), RemoteUrl::parse(options.url())?) {
     (Some(Auth::Https { user, pass }), RemoteUrl::Http(url)) => Some(StaticCredentialsFactory {
@@ -89,25 +87,20 @@ fn classify_failure(options: &CloneOptions, err: &Error) -> Option<GitError> {
     RemoteError::Auth { .. } | RemoteError::CredentialsUnavailable { .. } => GitError::AuthenticationFailed { url },
     RemoteError::HttpStatus { status: 401 | 403, .. } => GitError::AuthenticationFailed { url },
     RemoteError::HttpStatus { status: 404, .. } => GitError::RepositoryNotFound { url },
-    RemoteError::Unreadable {
-      reason: RemoteUnreadableReason::RepositoryNotFound,
-      ..
-    } => GitError::RepositoryNotFound { url },
-    RemoteError::Unreadable {
-      reason: RemoteUnreadableReason::HttpStatus { status: 404, .. },
-      ..
-    } => GitError::RepositoryNotFound { url },
-    RemoteError::Unreadable { .. } | RemoteError::Transport { .. } => GitError::RemoteUnreachable {
-      url,
-      reason: err.to_string(),
-    },
+    RemoteError::Unreadable { reason: RemoteUnreadableReason::RepositoryNotFound, .. } => {
+      GitError::RepositoryNotFound { url }
+    }
+    RemoteError::Unreadable { reason: RemoteUnreadableReason::HttpStatus { status: 404, .. }, .. } => {
+      GitError::RepositoryNotFound { url }
+    }
+    RemoteError::Unreadable { .. } | RemoteError::Transport { .. } => {
+      GitError::RemoteUnreachable { url, reason: err.to_string() }
+    }
     RemoteError::Clone(clone) => match clone.as_ref() {
-      CloneError::DestNotEmpty { .. } => GitError::DestinationNotEmpty {
-        path: options.destination().to_path_buf(),
-      },
-      CloneError::RemoteRefNotFound { name } => GitError::BranchNotFound {
-        branch: options.branch().unwrap_or(name).to_owned(),
-      },
+      CloneError::DestNotEmpty { .. } => GitError::DestinationNotEmpty { path: options.destination().to_path_buf() },
+      CloneError::RemoteRefNotFound { name } => {
+        GitError::BranchNotFound { branch: options.branch().unwrap_or(name).to_owned() }
+      }
       _ => return None,
     },
     _ => return None,
@@ -130,12 +123,7 @@ impl StaticCredentials {
       Some(port) => format!("{host}:{port}"),
       None => host.to_owned(),
     };
-    Self {
-      protocol: url.scheme().to_owned(),
-      host,
-      user: user.to_owned(),
-      pass: pass.to_owned(),
-    }
+    Self { protocol: url.scheme().to_owned(), host, user: user.to_owned(), pass: pass.to_owned() }
   }
 }
 
@@ -190,11 +178,7 @@ mod tests {
   }
 
   fn request(protocol: &str, host: &str) -> Credential {
-    Credential {
-      protocol: Some(protocol.into()),
-      host: Some(host.into()),
-      ..Credential::default()
-    }
+    Credential { protocol: Some(protocol.into()), host: Some(host.into()), ..Credential::default() }
   }
 
   #[test]
@@ -206,11 +190,7 @@ mod tests {
 
   #[test]
   fn withholds_credentials_from_other_origins() {
-    for (protocol, host) in [
-      ("https", "evil.example.com"),
-      ("https", "example.com"),
-      ("http", "example.com:8443"),
-    ] {
+    for (protocol, host) in [("https", "evil.example.com"), ("https", "example.com"), ("http", "example.com:8443")] {
       let filled = credentials().fill(&request(protocol, host)).unwrap();
       assert_eq!(filled.password, None, "{protocol}://{host}");
     }
@@ -218,10 +198,7 @@ mod tests {
 
   #[test]
   fn factory_builds_a_client() {
-    let factory = StaticCredentialsFactory {
-      credentials: credentials(),
-      environment: Environment::empty(),
-    };
+    let factory = StaticCredentialsFactory { credentials: credentials(), environment: Environment::empty() };
     let config = ConfigSet::default();
     assert!(factory.create(&config).is_ok());
     assert!(factory.create_for_preflight(&config).is_ok());
@@ -232,49 +209,29 @@ mod tests {
     let options = CloneOptions::new("https://u:secret@example.com/a.git", "/tmp/b").with_branch("nope");
     let remote = |err: RemoteError| Error::Remote(err);
     let cases: Vec<(Error, Expect)> = vec![
-      (
-        remote(RemoteError::Auth {
-          url: "https://example.com/a.git".into(),
-          reason: AuthFailure::Rejected,
-        }),
-        |e| matches!(e, GitError::AuthenticationFailed { .. }),
-      ),
+      (remote(RemoteError::Auth { url: "https://example.com/a.git".into(), reason: AuthFailure::Rejected }), |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
       (remote(RemoteError::HttpStatus { url: None, status: 403 }), |e| {
         matches!(e, GitError::AuthenticationFailed { .. })
       }),
+      (remote(RemoteError::Unreadable { url: None, reason: RemoteUnreadableReason::RepositoryNotFound }), |e| {
+        matches!(e, GitError::RepositoryNotFound { .. })
+      }),
       (
-        remote(RemoteError::Unreadable {
-          url: None,
-          reason: RemoteUnreadableReason::RepositoryNotFound,
-        }),
+        remote(RemoteError::Unreadable { url: None, reason: RemoteUnreadableReason::HttpStatus { status: 404 } }),
         |e| matches!(e, GitError::RepositoryNotFound { .. }),
       ),
+      (remote(RemoteError::Unreadable { url: None, reason: RemoteUnreadableReason::NoHandshake }), |e| {
+        matches!(e, GitError::RemoteUnreachable { .. })
+      }),
       (
-        remote(RemoteError::Unreadable {
-          url: None,
-          reason: RemoteUnreadableReason::HttpStatus { status: 404 },
-        }),
-        |e| matches!(e, GitError::RepositoryNotFound { .. }),
-      ),
-      (
-        remote(RemoteError::Unreadable {
-          url: None,
-          reason: RemoteUnreadableReason::NoHandshake,
-        }),
-        |e| matches!(e, GitError::RemoteUnreachable { .. }),
-      ),
-      (
-        remote(RemoteError::Clone(Box::new(CloneError::RemoteRefNotFound {
-          name: "nope".into(),
-        }))),
+        remote(RemoteError::Clone(Box::new(CloneError::RemoteRefNotFound { name: "nope".into() }))),
         |e| matches!(e, GitError::BranchNotFound { branch } if branch == "nope"),
       ),
-      (
-        remote(RemoteError::Clone(Box::new(CloneError::DestNotEmpty {
-          path: "/tmp/b".into(),
-        }))),
-        |e| matches!(e, GitError::DestinationNotEmpty { .. }),
-      ),
+      (remote(RemoteError::Clone(Box::new(CloneError::DestNotEmpty { path: "/tmp/b".into() }))), |e| {
+        matches!(e, GitError::DestinationNotEmpty { .. })
+      }),
     ];
     for (err, expected) in &cases {
       let classified = classify_failure(&options, err).unwrap();
