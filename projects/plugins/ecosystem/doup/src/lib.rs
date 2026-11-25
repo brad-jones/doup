@@ -1,7 +1,14 @@
-wit_bindgen::generate!({
-  world: "ecosystem",
-  path: "../../wit",
-});
+// Generated code, the canonical ABI flattens `fetch-release-notes(dependency, to)` into 9 core wasm params.
+#[allow(clippy::too_many_arguments)]
+mod bindings {
+  wit_bindgen::generate!({
+    world: "ecosystem",
+    path: "../../wit",
+    default_bindings_module: "crate::bindings",
+  });
+}
+
+use bindings::*;
 
 use std::sync::OnceLock;
 
