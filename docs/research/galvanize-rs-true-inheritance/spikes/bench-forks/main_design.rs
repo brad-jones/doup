@@ -187,10 +187,7 @@ impl Animal {
     Self(RawHandle::new(Self::init(name), Self::vtable()))
   }
   pub fn init(name: &str) -> __AnimalFields {
-    __AnimalFields {
-      name: RwLock::new(name.into()),
-      age: RwLock::new(3),
-    }
+    __AnimalFields { name: RwLock::new(name.into()), age: RwLock::new(3) }
   }
   fn fields(&self) -> &__AnimalFields {
     // SAFETY: every view of an object carries its own class's fields, which start with an Animal's.
@@ -271,10 +268,7 @@ impl<B> DerefMut for __DogVTable<B> {
 type DogVT = __DogVTable<__AnimalVTable>;
 
 static DOG_VT: LazyLock<DogVT> = LazyLock::new(|| {
-  let mut vt = __DogVTable {
-    base: Animal::vtable().clone(),
-    bark_volume: |this| this.__bark_volume(),
-  };
+  let mut vt = __DogVTable { base: Animal::vtable().clone(), bark_volume: |this| this.__bark_volume() };
   // SAFETY (all thunks): only Dog objects, and those of its subclasses, carry this vtable or a copy of it.
   vt.speak = |this| unsafe { view_unchecked::<_, Dog>(this) }.__override_speak();
   vt.weight = |this| unsafe { view_unchecked::<_, Dog>(this) }.__override_weight();
@@ -311,10 +305,7 @@ impl Dog {
     Self(RawHandle::new(Self::init(name), Self::vtable()))
   }
   pub fn init(name: &str) -> __DogFields {
-    __DogFields {
-      base: Animal::init(name),
-      tricks: RwLock::new(0),
-    }
+    __DogFields { base: Animal::init(name), tricks: RwLock::new(0) }
   }
   fn vt(&self) -> &DogVT {
     // SAFETY: every view of an object carries its own class's vtable, which starts with a Dog's.
@@ -496,17 +487,13 @@ unsafe impl<T: Value> Class for Boxed<T> {
 
 impl<T: Value> Boxed<T> {
   fn vtable() -> &'static __BoxedVTable<T> {
-    vtable_for::<Self, _>(|| __BoxedVTable {
-      get: |this| this.__get(),
-    })
+    vtable_for::<Self, _>(|| __BoxedVTable { get: |this| this.__get() })
   }
   pub fn new(value: T) -> Self {
     Self::from_raw(RawHandle::new(Self::init(value), Self::vtable()))
   }
   pub fn init(value: T) -> __BoxedFields<T> {
-    __BoxedFields {
-      value: RwLock::new(value),
-    }
+    __BoxedFields { value: RwLock::new(value) }
   }
   fn vt(&self) -> &__BoxedVTable<T> {
     // SAFETY: every view of an object carries its own class's vtable, which starts with a Boxed's.
@@ -517,11 +504,7 @@ impl<T: Value> Boxed<T> {
   }
   fn __get(&self) -> T {
     // SAFETY: every view of an object carries its own class's fields, which start with a Boxed's.
-    unsafe { self.0.fields::<__BoxedFields<T>>() }
-      .value
-      .read()
-      .unwrap()
-      .clone()
+    unsafe { self.0.fields::<__BoxedFields<T>>() }.value.read().unwrap().clone()
   }
 }
 
@@ -575,10 +558,7 @@ impl<T: Value> Tagged<T> {
     })
   }
   pub fn new(value: T) -> Self {
-    let fields = __TaggedFields {
-      base: Boxed::init(value),
-      tag: RwLock::new(0),
-    };
+    let fields = __TaggedFields { base: Boxed::init(value), tag: RwLock::new(0) };
     Self::from_raw(RawHandle::new(fields, Self::vtable()))
   }
   /// A generic parent's vtable comes from the registry, so `super` calls pay for a lookup.

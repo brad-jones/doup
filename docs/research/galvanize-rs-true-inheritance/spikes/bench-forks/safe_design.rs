@@ -82,10 +82,7 @@ impl Animal {
     Self(Arc::new(Self::init(name)))
   }
   pub fn init(name: &str) -> __AnimalFields {
-    __AnimalFields {
-      name: RwLock::new(name.into()),
-      age: RwLock::new(3),
-    }
+    __AnimalFields { name: RwLock::new(name.into()), age: RwLock::new(3) }
   }
   pub fn name(&self) -> String {
     self.0.__animal_fields().name.read().unwrap().clone()
@@ -203,19 +200,13 @@ impl Deref for Dog {
 
 impl Dog {
   fn from_obj(obj: Arc<dyn DogObject>) -> Self {
-    Self {
-      as_animal: Animal(obj.clone()),
-      obj,
-    }
+    Self { as_animal: Animal(obj.clone()), obj }
   }
   pub fn new(name: &str) -> Self {
     Self::from_obj(Arc::new(Self::init(name)))
   }
   pub fn init(name: &str) -> __DogFields {
-    __DogFields {
-      base: Animal::init(name),
-      tricks: RwLock::new(0),
-    }
+    __DogFields { base: Animal::init(name), tricks: RwLock::new(0) }
   }
   fn __override_speak(&self) -> String {
     "Woof".into()
@@ -295,10 +286,7 @@ impl Deref for Puppy {
 
 impl Puppy {
   fn from_obj(obj: Arc<__PuppyFields>) -> Self {
-    Self {
-      as_dog: Dog::from_obj(obj.clone()),
-      obj,
-    }
+    Self { as_dog: Dog::from_obj(obj.clone()), obj }
   }
   pub fn new(name: &str) -> Self {
     Self::from_obj(Arc::new(__PuppyFields { base: Dog::init(name) }))
@@ -376,10 +364,7 @@ impl Deref for Beagle {
 
 impl Beagle {
   fn from_obj(obj: Arc<__BeagleFields>) -> Self {
-    Self {
-      as_dog: Dog::from_obj(obj.clone()),
-      obj,
-    }
+    Self { as_dog: Dog::from_obj(obj.clone()), obj }
   }
   pub fn new(name: &str) -> Self {
     Self::from_obj(Arc::new(__BeagleFields { base: Dog::init(name) }))
@@ -433,9 +418,7 @@ impl<T: Value> Boxed<T> {
     Self(Arc::new(Self::init(value)))
   }
   pub fn init(value: T) -> __BoxedFields<T> {
-    __BoxedFields {
-      value: RwLock::new(value),
-    }
+    __BoxedFields { value: RwLock::new(value) }
   }
   pub fn get(&self) -> T {
     self.0.get(self)
@@ -502,16 +485,10 @@ impl<T: Value> Deref for Tagged<T> {
 
 impl<T: Value> Tagged<T> {
   fn from_obj(obj: Arc<__TaggedFields<T>>) -> Self {
-    Self {
-      as_boxed: Boxed(obj.clone()),
-      obj,
-    }
+    Self { as_boxed: Boxed(obj.clone()), obj }
   }
   pub fn new(value: T) -> Self {
-    Self::from_obj(Arc::new(__TaggedFields {
-      base: Boxed::init(value),
-      tag: RwLock::new(0),
-    }))
+    Self::from_obj(Arc::new(__TaggedFields { base: Boxed::init(value), tag: RwLock::new(0) }))
   }
   fn super_get(&self) -> T {
     BoxedObject::get(&self.obj.base, self)

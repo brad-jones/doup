@@ -56,9 +56,7 @@ mod client {
     let drops = Arc::new(AtomicUsize::new(0));
     let tagged = main::Tagged::new(DropCounter(drops.clone()));
     let boxed: main::Boxed<DropCounter> = (*tagged).clone();
-    let another = boxed
-      .downcast::<main::Tagged<DropCounter>>()
-      .expect("preserves the dynamic type");
+    let another = boxed.downcast::<main::Tagged<DropCounter>>().expect("preserves the dynamic type");
     drop(tagged);
     drop(another);
     assert_eq!(drops.load(Ordering::SeqCst), 0);
@@ -70,13 +68,7 @@ mod client {
     drop(puppy);
     assert!(animal.downcast::<safe::Beagle>().is_none());
     assert_eq!(animal.describe(), "Bit says Woof (but squeakier)");
-    assert_eq!(
-      animal
-        .downcast::<safe::Dog>()
-        .expect("a Puppy extends Dog")
-        .bark_volume(),
-      4
-    );
+    assert_eq!(animal.downcast::<safe::Dog>().expect("a Puppy extends Dog").bark_volume(), 4);
     println!("valid ownership, sibling rejection, alignment, ZST payload, drop and thread checks passed");
   }
 
@@ -193,10 +185,7 @@ mod client {
           })
         })
         .collect();
-      workers
-        .into_iter()
-        .map(|worker| worker.join().expect("independent-object benchmark"))
-        .collect::<Vec<_>>()
+      workers.into_iter().map(|worker| worker.join().expect("independent-object benchmark")).collect::<Vec<_>>()
     });
     times.sort_by(f64::total_cmp);
     times[times.len() / 2]

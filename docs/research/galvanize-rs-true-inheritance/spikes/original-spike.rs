@@ -123,25 +123,16 @@ unsafe impl Class for Animal {
 }
 impl Animal {
   fn vtable() -> &'static __AnimalVTable {
-    vtable_for::<Animal, _>(|| __AnimalVTable {
-      speak: |this| this.__speak(),
-      describe: |this| this.__describe(),
-    })
+    vtable_for::<Animal, _>(|| __AnimalVTable { speak: |this| this.__speak(), describe: |this| this.__describe() })
   }
   pub fn new(name: &str) -> Self {
     Self(RawHandle::new(Self::init(name), Self::vtable()))
   }
   pub fn init(name: &str) -> __AnimalFields {
-    __AnimalFields {
-      name: RwLock::new(name.into()),
-    }
+    __AnimalFields { name: RwLock::new(name.into()) }
   }
   pub fn name(&self) -> String {
-    unsafe { self.0.fields::<__AnimalFields>() }
-      .name
-      .read()
-      .unwrap()
-      .clone()
+    unsafe { self.0.fields::<__AnimalFields>() }.name.read().unwrap().clone()
   }
   fn vt(&self) -> &__AnimalVTable {
     unsafe { self.0.vt() }
@@ -220,10 +211,7 @@ type DogVT = __DogVTable<__AnimalVTable>; // in the macro: __DogVTable<VTableOf<
 impl Dog {
   fn vtable() -> &'static DogVT {
     vtable_for::<Dog, _>(|| {
-      let mut vt = __DogVTable {
-        base: Animal::vtable().clone(),
-        fetch: |this| this.__fetch(),
-      };
+      let mut vt = __DogVTable { base: Animal::vtable().clone(), fetch: |this| this.__fetch() };
       // #[override] fn speak: the macro doesn't know `speak` is declared by Animal, DerefMut finds it,
       // and the closure's parameter type is inferred from the field's fn pointer type.
       vt.speak = |this| this.downcast::<Dog>().unwrap().__override_speak();
@@ -234,10 +222,7 @@ impl Dog {
     Self(RawHandle::new(Self::init(name), Self::vtable()))
   }
   pub fn init(name: &str) -> __DogFields {
-    __DogFields {
-      base: Animal::init(name),
-      tricks: RwLock::new(0),
-    }
+    __DogFields { base: Animal::init(name), tricks: RwLock::new(0) }
   }
   fn vt(&self) -> &DogVT {
     unsafe { self.0.vt() }
@@ -324,7 +309,5 @@ fn main() {
   println!("{}", back.speak()); // still Puppy's
   let rex = Dog::new("Rex");
   println!("{} / {}", rex.describe(), rex.fetch());
-  std::thread::spawn(move || println!("thread: {}", back.describe()))
-    .join()
-    .unwrap();
+  std::thread::spawn(move || println!("thread: {}", back.describe())).join().unwrap();
 }

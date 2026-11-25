@@ -51,9 +51,7 @@ impl Animal {
     Self(Arc::new(Self::init(n)))
   }
   pub fn init(n: &str) -> __AnimalFields {
-    __AnimalFields {
-      name: RwLock::new(n.into()),
-    }
+    __AnimalFields { name: RwLock::new(n.into()) }
   }
   pub fn name(&self) -> String {
     self.0.__animal_fields().name.read().unwrap().clone()
@@ -132,19 +130,13 @@ impl Deref for Dog {
 }
 impl Dog {
   fn from_obj(obj: Arc<dyn DogObject>) -> Self {
-    Self {
-      as_animal: Animal(obj.clone()),
-      obj,
-    }
+    Self { as_animal: Animal(obj.clone()), obj }
   } // trait upcasting
   pub fn new(n: &str) -> Self {
     Self::from_obj(Arc::new(Self::init(n)))
   }
   pub fn init(n: &str) -> __DogFields {
-    __DogFields {
-      base: Animal::init(n),
-      tricks: RwLock::new(0),
-    }
+    __DogFields { base: Animal::init(n), tricks: RwLock::new(0) }
   }
   pub fn fetch(&self) -> String {
     self.obj.fetch(self)
@@ -201,10 +193,7 @@ impl Deref for Puppy {
 }
 impl Puppy {
   fn from_obj(obj: Arc<__PuppyFields>) -> Self {
-    Self {
-      as_dog: Dog::from_obj(obj.clone()),
-      obj,
-    }
+    Self { as_dog: Dog::from_obj(obj.clone()), obj }
   }
   pub fn new(n: &str) -> Self {
     Self::from_obj(Arc::new(__PuppyFields { base: Dog::init(n) }))
@@ -221,7 +210,5 @@ fn main() {
   assert!(Animal::new("x").downcast::<Dog>().is_none());
   assert!(back.ptr_eq(a) && p.ptr_eq(&back));
   println!("{}", Dog::new("Rex").describe()); // Dog's own override, no Puppy involved
-  std::thread::spawn(move || println!("thread: {}", back.describe()))
-    .join()
-    .unwrap();
+  std::thread::spawn(move || println!("thread: {}", back.describe())).join().unwrap();
 }
