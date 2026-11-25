@@ -62,13 +62,13 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     // A bad config or bad WASM module should be caught here, not half way through updating the repo.
     let module_search_dirs = vec![destination.to_path_buf()];
 
-    print!("Loading {}... ", &repo_config.platform.plugin);
+    print!("Loading {}... ", repo_config.platform.plugin);
     let _platform = PlatformPlugin::load(&repo_config.platform, module_search_dirs.clone()).await?;
     println!("DONE");
 
     let mut ecosystems = HashMap::new();
     for ecosystem in &repo_config.ecosystems {
-      print!("Loading {}... ", &ecosystem.plugin);
+      print!("Loading {}... ", ecosystem.plugin);
       ecosystems.insert(ecosystem, EcosystemPlugin::load(ecosystem, module_search_dirs.clone()).await?);
       println!("DONE");
     }
@@ -76,7 +76,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     // Now discover all the dependencies that may need updating
     let mut dependencies_by_ecosystem = HashMap::new();
     for (&ecosystem_ref, ecosystem_plugin) in &ecosystems {
-      print!("Discovering dependencies for {}... ", &ecosystem_ref.plugin);
+      print!("Discovering dependencies for {}... ", ecosystem_ref.plugin);
       dependencies_by_ecosystem.insert(ecosystem_ref, ecosystem_plugin.discover_deps(destination).await?);
       println!("DONE");
     }
@@ -86,7 +86,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     for (&ecosystem_ref, dependencies) in &dependencies_by_ecosystem {
       let ecosystem_plugin = &ecosystems[ecosystem_ref];
       for dependency in dependencies {
-        print!("Looking up next version using {} for {}... ", &ecosystem_ref.plugin, &dependency.name);
+        print!("Looking up next version using {} for {}... ", ecosystem_ref.plugin, dependency.name);
         if let Some(next_version) = ecosystem_plugin.lookup_versions(dependency).await? {
           next_versions.push((ecosystem_ref, dependency, next_version.clone()));
           println!("{}", next_version.next);
