@@ -18,7 +18,7 @@ pub use doup::plugin::host_api;
 
 /// Whether a session's guest may make outbound HTTP requests via `wasi:http`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Network {
+pub enum HttpPolicy {
   /// Every outbound request is rejected with `HTTP-request-denied`.
   #[default]
   Denied,
@@ -35,9 +35,9 @@ fn install_crypto_provider() {
   INSTALL.call_once(|| _ = rustls::crypto::aws_lc_rs::default_provider().install_default());
 }
 
-/// Enforces a session's [`Network`] policy on every outbound `wasi:http` request.
+/// Enforces a session's [`Http`] policy on every outbound `wasi:http` request.
 struct HttpHooks {
-  network: Network,
+  http_policy: HttpPolicy,
 }
 
 impl WasiHttpHooks for HttpHooks {
@@ -51,9 +51,9 @@ impl WasiHttpHooks for HttpHooks {
         Output = Result<(http::Response<WasiBody>, Box<dyn Future<Output = Result<(), HttpError>> + Send>), HttpError>,
       > + Send,
   > {
-    let network = self.network;
+    let http_policy = self.http_policy;
     Box::new(async move {
-      if network == Network::Denied {
+      if http_policy == HttpPolicy::Denied {
         return Err(HttpError::HttpRequestDenied);
       }
       install_crypto_provider();
@@ -79,19 +79,19 @@ impl HostState {
   ///
   /// `configure` receives the [`WasiCtxBuilder`] so callers can customise the
   /// WASI context (e.g. inherit stdio, preopen directories, set env vars)
-  /// before it is built. `network` decides whether the guest's `wasi:http` requests are sent.
+  /// before it is built. `http_policy` decides whether the guest's `wasi:http` requests are sent.
   ///
   /// # Errors
   ///
   /// Returns an error if `configure` fails, e.g. a preopened directory cannot be opened.
   pub fn new(
-    network: Network,
+    http_policy: HttpPolicy,
     configure: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<Self> {
     Ok(Self {
       wasi: configure(&mut WasiCtxBuilder::new())?.build(),
       http: WasiHttpCtx::new(),
-      http_hooks: HttpHooks { network },
+      http_hooks: HttpHooks { http_policy },
       table: ResourceTable::new(),
     })
   }

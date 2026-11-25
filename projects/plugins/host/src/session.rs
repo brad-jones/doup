@@ -11,7 +11,7 @@
 //!
 //! Sessions that trap or fail are dropped rather than returned to the pool.
 
-use crate::host::{HostState, Network, host_api};
+use crate::host::{HostState, HttpPolicy, host_api};
 use crate::wkg::is_wkg_reference;
 use anyhow::{Context, Result, bail};
 use doup_config::repo::DoupRepoPlugin;
@@ -89,7 +89,7 @@ pub trait PluginWorld: 'static {
   /// The result of this method is cached into [`WORLD_LINKERS`].
   ///
   /// `wasi:http` is always linked because a component that imports it can't be instantiated
-  /// otherwise. Whether requests actually go out is decided per session by [`Network`].
+  /// otherwise. Whether requests actually go out is decided per session by [`Http`].
   fn linker(engine: &Engine) -> Result<Linker<HostState>> {
     let mut linker = Linker::new(engine);
     add_to_linker_async(&mut linker)?;
@@ -244,14 +244,14 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// custom WASI context overrides need to be given. Do not attempt to check
   /// the resulting session into the pool, just drop it.
   ///
-  /// `network` decides whether the guest may make outbound `wasi:http` requests,
+  /// `http_policy` decides whether the guest may make outbound `wasi:http` requests,
   /// pooled sessions never can, see [`Self::checkout_session`].
   pub async fn create_session(
     &self,
-    network: Network,
+    http_policy: HttpPolicy,
     wasi: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<PluginSession<W>> {
-    let mut store = Store::new(self.engine()?, HostState::new(network, |b| wasi(W::wasi(b)?))?);
+    let mut store = Store::new(self.engine()?, HostState::new(http_policy, |b| wasi(W::wasi(b)?))?);
 
     let bindings = W::instantiate(self.component_pre()?, &mut store).await?;
 
@@ -267,12 +267,12 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// Takes an idle session, or creates and configures a new one. Hand it back with [`Self::checkin_session`].
   /// A session that is never checked in (error, or the caller's future cancelled) is simply dropped.
   ///
-  /// Pooled sessions have no network access, use [`Self::create_session`] for calls that need it.
+  /// Pooled sessions have no HTTP access, use [`Self::create_session`] for calls that need it.
   pub async fn checkout_session(&self) -> Result<PluginSession<W>> {
     let session = self.session_pool.lock().unwrap_or_else(PoisonError::into_inner).pop();
     match session {
       Some(session) => Ok(session),
-      None => self.create_session(Network::Denied, |b| Ok(b)).await,
+      None => self.create_session(HttpPolicy::Denied, |b| Ok(b)).await,
     }
   }
 

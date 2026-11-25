@@ -5,7 +5,7 @@
 //! generates the component bindings for that world and exposes
 //! [`EcosystemPlugin`], a handle that runs calls against pooled plugin sessions.
 
-use crate::host::{HostState, Network};
+use crate::host::{HostState, HttpPolicy};
 use crate::session::{PluginSessionPool, PluginWorld};
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
@@ -79,24 +79,26 @@ impl EcosystemPlugin {
   }
 
   /// Lists the dependencies found in `workspace_dir`. The guest gets a read-only view of the
-  /// workspace and no network access.
+  /// workspace and no HTTP access.
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
     let mut session = self
       .session_pool
-      .create_session(Network::Denied, |wasi| Ok(wasi.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?))
+      .create_session(HttpPolicy::Denied, |wasi| {
+        Ok(wasi.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?)
+      })
       .await?;
 
     session.bindings.call_discover_deps(&mut session.store).await?.map_err(anyhow::Error::msg)
   }
 
   /// Looks up the versions available for `dependency`. This is the only call whose guest
-  /// gets network access, along with a read-only view of `workspace_dir` (eg: for registry config).
+  /// gets HTTP access, along with a read-only view of `workspace_dir` (eg: for registry config).
   ///
-  /// Each call uses a fresh, unpooled session so that network access never leaks into pooled sessions.
+  /// Each call uses a fresh, unpooled session so that HTTP access never leaks into pooled sessions.
   pub async fn lookup_versions(&self, workspace_dir: &Path, dependency: &Dependency) -> Result<Option<Versions>> {
     let mut session = self
       .session_pool
-      .create_session(Network::Allowed, |wasi| {
+      .create_session(HttpPolicy::Allowed, |wasi| {
         Ok(wasi.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?)
       })
       .await?;
