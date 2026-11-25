@@ -1,4 +1,4 @@
-use super::session::PluginSession;
+use super::plugin_session::PluginSession;
 use crate::host::{HostState, HttpPolicy};
 use crate::wkg::is_wkg_reference;
 use crate::world::PluginWorld;

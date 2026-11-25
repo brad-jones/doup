@@ -12,6 +12,6 @@
 //!
 //! Sessions that trap or fail are dropped rather than returned to the pool.
 
-mod pool;
-mod session;
-pub use pool::PluginSessionPool;
+mod plugin_session;
+mod plugin_session_pool;
+pub use plugin_session_pool::PluginSessionPool;
