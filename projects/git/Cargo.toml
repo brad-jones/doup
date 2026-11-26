@@ -14,7 +14,7 @@ ssh-agent-lib = "0.6.0"
 ssh-key = { version = "0.6.7", features = ["ed25519", "p256", "p384", "p521", "rsa"] }
 tempfile = "3.27.0"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["fs", "net", "process", "rt"] }
+tokio = { version = "1.54.1", features = ["fs", "io-util", "net", "process", "rt"] }
 url = "2.5.8"
 
 [dev-dependencies]

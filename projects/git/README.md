@@ -5,10 +5,10 @@ itself.
 
 ## Usage
 
-Pick a backend when building a `Git`, then call operations on it (they live on the `GitBackend` trait):
+Pick a backend when building a `Git`, then clone. That gives back a `ClonedRepo` with operations on the new clone:
 
 ```rust
-use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_git::{Auth, CloneOptions, Git, GitCli, Grit};
 use std::num::NonZeroU32;
 
 let git = Git::new(GitCli); // or Git::new(Grit)
@@ -18,10 +18,37 @@ let options = CloneOptions::new("https://github.com/owner/repo.git", "repo")
   .with_depth(NonZeroU32::new(1).unwrap())
   .with_auth(Auth::Https { user: "x-access-token".into(), pass: token });
 
-git.clone_repo(&options).await?;
+let repo = git.clone_repo(&options).await?;
+let branches = repo.list_remote_branches().await?; // like `git ls-remote --heads origin`
+let default = repo.default_branch().await?; // the branch origin's HEAD points at, e.g. "main"
+let commits = repo.branch_commits("doup/foo").await?; // like `git log origin/HEAD..origin/doup/foo`
+let authors = repo.branch_authors("doup/foo").await?; // their `%ae`, sorted and deduplicated
 ```
 
 Every operation is async (built on `tokio`) and fails with a typed `GitError`.
+
+`ClonedRepo` keeps the clone's `Auth` in memory (never on disk, and redacted from `Debug`), so later operations reach
+`origin` with the same credentials.
+
+### A branch's own commits
+
+`branch_fetch`, `branch_commits` and `branch_authors` deal with the commits a branch has on top of `origin`'s default
+branch, and work whatever state the clone is in (shallow, single-branch, branch created or force-pushed since cloning):
+
+- `branch_fetch` fetches only those commits, without file contents: `git fetch --filter=blob:none
+  --shallow-exclude=refs/heads/<default> origin +refs/heads/<branch>:refs/remotes/origin/<branch>`. This makes the clone
+  a partial clone (`remote.origin.promisor`).
+- `branch_commits` lists them newest first as `GitCommit`s (`id`, author name and email, `message`, `is_merge`), read
+  from the raw commit objects. `git log` would hide the parents of a commit on a shallow boundary, getting `is_merge`
+  wrong.
+- A branch whose tip is the default branch's tip (including the default branch itself) has no commits: nothing is
+  fetched and `branch_commits` is empty.
+- A branch strictly behind the default branch (e.g. merged) fails with `GitError::NoUniqueCommits`: the server refuses a
+  shallow-exclude fetch that would send nothing, and over smart HTTP (e.g. GitHub) the refusal is too vague to tell
+  apart from other failures, so it is not turned into an empty list.
+- **Merges stop the walk.** Shallow boundaries are per commit, so a merge of the default branch into the branch is a
+  boundary and the commits behind it are not fetched or listed. The merge itself is listed with `is_merge()` set, so a
+  caller can treat any merge as "the list may be incomplete".
 
 ## Backends
 
@@ -30,9 +57,10 @@ Every operation is async (built on `tokio`) and fails with a typed `GitError`.
 | `GitCli` | Runs the real `git` executable via `tokio::process`.                              | `git` (+ `ssh` if SSH) |
 | `Grit`   | Runs [grit](https://grit-scm.com) in-process via `grit-lib`, on `spawn_blocking`. | `ssh` if SSH           |
 
-`Git` is an enum with one variant per backend, dispatched with [spire_enum](https://crates.io/crates/spire_enum). It
-validates options before delegating, so both backends reject bad input the same way. Both must pass the same contract
-tests (see `backend_contract_tests!` in `src/test_support.rs`). A new backend is a new `Git` variant.
+`Git` is an enum with one variant per backend, dispatched with [spire_enum](https://crates.io/crates/spire_enum). Its
+methods, and `ClonedRepo`'s, validate input before delegating to the backend's `GitBackend` impl and normalise what
+comes back, so both backends behave the same way. Both must pass the same contract tests (see `backend_contract_tests!`
+in `src/test_support.rs`). A new backend is a new `Git` variant.
 
 ### Working with grit
 
@@ -42,21 +70,29 @@ grit is a Git implementation in Rust, used here through the `grit-lib` crate. **
 Notes from building this crate against `grit-lib` 0.5.x:
 
 - `grit_lib::remote::clone::clone` is synchronous, so it runs inside `tokio::task::spawn_blocking` with a `CancelToken`
-  that is cancelled if the awaiting future is dropped.
+  that is cancelled if the awaiting future is dropped. Listing remote refs has no `CancelToken`, so it just runs to
+  completion.
 - grit has no in-process SSH. It always spawns `ssh` (via `sh -c` for `GIT_SSH_COMMAND`), resolving the command from the
-  `Environment` on its `CloneOptions`. That `Environment` is **not** passed on to the `ssh` child, so anything ssh needs
-  must be inlined in the command itself.
+  `Environment` on its `CloneOptions`, or for an existing repo the `Environment` it was opened with. That `Environment`
+  is **not** passed on to the `ssh` child, so anything ssh needs must be inlined in the command itself.
 - HTTPS credentials go through a custom `HttpClientFactory` + `CredentialProvider`, so they stay in memory and are not
   written to config.
 - A failed clone is not cleaned up by grit; call `should_cleanup_failed_clone` / `cleanup_failed_clone`.
 - Map grit errors (`Error::Remote(RemoteError::..)`) onto `GitError` variants rather than exposing them directly.
+- `FetchOptions::environment` defaults to empty, so set it to the repo's `Environment` like the rest. Only `blob:none`
+  and `blob:limit` filters exist (no `tree:0`). `deepen_not` is the `--shallow-exclude` option.
+- grit's in-process upload-pack, which serves local and `file://` remotes, does not refuse a `deepen_not` fetch that
+  selects nothing as git does: it sends the whole history instead. So `fetch_branch` checks for that case itself before
+  fetching from a local remote.
+- Walks (`revwalk().commits`) honour shallow grafts, so read raw objects (`objects().read`) when the real parents
+  matter.
 
 ## Authentication
 
 `Auth` mirrors the bot config's `DoupBotRepoAuth`:
 
 - `Auth::Https { user, pass }`: `GitCli` sends a basic auth `extraheader` through `GIT_CONFIG_*` environment variables
-  (never in args), and `Grit` answers auth challenges from memory, only for the clone's own origin.
+  (never in args), and `Grit` answers auth challenges from memory, only for the remote's own origin.
 - `Auth::Ssh { key }`: the key is held by an ssh-agent served from doup's own process (`ssh-agent-lib`), so it never
   touches disk. Only the public key and the agent's socket live in an owner-only temp dir, so a SIGKILL leaves nothing
   secret behind. Both backends use `SSH_AUTH_SOCK=<socket> ssh -o IdentityAgent=SSH_AUTH_SOCK -o IdentitiesOnly=yes -i
@@ -73,10 +109,12 @@ Without `Auth`, the user's existing Git and SSH setup is used.
 
 Only add operations doup actually needs:
 
-1. Add a method to the `GitBackend` trait, and to `Git`'s `#[delegate_impl]` block: either body-less (`;`) to forward
-   as-is, or with a body that validates and then forwards via `delegate_git! { ... }`.
-2. Implement it for both `GitCli` and `Grit`, mapping failures to `GitError`.
-3. Add contract tests to `backend_contract_tests!` so both backends are held to the same behaviour.
+1. Add a method to the `GitBackend` trait. Operations on a clone take the `&ClonedRepo`.
+2. Add the public method that callers use: on `Git` for operations without a repo, or on `ClonedRepo` for operations on
+   a clone. It validates input, forwards via `delegate_git!(...)`, and normalises the result if the backends could
+   differ, e.g. in ordering.
+3. Implement it for both `GitCli` and `Grit`, mapping failures to `GitError`.
+4. Add contract tests to `backend_contract_tests!` so both backends are held to the same behaviour.
 
 ## Testing
 

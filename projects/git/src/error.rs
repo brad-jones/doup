@@ -46,6 +46,15 @@ pub enum GitError {
   #[error("remote branch '{branch}' not found")]
   BranchNotFound { branch: String },
 
+  #[error("remote '{url}' has no default branch")]
+  NoDefaultBranch { url: String },
+
+  #[error("remote branch '{branch}' has no commits that are not already on the default branch")]
+  NoUniqueCommits { branch: String },
+
+  #[error("commit '{id}' could not be parsed")]
+  InvalidCommit { id: String },
+
   #[error("remote '{url}' is unreachable: {reason}")]
   RemoteUnreachable { url: String, reason: String },
 

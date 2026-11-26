@@ -67,10 +67,10 @@ mod session;
 mod wkg;
 mod world;
 
-mod ecosystem_plugin;
+pub mod ecosystem_plugin;
 pub use ecosystem_plugin::EcosystemPlugin;
 
-mod platform_plugin;
+pub mod platform_plugin;
 pub use platform_plugin::PlatformPlugin;
 
 /// Just a simple wrapper to make it easy to put a WasiCtxBuilder closure into a variable.

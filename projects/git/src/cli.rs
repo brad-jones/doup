@@ -1,10 +1,12 @@
 use crate::auth::basic_auth_header;
 use crate::remote_url::{RemoteUrl, redact};
 use crate::ssh_agent::SshAgent;
-use crate::{Auth, CloneOptions, GitBackend, GitError};
+use crate::{Auth, CloneOptions, ClonedRepo, GitBackend, GitCommit, GitError, RemoteTips};
 use std::ffi::OsString;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::process::Stdio;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 /// Shells out to the `git` executable found on `PATH`.
@@ -16,29 +18,51 @@ impl GitBackend for GitCli {
     // Must outlive the child process, which signs through the agent.
     let agent = SshAgent::for_auth(options.auth())?;
     let invocation = clone_invocation(options, agent.as_ref())?;
-    let output = Command::new("git")
-      .args(&invocation.args)
-      .envs(invocation.envs)
-      .stdin(Stdio::null())
-      .stdout(Stdio::null())
-      .stderr(Stdio::piped())
-      .kill_on_drop(true)
-      .output()
-      .await
-      .map_err(|err| match err.kind() {
-        ErrorKind::NotFound => GitError::GitNotInstalled,
-        _ => GitError::Io(err),
-      })?;
+    let result = run(invocation, |stderr| classify_clone_failure(options, stderr)).await;
     drop(agent);
+    result.map(drop)
+  }
 
-    if output.status.success() {
-      return Ok(());
+  async fn list_remote_branches(&self, repo: &ClonedRepo) -> Result<Vec<String>, GitError> {
+    let agent = SshAgent::for_auth(repo.auth())?;
+    let invocation = ls_remote_invocation(repo, agent.as_ref())?;
+    let result = run(invocation, |stderr| classify_failure(repo.url(), stderr)).await;
+    drop(agent);
+    Ok(parse_ls_remote(&String::from_utf8_lossy(&result?)))
+  }
+
+  async fn remote_tips(&self, repo: &ClonedRepo, branch: Option<&str>) -> Result<RemoteTips, GitError> {
+    let agent = SshAgent::for_auth(repo.auth())?;
+    let invocation = ls_remote_tips_invocation(repo, branch, agent.as_ref())?;
+    let result = run(invocation, |stderr| classify_failure(repo.url(), stderr)).await;
+    drop(agent);
+    parse_remote_tips(&String::from_utf8_lossy(&result?), branch)
+      .ok_or_else(|| GitError::NoDefaultBranch { url: redact(repo.url()) })
+  }
+
+  async fn fetch_branch(&self, repo: &ClonedRepo, branch: &str, exclude: &str) -> Result<(), GitError> {
+    let agent = SshAgent::for_auth(repo.auth())?;
+    let invocation = fetch_branch_invocation(repo, branch, exclude, agent.as_ref())?;
+    let result = run(invocation, |stderr| classify_fetch_branch_failure(repo.url(), branch, stderr)).await;
+    drop(agent);
+    result.map(drop)
+  }
+
+  async fn branch_commits(&self, repo: &ClonedRepo, branch: &str) -> Result<Vec<GitCommit>, GitError> {
+    let local = |args: &[&str], stdin: Option<Vec<u8>>| Invocation {
+      args: args.iter().map(Into::into).collect(),
+      envs: Vec::new(),
+      current_dir: Some(repo.path().to_path_buf()),
+      stdin,
+    };
+    let tip = format!("refs/remotes/origin/{branch}");
+    let ids = run(local(&["rev-list", &tip, "--"], None), |_| None).await?;
+    if ids.is_empty() {
+      return Ok(Vec::new());
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(
-      classify_failure(options, &stderr)
-        .unwrap_or_else(|| GitError::CommandFailed { status: output.status, stderr: stderr.trim().to_owned() }),
-    )
+    // Raw objects, as `git log` hides the parents of commits on a shallow boundary.
+    let objects = run(local(&["cat-file", "--batch"], Some(ids)), |_| None).await?;
+    parse_cat_file_batch(&objects)
   }
 }
 
@@ -46,9 +70,51 @@ impl GitBackend for GitCli {
 struct Invocation {
   args: Vec<OsString>,
   envs: Vec<(&'static str, OsString)>,
+  current_dir: Option<PathBuf>,
+  stdin: Option<Vec<u8>>,
 }
 
-/// Secrets only ever go in the environment, never in args that `ps` can show.
+/// Runs git and returns its stdout, turning a failure into the error `classify` reads from stderr.
+async fn run(invocation: Invocation, classify: impl FnOnce(&str) -> Option<GitError>) -> Result<Vec<u8>, GitError> {
+  let mut command = Command::new("git");
+  if let Some(dir) = &invocation.current_dir {
+    command.current_dir(dir);
+  }
+  let mut child = command
+    .args(&invocation.args)
+    .envs(invocation.envs)
+    .stdin(if invocation.stdin.is_some() { Stdio::piped() } else { Stdio::null() })
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .kill_on_drop(true)
+    .spawn()
+    .map_err(|err| match err.kind() {
+      ErrorKind::NotFound => GitError::GitNotInstalled,
+      _ => GitError::Io(err),
+    })?;
+
+  // Written while stdout is read, so neither pipe can fill up and block git.
+  let pipe = child.stdin.take();
+  let feed = async move {
+    if let (Some(mut pipe), Some(input)) = (pipe, invocation.stdin) {
+      pipe.write_all(&input).await?;
+    }
+    Ok::<_, std::io::Error>(())
+  };
+  let (fed, output) = tokio::join!(feed, child.wait_with_output());
+  let output = output?;
+
+  if output.status.success() {
+    fed?;
+    return Ok(output.stdout);
+  }
+  let stderr = String::from_utf8_lossy(&output.stderr);
+  Err(
+    classify(&stderr)
+      .unwrap_or_else(|| GitError::CommandFailed { status: output.status, stderr: stderr.trim().to_owned() }),
+  )
+}
+
 fn clone_invocation(options: &CloneOptions, agent: Option<&SshAgent>) -> Result<Invocation, GitError> {
   let mut args: Vec<OsString> = vec!["clone".into(), "--quiet".into()];
   if let Some(branch) = options.branch() {
@@ -58,12 +124,66 @@ fn clone_invocation(options: &CloneOptions, agent: Option<&SshAgent>) -> Result<
     args.push(format!("--depth={depth}").into());
   }
   args.extend(["--".into(), options.url().into(), options.destination().into()]);
+  Ok(Invocation { args, envs: auth_envs(options.url(), options.auth(), agent)?, current_dir: None, stdin: None })
+}
 
+fn ls_remote_invocation(repo: &ClonedRepo, agent: Option<&SshAgent>) -> Result<Invocation, GitError> {
+  Ok(Invocation {
+    args: vec!["ls-remote".into(), "--heads".into(), "origin".into()],
+    envs: auth_envs(repo.url(), repo.auth(), agent)?,
+    current_dir: Some(repo.path().to_path_buf()),
+    stdin: None,
+  })
+}
+
+fn ls_remote_tips_invocation(
+  repo: &ClonedRepo,
+  branch: Option<&str>,
+  agent: Option<&SshAgent>,
+) -> Result<Invocation, GitError> {
+  let mut args: Vec<OsString> = vec!["ls-remote".into(), "--symref".into(), "origin".into(), "HEAD".into()];
+  if let Some(branch) = branch {
+    args.push(format!("refs/heads/{branch}").into());
+  }
+  Ok(Invocation {
+    args,
+    envs: auth_envs(repo.url(), repo.auth(), agent)?,
+    current_dir: Some(repo.path().to_path_buf()),
+    stdin: None,
+  })
+}
+
+fn fetch_branch_invocation(
+  repo: &ClonedRepo,
+  branch: &str,
+  exclude: &str,
+  agent: Option<&SshAgent>,
+) -> Result<Invocation, GitError> {
+  Ok(Invocation {
+    args: vec![
+      "fetch".into(),
+      "--quiet".into(),
+      "--no-tags".into(),
+      "--filter=blob:none".into(),
+      format!("--shallow-exclude=refs/heads/{exclude}").into(),
+      "origin".into(),
+      format!("+refs/heads/{branch}:refs/remotes/origin/{branch}").into(),
+    ],
+    envs: auth_envs(repo.url(), repo.auth(), agent)?,
+    current_dir: Some(repo.path().to_path_buf()),
+    stdin: None,
+  })
+}
+
+/// Secrets only ever go in the environment, never in args that `ps` can show.
+fn auth_envs(
+  url: &str,
+  auth: Option<&Auth>,
+  agent: Option<&SshAgent>,
+) -> Result<Vec<(&'static str, OsString)>, GitError> {
   let mut envs = vec![("GIT_TERMINAL_PROMPT", "0".into())];
-  if let Some(Auth::Https { user, pass }) = options.auth() {
-    let key = RemoteUrl::parse(options.url())?
-      .extra_header_key()
-      .ok_or_else(|| GitError::InvalidUrl { url: redact(options.url()) })?;
+  if let Some(Auth::Https { user, pass }) = auth {
+    let key = RemoteUrl::parse(url)?.extra_header_key().ok_or_else(|| GitError::InvalidUrl { url: redact(url) })?;
     envs.extend([
       ("GIT_CONFIG_COUNT", "1".into()),
       ("GIT_CONFIG_KEY_0", key.into()),
@@ -77,12 +197,90 @@ fn clone_invocation(options: &CloneOptions, agent: Option<&SshAgent>) -> Result<
       ("GIT_SSH_VARIANT", "ssh".into()),
     ]);
   }
-  Ok(Invocation { args, envs })
+  Ok(envs)
 }
 
-/// git exits 128 for nearly everything, so the cause has to be read from stderr.
-fn classify_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
-  let url = redact(options.url());
+/// Reads branch names from `git ls-remote --heads` lines, `<oid>\trefs/heads/<name>`.
+fn parse_ls_remote(stdout: &str) -> Vec<String> {
+  stdout
+    .lines()
+    .filter_map(|line| line.split_once('\t'))
+    .filter_map(|(_, name)| name.trim_end().strip_prefix("refs/heads/"))
+    .map(str::to_owned)
+    .collect()
+}
+
+/// Reads `git ls-remote --symref origin HEAD refs/heads/<branch>` output, `None` when `HEAD` does
+/// not point at a branch with a commit.
+fn parse_remote_tips(stdout: &str, branch: Option<&str>) -> Option<RemoteTips> {
+  let branch_ref = branch.map(|branch| format!("refs/heads/{branch}"));
+  let (mut default_branch, mut default_tip, mut branch_tip) = (None, None, None);
+  for (value, name) in stdout.lines().filter_map(|line| line.trim_end().split_once('\t')) {
+    if let Some(target) = value.strip_prefix("ref: ") {
+      if name == "HEAD" {
+        default_branch = target.strip_prefix("refs/heads/");
+      }
+    } else if name == "HEAD" {
+      default_tip = Some(value);
+    } else if branch_ref.as_deref() == Some(name) {
+      branch_tip = Some(value);
+    }
+  }
+  Some(RemoteTips {
+    default_branch: default_branch?.to_owned(),
+    default_tip: default_tip?.to_owned(),
+    branch_tip: branch_tip.map(str::to_owned),
+  })
+}
+
+/// Reads `git cat-file --batch` output: per object, `<id> <type> <size>\n<content>\n`.
+fn parse_cat_file_batch(mut stdout: &[u8]) -> Result<Vec<GitCommit>, GitError> {
+  let mut commits = Vec::new();
+  while !stdout.is_empty() {
+    let header_end = stdout.iter().position(|&byte| byte == b'\n').unwrap_or(stdout.len());
+    let header = String::from_utf8_lossy(&stdout[..header_end]);
+    let mut fields = header.split(' ');
+    let (id, kind, size) = (fields.next().unwrap_or_default(), fields.next(), fields.next());
+    let invalid = || GitError::InvalidCommit { id: id.to_owned() };
+    let size: usize = size.and_then(|size| size.parse().ok()).filter(|_| kind == Some("commit")).ok_or_else(invalid)?;
+    let content = stdout.get(header_end + 1..header_end + 1 + size).ok_or_else(invalid)?;
+    commits.push(GitCommit::parse(id.to_owned(), content)?);
+    stdout = stdout.get(header_end + 2 + size..).unwrap_or_default();
+  }
+  Ok(commits)
+}
+
+/// Failures only fetching a branch can have, falling back to [`classify_failure`].
+fn classify_fetch_branch_failure(url: &str, branch: &str, stderr: &str) -> Option<GitError> {
+  let lower = stderr.to_ascii_lowercase();
+  // The first is git's own message; smart HTTP (e.g. GitHub) only reports the broken response.
+  if lower.contains("no commits selected for shallow requests") || lower.contains("error processing shallow info") {
+    Some(GitError::NoUniqueCommits { branch: branch.to_owned() })
+  } else if lower.contains("couldn't find remote ref") {
+    Some(GitError::BranchNotFound { branch: branch.to_owned() })
+  } else {
+    classify_failure(url, stderr)
+  }
+}
+
+/// Failures only a clone can have, falling back to [`classify_failure`].
+fn classify_clone_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
+  let lower = stderr.to_ascii_lowercase();
+  if let Some(branch) = options.branch()
+    && lower.contains("remote branch")
+    && lower.contains("not found")
+  {
+    Some(GitError::BranchNotFound { branch: branch.to_owned() })
+  } else if lower.contains("already exists and is not an empty directory") {
+    Some(GitError::DestinationNotEmpty { path: options.destination().to_path_buf() })
+  } else {
+    classify_failure(options.url(), stderr)
+  }
+}
+
+/// git exits 128 for nearly everything, so the cause of a failure reaching `url` has to be read from stderr.
+fn classify_failure(url: &str, stderr: &str) -> Option<GitError> {
+  let url = redact(url);
   let lower = stderr.to_ascii_lowercase();
   let has = |needles: &[&str]| needles.iter().any(|needle| lower.contains(needle));
 
@@ -98,13 +296,6 @@ fn classify_failure(options: &CloneOptions, stderr: &str) -> Option<GitError> {
       "returned error: 403",
     ]) {
       GitError::AuthenticationFailed { url }
-    } else if let Some(branch) = options.branch()
-      && has(&["remote branch"])
-      && has(&["not found"])
-    {
-      GitError::BranchNotFound { branch: branch.to_owned() }
-    } else if has(&["already exists and is not an empty directory"]) {
-      GitError::DestinationNotEmpty { path: options.destination().to_path_buf() }
     } else if has(&["repository not found", "does not appear to be a git repository", "returned error: 404"])
       || (has(&["fatal: repository '"]) && has(&["' not found"]))
     {
@@ -188,6 +379,111 @@ mod tests {
   }
 
   #[test]
+  fn builds_ls_remote_against_origin_in_the_clone() {
+    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b")
+      .with_auth(Auth::Https { user: "user".into(), pass: "hunter2".into() });
+    let repo = ClonedRepo::new(crate::Git::new(GitCli), &options);
+    let invocation = ls_remote_invocation(&repo, None).unwrap();
+    assert_eq!(args(&invocation), ["ls-remote", "--heads", "origin"]);
+    assert_eq!(invocation.current_dir.as_deref(), Some(std::path::Path::new("/tmp/b")));
+    assert_eq!(env(&invocation, "GIT_TERMINAL_PROMPT"), Some("0"));
+    assert_eq!(env(&invocation, "GIT_CONFIG_VALUE_0"), Some(basic_auth_header("user", "hunter2").as_str()));
+  }
+
+  #[test]
+  fn parses_branch_names_from_ls_remote() {
+    let stdout = "1111\trefs/heads/main\n2222\trefs/heads/feature/x\r\n3333\trefs/tags/v1\n\n";
+    assert_eq!(parse_ls_remote(stdout), ["main", "feature/x"]);
+  }
+
+  fn https_repo() -> ClonedRepo {
+    let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b")
+      .with_auth(Auth::Https { user: "user".into(), pass: "hunter2".into() });
+    ClonedRepo::new(crate::Git::new(GitCli), &options)
+  }
+
+  #[test]
+  fn builds_ls_remote_for_the_default_branch_and_a_branch() {
+    let repo = https_repo();
+    let invocation = ls_remote_tips_invocation(&repo, Some("doup/x"), None).unwrap();
+    assert_eq!(args(&invocation), ["ls-remote", "--symref", "origin", "HEAD", "refs/heads/doup/x"]);
+    assert_eq!(env(&invocation, "GIT_CONFIG_VALUE_0"), Some(basic_auth_header("user", "hunter2").as_str()));
+    let invocation = ls_remote_tips_invocation(&repo, None, None).unwrap();
+    assert_eq!(args(&invocation), ["ls-remote", "--symref", "origin", "HEAD"]);
+  }
+
+  #[test]
+  fn builds_a_blobless_branch_fetch_that_excludes_the_default_branch() {
+    let invocation = fetch_branch_invocation(&https_repo(), "-x", "main", None).unwrap();
+    assert_eq!(
+      args(&invocation),
+      [
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--filter=blob:none",
+        "--shallow-exclude=refs/heads/main",
+        "origin",
+        "+refs/heads/-x:refs/remotes/origin/-x"
+      ]
+    );
+    assert!(args(&invocation).iter().all(|arg| !arg.contains("hunter2")));
+    assert_eq!(invocation.current_dir.as_deref(), Some(std::path::Path::new("/tmp/b")));
+    assert_eq!(env(&invocation, "GIT_TERMINAL_PROMPT"), Some("0"));
+  }
+
+  #[test]
+  fn parses_remote_tips() {
+    let stdout = "ref: refs/heads/main\tHEAD\n1111\tHEAD\n2222\trefs/heads/x/HEAD\n3333\trefs/heads/x\r\n";
+    let tips = parse_remote_tips(stdout, Some("x")).unwrap();
+    assert_eq!((tips.default_branch.as_str(), tips.default_tip.as_str()), ("main", "1111"));
+    assert_eq!(tips.branch_tip.as_deref(), Some("3333"));
+    assert_eq!(parse_remote_tips(stdout, Some("y")).unwrap().branch_tip, None);
+    assert_eq!(parse_remote_tips("1111\tHEAD\n", None), None, "detached HEAD");
+    assert_eq!(parse_remote_tips("ref: refs/heads/main\tHEAD\n", None), None, "unborn HEAD");
+  }
+
+  #[test]
+  fn parses_cat_file_batch_output() {
+    let one = "tree t\nauthor A <a@x> 1 +0000\n\none\n";
+    let two = "tree t\nparent p\nparent q\nauthor B <b@x> 1 +0000\n\ntwo";
+    let stdout = format!("aaaa commit {}\n{one}\nbbbb commit {}\n{two}\n", one.len(), two.len());
+    let commits = parse_cat_file_batch(stdout.as_bytes()).unwrap();
+    assert_eq!(commits.iter().map(GitCommit::id).collect::<Vec<_>>(), ["aaaa", "bbbb"]);
+    assert_eq!((commits[0].message(), commits[1].message()), ("one\n", "two"));
+    assert!(commits[1].is_merge());
+
+    for bad in ["aaaa missing\n", "aaaa blob 3\nabc\n", "aaaa commit 99\nshort\n"] {
+      let err = parse_cat_file_batch(bad.as_bytes()).unwrap_err();
+      assert!(matches!(&err, GitError::InvalidCommit { id } if id == "aaaa"), "{bad}: {err:?}");
+    }
+  }
+
+  #[test]
+  fn classifies_branch_fetch_failures() {
+    let url = "https://u:secret@github.com/a/b.git";
+    let cases: &[(&str, Expect)] = &[
+      (
+        "fatal: no commits selected for shallow requests\nfatal: the remote end hung up unexpectedly",
+        |e| matches!(e, GitError::NoUniqueCommits { branch } if branch == "x"),
+      ),
+      ("fatal: error processing shallow info: 4", |e| matches!(e, GitError::NoUniqueCommits { .. })),
+      (
+        "fatal: couldn't find remote ref refs/heads/x",
+        |e| matches!(e, GitError::BranchNotFound { branch } if branch == "x"),
+      ),
+      ("fatal: Authentication failed for 'https://github.com/a/b.git/'", |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
+    ];
+    for (stderr, expected) in cases {
+      let err = classify_fetch_branch_failure(url, "x", stderr).unwrap();
+      assert!(expected(&err), "{stderr} => {err:?}");
+      assert!(!err.to_string().contains("secret"), "{err}");
+    }
+  }
+
+  #[test]
   fn classifies_git_failures() {
     let plain = CloneOptions::new("https://u:secret@github.com/a/b.git", "/tmp/b");
     let branch = plain.clone().with_branch("nope");
@@ -222,7 +518,7 @@ mod tests {
       ),
     ];
     for (options, stderr, expected) in cases {
-      let err = classify_failure(options, stderr).unwrap();
+      let err = classify_clone_failure(options, stderr).unwrap();
       assert!(expected(&err), "{stderr} => {err:?}");
       assert!(!err.to_string().contains("secret"), "{err}");
     }
@@ -231,6 +527,6 @@ mod tests {
   #[test]
   fn leaves_unrecognised_failures_unclassified() {
     let options = CloneOptions::new("https://github.com/a/b.git", "/tmp/b");
-    assert!(classify_failure(&options, "fatal: something else").is_none());
+    assert!(classify_clone_failure(&options, "fatal: something else").is_none());
   }
 }

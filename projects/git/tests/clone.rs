@@ -1,6 +1,6 @@
 //! Clones from real remotes, so these need network access.
 
-use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_git::{Auth, CloneOptions, Git, GitCli, Grit};
 use std::num::NonZeroU32;
 use tempfile::TempDir;
 
@@ -9,9 +9,14 @@ async fn clones_a_public_https_repository(backend: impl Into<Git>) {
   let dest = dir.path().join("clone");
   let options =
     CloneOptions::new("https://github.com/octocat/Hello-World.git", &dest).with_depth(NonZeroU32::new(1).unwrap());
-  Git::new(backend).clone_repo(&options).await.unwrap();
+  let repo = Git::new(backend).clone_repo(&options).await.unwrap();
   assert!(dest.join(".git").is_dir());
   assert!(dest.join("README").exists());
+  assert!(repo.list_remote_branches().await.unwrap().iter().any(|branch| branch == "master"));
+  assert_eq!(repo.default_branch().await.unwrap(), "master");
+  assert!(repo.branch_commits("master").await.unwrap().is_empty());
+  // `test` has commits of its own, which only a shallow-exclude fetch over HTTPS can find here.
+  assert!(!repo.branch_authors("test").await.unwrap().is_empty());
 }
 
 const SSH_SKIPPED: &str = "set DOUP_TEST_SSH_URL and DOUP_TEST_SSH_KEY to run";
@@ -27,9 +32,12 @@ async fn clones_over_ssh_with_an_in_memory_key(backend: impl Into<Git>) {
   let dir = TempDir::new().unwrap();
   let dest = dir.path().join("clone");
   let options = CloneOptions::new(url, &dest).with_depth(NonZeroU32::new(1).unwrap()).with_auth(Auth::Ssh { key });
-  Git::new(backend).clone_repo(&options).await.unwrap();
+  let repo = Git::new(backend).clone_repo(&options).await.unwrap();
   assert!(dest.join(".git").is_dir());
   assert!(dest.join("README.md").exists());
+  // The key is only held in memory, so this proves the clone's auth is reused.
+  assert!(!repo.list_remote_branches().await.unwrap().is_empty());
+  assert!(!repo.default_branch().await.unwrap().is_empty());
 }
 
 #[tokio::test]

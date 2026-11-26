@@ -1,11 +1,12 @@
 //! Every Git operation doup needs, behind a [`GitBackend`] that can be swapped out.
 //!
 //! ```no_run
-//! use doup_git::{CloneOptions, Git, GitBackend, GitCli};
+//! use doup_git::{CloneOptions, Git, GitCli};
 //!
 //! # async fn run() -> Result<(), doup_git::GitError> {
 //! let git = Git::new(GitCli);
-//! git.clone_repo(&CloneOptions::new("https://github.com/a/b.git", "b")).await?;
+//! let repo = git.clone_repo(&CloneOptions::new("https://github.com/a/b.git", "b")).await?;
+//! let branches = repo.list_remote_branches().await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -13,6 +14,8 @@
 mod auth;
 mod backend;
 mod cli;
+mod cloned_repo;
+mod commit;
 mod error;
 mod grit;
 mod options;
@@ -23,14 +26,16 @@ mod ssh_agent;
 mod test_support;
 
 pub use auth::Auth;
-pub use backend::GitBackend;
+pub use backend::{GitBackend, RemoteTips};
 pub use cli::GitCli;
+pub use cloned_repo::ClonedRepo;
+pub use commit::GitCommit;
 pub use error::GitError;
 pub use grit::Grit;
 pub use options::CloneOptions;
 
 use remote_url::{RemoteUrl, redact};
-use spire_enum::prelude::{delegate_impl, delegated_enum};
+use spire_enum::prelude::delegated_enum;
 use std::io::ErrorKind;
 use std::path::Path;
 
@@ -46,13 +51,16 @@ impl Git {
   pub fn new(backend: impl Into<Self>) -> Self {
     backend.into()
   }
-}
 
-#[delegate_impl]
-impl GitBackend for Git {
-  async fn clone_repo(&self, options: &CloneOptions) -> Result<(), GitError> {
+  /// Clones a repository as described by `options`, returning a handle to the new clone.
+  ///
+  /// # Errors
+  ///
+  /// Returns a [`GitError`] when `options` are invalid or the clone fails.
+  pub async fn clone_repo(&self, options: &CloneOptions) -> Result<ClonedRepo, GitError> {
     validate(options).await?;
-    delegate_git! { self.clone_repo(options).await }
+    delegate_git!(self.clone_repo(options).await)?;
+    Ok(ClonedRepo::new(self.clone(), options))
   }
 }
 

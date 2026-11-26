@@ -5,10 +5,12 @@ use doup_config::{
   file::ConfigFile,
   repo::DoupRepoConfigFile,
 };
-use doup_git::{Auth, CloneOptions, Git, GitBackend, GitCli, Grit};
+use doup_git::{Auth, CloneOptions, Git, GitCli, Grit};
 use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
+
+use crate::reconciliation::reconcile;
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -46,12 +48,14 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     }
 
     eprint!("Cloning {} into {}... ", repo.origin, destination.display());
-    if let Err(err) = git.clone_repo(&options).await {
+    let clone_result = git.clone_repo(&options).await;
+    if let Err(err) = clone_result {
       eprintln!("Failed to clone {}: {err:#}", repo.origin);
       failed += 1;
       continue;
     }
     eprintln!("DONE");
+    let repo = clone_result.unwrap();
 
     // Load the repo's config
     let env_prefix = DoupRepoConfigFile::repo_env_prefix(index);
@@ -72,6 +76,25 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       ecosystems.insert(ecosystem, EcosystemPlugin::load(ecosystem, module_search_dirs.clone()).await?);
       eprintln!("DONE");
     }
+
+    eprint!("Listing existing branches... ");
+    let mut existing_branches: Vec<String> = Vec::new();
+    for branch in repo.list_remote_branches().await? {
+      // Ignore any branch that doup does not manage
+      if !branch.starts_with("doup/") {
+        continue;
+      }
+
+      // A branch with no authors has no commits, so it is safe to delete.
+      // Otherwise, any author other than doup means the branch must be left
+      // alone so it is never scheduled for deletion.
+      let authors = repo.branch_authors(&branch).await?;
+      let only_doup = authors.iter().all(|a| a == "doup[bot]@users.noreply.github.com");
+      if only_doup {
+        existing_branches.push(branch);
+      }
+    }
+    eprintln!("found {} branches", existing_branches.len());
 
     // Now discover all the dependencies that may need updating
     let mut dependencies_by_ecosystem = HashMap::new();
@@ -106,6 +129,8 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       eprintln!("found {} versions", notes.len());
       release_notes.push((ecosystem_ref, dependency, versions, notes));
     }
+
+    let _actions = reconcile(release_notes, Vec::new(), existing_branches)?;
 
     /*
       TODO:
