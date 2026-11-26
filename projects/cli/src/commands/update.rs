@@ -13,7 +13,7 @@ use tempfile::TempDir;
 /// Runs the doup update process
 #[derive(Args)]
 pub struct UpdateArgs {
-  /// Does not make any changes or create any PRs, only reports what needs to be updated
+  /// Does not make any changes or create any PRs, only reports what actions would be taken.
   #[arg(long)]
   dry_run: bool,
 }
@@ -106,6 +106,78 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       eprintln!("found {} versions", notes.len());
       release_notes.push((ecosystem_ref, dependency, versions, notes));
     }
+
+    /*
+      TODO:
+
+      - Collect all remaining information, such as remote branches, existing PRs, etc.
+        To be able to create a list of actions to perform:
+
+        - Upsert (that is create or replace) a PR because we have detected a
+          difference between the current version and the next version.
+          - There may in fact be 2 PRs, one for the `next` version
+            and one for the `latest` version.
+
+          - The ecosystem world gets a new method, which would actually make the changes inside a git worktree.
+            But the host still does all the actual git operations, the guest is only writing to files inside the provided worktree @ /workspace.
+            Then once done the host pushes the changes to the PR.
+            eg: export async apply-updates(dependency: dependency, to: string) -> result<(), string>
+
+        - Skip the update because it was excluded by a set of blacklist rules.
+          NB: These rules are yet to be added into `DoupRepoConfigFile`.
+          But the plan is to allow the user to configure doup to ignore certain updates.
+          The exact shape & form these rules will take are to be determined.
+          We should look at what RenovateBot does here for inspiration.
+
+        - Close existing PRs (& delete their branch) because we detected that
+          the default branch is already up to date. ie: A user manually updated
+          outside of doup.
+
+        - Delete any remaining orphaned branches. (That is branches without PRs)
+
+        - IMPORTANT: Only ever delete branches that are the sole author of the
+          doup bot, any commits from any other authors means the branch stays.
+
+      - A dry run prints a summary of all the info we have up until this point and then dies.
+
+      - Otherwise perform each action
+
+      Reconciliation DESIGN:
+
+      ```
+      // NB: Whether or not we actually bother with these newtypes I'm not sure
+      // but just to communicate intent I think this is helpful.
+      struct ToVersion(String);
+      struct PRNumber(i64);
+      struct BranchName(String);
+
+      enum DoupAction {
+        /// Use ecosystems[DoupRepoPlugin].apply_updates(Dependency, ToVersion) inside a new git worktree.
+        /// Maybe we also give the ecosystem plugin an opportunity to participate in the PR title & body building?
+        /// There is the commit message too.
+        /// The problem we have at the moment is that the host does not have a reliable way to define the "current" version.
+        /// At the moment the "current" version is buried in the occurrences.
+        /// We will want to use phrases like: "updating {{name}} from {{current}} to {{next}}"
+        /// let body = pr_body_template(Vec<ReleaseNote>);
+        /// Then platform.create_pull_request(title, body)
+        UpsertPR(DoupRepoPlugin, Dependency, ToVersion, Vec<ReleaseNote>),
+
+        /// Here we are saying we have on purpose decided to not update this dependency to this version.
+        /// This would ultimately result in a log message, nothing more.
+        /// Again we kind of need to know the "CurrentVersion"?
+        /// This action is probably out of scope for now as it depends on defining the exclusion rules.
+        SkipUpdate(Dependency, ToVersion),
+
+        /// In order to know what PRs to close we need to know what PRs already exist.
+        ClosePR(PRNumber),
+
+        /// Likewise, in order to know what branches to delete we need to know what branches already exist.
+        DeleteBranch(BranchName),
+      }
+      ```
+
+      - reconcile(release_notes, existing_prs, existing_branches) -> Result<Vec<Action>>
+    */
   }
 
   if failed > 0 {
