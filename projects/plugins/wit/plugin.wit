@@ -34,6 +34,20 @@ world ecosystem {
     /// A dependency may occur many times, think monorepo with
     /// many manifests that all depend on a common dependency.
     occurrences: list<occurrence>,
+
+    /// The doup host needs to know what the canonical "current" version is for
+    /// a given dependency. In order to do things like write comment messages
+    /// of the form: "chore(bump): {{name}} from {{current}} to {{next}}".
+    ///
+    /// But if there are multiple occurrences, it's difficult for the host to reliably know which one to use.
+    /// Instead we expect the guest to fill this value, usually this would be the lowest locked-version.
+    /// Or if locked is not available, the lowest current-version but in pure semver form without any constraints,
+    /// just the version number, eg: "1.2.3".
+    ///
+    /// This value is still by & large opaque to the host & does not nessarily
+    /// need to be a semantic version number, it is used for identification of
+    /// PRs & display purposes, like the commit message example.
+    current-version: string,
   }
 
   record occurrence {

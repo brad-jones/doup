@@ -3,7 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, Occurrence, registry};
+use crate::{Dependency, Occurrence, lookup, registry};
 use ignore::WalkBuilder;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
@@ -52,7 +52,21 @@ pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
     }
   }
 
-  Ok(by_key.into_iter().map(|((name, registry), occurrences)| Dependency { name, registry, occurrences }).collect())
+  by_key
+    .into_iter()
+    .map(|((name, registry), occurrences)| {
+      let current_version = current_version(&name, &occurrences)?;
+      Ok(Dependency { name, registry, current_version, occurrences })
+    })
+    .collect()
+}
+
+/// The canonical current version of a dependency: its lowest installed version, as a bare version number.
+fn current_version(name: &str, occurrences: &[Occurrence]) -> Result<String, String> {
+  let requirements = lookup::requirements(name, occurrences)?;
+  lookup::installed(occurrences, &requirements)?
+    .map(|version| version.to_string())
+    .ok_or_else(|| format!("{name} has no occurrences"))
 }
 
 fn same_declaration(a: &Occurrence, b: &Occurrence) -> bool {
@@ -326,6 +340,7 @@ winapi = "0.3"
     assert_eq!(serde.lock_path.as_deref(), Some("Cargo.lock"));
     assert_eq!(serde.current_version, "1.0");
     assert_eq!(serde.locked_version.as_deref(), Some("1.0.200"));
+    assert_eq!(find(&deps, "serde").current_version, "1.0.200");
     assert_eq!(find(&deps, "real-name").occurrences[0].locked_version.as_deref(), Some("2.1.0"));
   }
 
@@ -366,6 +381,7 @@ winapi = "0.3"
     assert_eq!(occurrences[1].manifest_path, "tool/Cargo.toml");
     assert_eq!(occurrences[1].lock_path.as_deref(), Some("tool/Cargo.lock"));
     assert_eq!(occurrences[1].locked_version.as_deref(), Some("1.0.2"));
+    assert_eq!(find(&deps, "serde").current_version, "1.0.1");
   }
 
   #[test]
@@ -377,6 +393,7 @@ winapi = "0.3"
     let serde = &find(&deps, "serde").occurrences[0];
     assert_eq!(serde.lock_path, None);
     assert_eq!(serde.locked_version, None);
+    assert_eq!(find(&deps, "serde").current_version, "1.0.0");
   }
 
   #[test]

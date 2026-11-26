@@ -240,6 +240,7 @@ mod tests {
     Dependency {
       name: "foo".to_string(),
       registry: None,
+      current_version: locked.to_string(),
       occurrences: vec![Occurrence {
         manifest_path: "Cargo.toml".to_string(),
         lock_path: Some("Cargo.lock".to_string()),

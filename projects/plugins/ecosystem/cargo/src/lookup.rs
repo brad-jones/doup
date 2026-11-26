@@ -3,7 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, Versions};
+use crate::{Dependency, Occurrence, Versions};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 
@@ -26,28 +26,39 @@ pub struct Analysis {
   pub candidates: Vec<Version>,
 }
 
-/// Parses the newline delimited JSON `index` entry of the crate behind `dependency`.
-pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String> {
-  let requirements = dependency
-    .occurrences
+/// Parses the declared version requirement of every occurrence of the dependency called `name`.
+pub fn requirements(name: &str, occurrences: &[Occurrence]) -> Result<Vec<VersionReq>, String> {
+  occurrences
     .iter()
     .map(|o| {
       VersionReq::parse(&o.current_version)
-        .map_err(|err| format!("invalid version requirement `{}` for {}: {err}", o.current_version, dependency.name))
+        .map_err(|err| format!("invalid version requirement `{}` for {name}: {err}", o.current_version))
     })
-    .collect::<Result<Vec<_>, _>>()?;
+    .collect()
+}
 
-  let installed = dependency
-    .occurrences
-    .iter()
-    .zip(&requirements)
-    .map(|(o, requirement)| match &o.locked_version {
-      Some(locked) => Version::parse(locked).map_err(|err| format!("invalid locked version `{locked}`: {err}")),
-      None => Ok(lower_bound(requirement)),
-    })
-    .collect::<Result<Vec<_>, _>>()?
-    .into_iter()
-    .min();
+/// The lowest version installed across `occurrences`, whose `requirements` come from [`requirements`].
+///
+/// An occurrence's installed version is its locked version, or the lower bound of its requirement without a lock.
+pub fn installed(occurrences: &[Occurrence], requirements: &[VersionReq]) -> Result<Option<Version>, String> {
+  Ok(
+    occurrences
+      .iter()
+      .zip(requirements)
+      .map(|(o, requirement)| match &o.locked_version {
+        Some(locked) => Version::parse(locked).map_err(|err| format!("invalid locked version `{locked}`: {err}")),
+        None => Ok(lower_bound(requirement)),
+      })
+      .collect::<Result<Vec<_>, _>>()?
+      .into_iter()
+      .min(),
+  )
+}
+
+/// Parses the newline delimited JSON `index` entry of the crate behind `dependency`.
+pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String> {
+  let requirements = requirements(&dependency.name, &dependency.occurrences)?;
+  let installed = installed(&dependency.occurrences, &requirements)?;
 
   let allow_prerelease = installed.iter().any(|v| !v.pre.is_empty())
     || requirements.iter().flat_map(|r| &r.comparators).any(|c| !c.pre.is_empty());
@@ -112,7 +123,7 @@ mod tests {
   }
 
   fn dependency(occurrences: Vec<Occurrence>) -> Dependency {
-    Dependency { name: "foo".to_string(), registry: None, occurrences }
+    Dependency { name: "foo".to_string(), registry: None, current_version: String::new(), occurrences }
   }
 
   fn index(versions: &[(&str, bool)]) -> String {
