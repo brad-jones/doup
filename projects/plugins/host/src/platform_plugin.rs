@@ -5,7 +5,7 @@
 //! generates the component bindings for that world and exposes
 //! [`PlatformPlugin`], a handle that runs calls against pooled plugin sessions.
 
-use crate::host::HostState;
+use crate::host::{HostState, HttpPolicy};
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
 use anyhow::Result;
@@ -78,14 +78,15 @@ impl PlatformPlugin {
     Ok(instance)
   }
 
-  /// Calls the plugin's `hello-world` export and returns its greeting.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if a session cannot be checked out or the call traps.
-  pub async fn hello_world(&self) -> Result<String> {
-    let mut session = self.session_pool.checkout_session().await?;
-    let result = session.bindings.call_hello_world(&mut session.store).await;
-    self.session_pool.checkin_session(session, result)
+  pub async fn list_open_prs(&self, head_branch_prefix: &str) -> Result<Vec<PullRequest>> {
+    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let result = session.call_async(async |b, a| b.call_list_open_prs(a, head_branch_prefix.to_string()).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
+
+  pub async fn list_closed_prs(&self, head_branches: &[String]) -> Result<Vec<PullRequest>> {
+    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let result = session.call_async(async |b, a| b.call_list_closed_prs(a, head_branches.to_vec()).await).await?;
+    result.map_err(anyhow::Error::msg)
   }
 }

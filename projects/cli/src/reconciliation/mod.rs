@@ -7,8 +7,11 @@ use nutype::nutype;
 
 type Updates<'a> = Vec<(&'a DoupRepoPlugin, &'a Dependency, &'a Versions, Vec<ReleaseNote>)>;
 
-#[nutype(derive(AsRef, Debug))]
-pub struct ToVersion(String);
+#[derive(Debug)]
+pub struct ToVersion {
+  pub version: String,
+  pub latest: bool,
+}
 
 #[nutype(derive(AsRef, Debug))]
 pub struct PRNumber(i64);
@@ -42,7 +45,7 @@ pub struct PullRequest {
 
   /// The head branch of the PR - eg: `doup/{{ecosystem}}/{{name}}`
   /// [`reconcile`] only expects branches starting with the `doup/` prefix.
-  /// Do not include any aribitary pull request in the list.
+  /// Do not include any arbitrary pull request in the list.
   /// For more details on the format see: [`doup_branch`]
   pub head_branch: String,
 
@@ -64,9 +67,15 @@ pub enum PullRequestState {
 // TODO: We need to use some sort of slugify func over these strings to make
 // them safe for use in a branch name, possibly also include a small hash of
 // all the relevant data if we can not reliably keep full fidelity.
-fn doup_branch(plugin: &DoupRepoPlugin, dependency: &Dependency) -> String {
+pub fn doup_branch(plugin: &DoupRepoPlugin, dependency: &Dependency, latest: bool) -> String {
   if let Some(ref reg) = dependency.registry {
+    if latest {
+      return format!("doup/{}/{}/{}_latest", plugin.plugin, reg, dependency.name);
+    }
     return format!("doup/{}/{}/{}", plugin.plugin, reg, dependency.name);
+  }
+  if latest {
+    return format!("doup/{}/{}_latest", plugin.plugin, dependency.name);
   }
   format!("doup/{}/{}", plugin.plugin, dependency.name)
 }
@@ -97,7 +106,7 @@ pub fn reconcile(
   for (ecosystem_ref, dependency, versions, ref notes) in candidates {
     reconcile_candidate(
       &mut actions,
-      (ToVersion::new(versions.next.clone()), ecosystem_ref, dependency, notes),
+      (ToVersion { version: versions.next.clone(), latest: false }, ecosystem_ref, dependency, notes),
       &existing_prs,
     );
 
@@ -105,7 +114,7 @@ pub fn reconcile(
     if let Some(ref latest) = versions.latest {
       reconcile_candidate(
         &mut actions,
-        (ToVersion::new(latest.clone()), ecosystem_ref, dependency, notes),
+        (ToVersion { version: latest.clone(), latest: true }, ecosystem_ref, dependency, notes),
         &existing_prs,
       );
     }
@@ -134,7 +143,7 @@ pub fn reconcile(
       ),
     ));
 
-    if existing_branches.iter().find(|b| b.as_ref() == pr.head_branch).is_some() {
+    if existing_branches.iter().find(|branch| **branch == pr.head_branch).is_some() {
       actions.push(DoupAction::DeleteBranch(
         BranchName::new(pr.head_branch.clone()),
         Reason::new(
@@ -152,8 +161,9 @@ pub fn reconcile(
     .iter()
     .map(|pr| pr.head_branch.clone())
     .chain(actions.iter().filter_map(|action| match action {
-      DoupAction::CreatePR(plugin, dependency, ..) | DoupAction::UpdatePR(_, plugin, dependency, ..) => {
-        Some(doup_branch(plugin, dependency))
+      DoupAction::CreatePR(plugin, dependency, to_version, ..)
+      | DoupAction::UpdatePR(_, plugin, dependency, to_version, ..) => {
+        Some(doup_branch(plugin, dependency, to_version.latest))
       }
       _ => None,
     }))
@@ -188,7 +198,9 @@ fn reconcile_candidate(
 ) {
   let (to_version, ecosystem_ref, dependency, notes) = candidate;
 
-  if let Some(pr) = existing_prs.iter().find(|pr| pr.head_branch == doup_branch(ecosystem_ref, dependency)) {
+  if let Some(pr) =
+    existing_prs.iter().find(|pr| pr.head_branch == doup_branch(ecosystem_ref, dependency, to_version.latest))
+  {
     match pr.state {
       PullRequestState::Open => {
         actions.push(DoupAction::UpdatePR(
@@ -207,7 +219,7 @@ fn reconcile_candidate(
       }
 
       PullRequestState::Closed => {
-        if pr.version == to_version.as_ref() {
+        if pr.version == to_version.version {
           actions.push(DoupAction::SkipUpdate(
             dependency.clone(),
             to_version,

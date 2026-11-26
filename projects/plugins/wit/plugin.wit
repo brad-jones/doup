@@ -12,9 +12,32 @@ world shared {
 world platform {
   import host-api;
 
+  record pull-request {
+    /// The pull request number.
+    /// eg: `https://github.com/<owner>/<repo>/pull/<number>`
+    number: s64,
+
+    /// The head branch of the PR.
+    /// eg: `doup/{{ecosystem}}/{{name}}`
+    head-branch: string,
+
+    /// The version number that this pull request is updating to.
+    /// This should be a plain version number without any semver constraints. eg: "1.2.3".
+    /// Although does not strictly need to be a semver and remains largely opaque to the host.
+    /// When a PR is created this value comes from either `versions.next` or `versions.latest`.
+    /// But it up to the platform plugin as to how this value is actually encoded into the PR.
+    /// eg: PR Title or other means.
+    version: string,
+  }
+
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
-  export hello-world: func() -> string;
+
+  /// List all open pull requests where their head branch name starts with `head-branch-prefix`.
+  export list-open-prs: async func(head-branch-prefix: string) -> result<list<pull-request>, string>;
+
+  /// List all closed pull requests where their head branch exactly matches one of `head-branches`.
+  export list-closed-prs: async func(head-branches: list<string>) -> result<list<pull-request>, string>;
 }
 
 world ecosystem {

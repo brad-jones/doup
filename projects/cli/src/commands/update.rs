@@ -10,7 +10,7 @@ use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
 
-use crate::reconciliation::reconcile;
+use crate::reconciliation::{PullRequest, PullRequestState, doup_branch, reconcile};
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -67,7 +67,7 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     let module_search_dirs = vec![destination.to_path_buf()];
 
     eprint!("Loading {}... ", repo_config.platform.plugin);
-    let _platform = PlatformPlugin::load(&repo_config.platform, module_search_dirs.clone()).await?;
+    let platform = PlatformPlugin::load(&repo_config.platform, module_search_dirs.clone()).await?;
     eprintln!("DONE");
 
     let mut ecosystems = HashMap::new();
@@ -120,17 +120,45 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
     }
 
     // Fetch release notes for all versions between current and next
-    let mut release_notes = Vec::new();
+    let mut candidates = Vec::new();
     for &(ecosystem_ref, dependency, ref versions) in &next_versions {
       let ecosystem_plugin = &ecosystems[ecosystem_ref];
       let to = if let Some(ref latest) = versions.latest { latest } else { &versions.next };
       eprint!("Downloading release notes using {} for {}... ", ecosystem_ref.plugin, dependency.name);
       let notes = ecosystem_plugin.fetch_release_notes(dependency, to).await?;
       eprintln!("found {} versions", notes.len());
-      release_notes.push((ecosystem_ref, dependency, versions, notes));
+      candidates.push((ecosystem_ref, dependency, versions, notes));
     }
 
-    let _actions = reconcile(release_notes, Vec::new(), existing_branches)?;
+    // List existing PRs.
+    // We need to fetch all open PRs with a head branch starting with `doup/`.
+    let mut existing_prs: Vec<PullRequest> = Vec::new();
+    eprint!("Listing existing open prs... ");
+    let open_prs = platform.list_open_prs("doup/").await?;
+    eprintln!("found {}", open_prs.len());
+    existing_prs.extend(open_prs.into_iter().map(|pr| PullRequest {
+      number: pr.number,
+      version: pr.version,
+      head_branch: pr.head_branch,
+      state: PullRequestState::Open,
+    }));
+
+    // And only closed PRs whose `head_branch` matches one of our `candidates`.
+    let mut candidate_branches = Vec::new();
+    for &(ecosystem_ref, dependency, versions, ref _notes) in &candidates {
+      candidate_branches.push(doup_branch(ecosystem_ref, dependency, versions.latest.is_some()));
+    }
+    eprint!("Listing existing closed prs... ");
+    let closed_prs = platform.list_closed_prs(&candidate_branches).await?;
+    eprintln!("found {}", closed_prs.len());
+    existing_prs.extend(closed_prs.into_iter().map(|pr| PullRequest {
+      number: pr.number,
+      version: pr.version,
+      head_branch: pr.head_branch,
+      state: PullRequestState::Closed,
+    }));
+
+    let _actions = reconcile(candidates, existing_prs, existing_branches)?;
 
     /*
       TODO:
