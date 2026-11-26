@@ -7,5 +7,8 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+garde = { version = "0.23.0", features = ["derive", "regex"] }
+serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-wit-bindgen = "0.63"
+wasi-fetch = "0.2.0"
+wit-bindgen = { version = "0.63", features = ["async"] }

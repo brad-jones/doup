@@ -3,7 +3,7 @@ $schema: ./schemas/repo.schema.json
 platform:
   use: ./target/wasm32-wasip3/release/doup_platform_plugin_github.wasm
   with:
-    foo: bar
+    repository: brad-jones/doup
 
 ecosystems:
   - use: ./target/wasm32-wasip3/release/doup_ecosystem_plugin_doup.wasm
