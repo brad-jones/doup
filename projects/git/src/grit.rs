@@ -1,10 +1,13 @@
 use crate::remote_url::{RemoteUrl, redact};
 use crate::ssh_agent::SshAgent;
-use crate::{Auth, CloneOptions, ClonedRepo, GitBackend, GitCommit, GitError, RemoteTips};
+use crate::{Auth, CloneOptions, ClonedRepo, GitBackend, GitCommit, GitError, RemoteTips, Worktree};
 use grit_lib::config::ConfigSet;
-use grit_lib::config::environment::{Environment, RepositoryOptions};
+use grit_lib::config::environment::{ConfigOverride, Environment, RepositoryOptions};
 use grit_lib::error::{Error, RemoteUnreadableReason};
-use grit_lib::objects::ObjectKind;
+use grit_lib::objects::{ObjectId, ObjectKind};
+use grit_lib::porcelain::CommitError;
+use grit_lib::porcelain::add::StageOptions;
+use grit_lib::porcelain::commit::{CommitRequest, HookPolicy};
 use grit_lib::progress::{CancelToken, NullProgress};
 use grit_lib::remote::clone::{self as grit_clone, CloneError};
 use grit_lib::remote::credentials::{Credential, CredentialProvider};
@@ -12,14 +15,18 @@ use grit_lib::remote::fetch::NoProgress;
 use grit_lib::remote::fetch_request::FetchRefspecError;
 use grit_lib::remote::http_client::{HttpClient, UreqHttpClient};
 use grit_lib::remote::partial_clone::ObjectFilterSpec;
-use grit_lib::remote::transfer::{FetchOptions, TagMode};
+use grit_lib::remote::push_report::{PushRefResult, PushRefStatus};
+use grit_lib::remote::transfer::{FetchOptions, PushOptions, PushRefSpec, TagMode};
 use grit_lib::remote::transport_path::resolve_local_remote_git_dir;
 use grit_lib::remote::{
   DEFAULT_REMOTE, HttpClientFactory, ListRefsOptions, Remote, RemoteError, RemoteRef, RemoteUrl as GritRemoteUrl,
 };
 use grit_lib::repo::Repository;
-use grit_lib::revwalk::RevWalkListOptions;
+use grit_lib::revwalk::{ResolveOptions, RevWalkListOptions};
+use grit_lib::worktree::{AddLinkedWorktreeOptions, WorktreeBranch};
+use std::io::ErrorKind;
 use std::num::NonZeroU32;
+use std::path::PathBuf;
 use url::Url;
 
 /// Performs Git operations in-process with grit, without needing a `git` executable.
@@ -77,6 +84,180 @@ impl GitBackend for Grit {
     let (repo, branch) = (repo.clone(), branch.to_owned());
     tokio::task::spawn_blocking(move || branch_commits_blocking(&repo, &branch)).await?
   }
+
+  async fn worktree_add(&self, worktree: &Worktree) -> Result<(), GitError> {
+    let parts = WorktreeParts::of(worktree);
+    let cancel = CancelToken::new();
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    tokio::task::spawn_blocking(move || worktree_add_blocking(&parts, &cancel)).await?
+  }
+
+  async fn worktree_commit(&self, worktree: &Worktree, message: &str) -> Result<String, GitError> {
+    let (parts, message) = (WorktreeParts::of(worktree), message.to_owned());
+    let cancel = CancelToken::new();
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    tokio::task::spawn_blocking(move || worktree_commit_blocking(&parts, &message, &cancel)).await?
+  }
+
+  async fn worktree_push(&self, worktree: &Worktree) -> Result<String, GitError> {
+    push(worktree, None).await
+  }
+
+  async fn worktree_push_force(&self, worktree: &Worktree, lease: Option<&str>) -> Result<String, GitError> {
+    push(worktree, Some(lease.map(str::to_owned))).await
+  }
+
+  async fn worktree_remove(&self, worktree: &Worktree) -> Result<(), GitError> {
+    let parts = WorktreeParts::of(worktree);
+    tokio::task::spawn_blocking(move || worktree_remove_blocking(&parts)).await?
+  }
+}
+
+/// What the blocking worktree operations need from a [`Worktree`], which cannot be sent to them.
+struct WorktreeParts {
+  repo: ClonedRepo,
+  path: PathBuf,
+  branch: String,
+  hooks_path: PathBuf,
+}
+
+impl WorktreeParts {
+  fn of(worktree: &Worktree) -> Self {
+    Self {
+      repo: worktree.repo().clone(),
+      path: worktree.path().to_path_buf(),
+      branch: worktree.branch().to_owned(),
+      hooks_path: worktree.hooks_path(),
+    }
+  }
+
+  /// Commits as the clone's identity, with an empty hooks path so none of the user's hooks run.
+  fn environment(&self, ssh_command: Option<String>) -> Result<Environment, GitError> {
+    // hygiene: embedder boundary, so the user's own Git setup applies like it does for a clone.
+    let mut environment = with_ssh_command(Environment::capture_process(), ssh_command);
+    // grit reads these from its own fields, not the vars set with `with_var`.
+    let identity = self.repo.identity();
+    environment.git_author_name = Some(identity.name().to_owned());
+    environment.git_author_email = Some(identity.email().to_owned());
+    environment.git_committer_name = Some(identity.name().to_owned());
+    environment.git_committer_email = Some(identity.email().to_owned());
+    let hooks_path = ConfigOverride::new("core.hooksPath", Some(self.hooks_path.to_string_lossy().into_owned()))
+      .map_err(GitError::Grit)?;
+    environment.push_config_override(&hooks_path);
+    Ok(environment)
+  }
+
+  /// Opens the clone itself, rather than the worktree.
+  fn open_clone(&self) -> Result<Repository, GitError> {
+    let options = RepositoryOptions::with_environment(self.environment(None)?).with_work_tree(self.repo.path());
+    Repository::open(&self.repo.path().join(".git"), &options).map_err(GitError::Grit)
+  }
+
+  /// Opens the worktree, with credentials ready for any request it makes to `origin`.
+  fn open(&self, ssh_command: Option<String>) -> Result<(Repository, Option<StaticCredentialsFactory>), GitError> {
+    let environment = self.environment(ssh_command)?;
+    let http_factory = http_factory(self.repo.url(), self.repo.auth(), &environment)?;
+    let admin_dir = crate::worktree::admin_dir(&self.path)
+      .ok_or_else(|| GitError::Io(std::io::Error::new(ErrorKind::NotFound, "worktree is not registered")))?;
+    let options = RepositoryOptions::with_environment(environment).with_work_tree(&self.path);
+    let git_repo = Repository::open(&admin_dir, &options).map_err(GitError::Grit)?;
+    Ok((git_repo, http_factory))
+  }
+}
+
+fn worktree_add_blocking(parts: &WorktreeParts, cancel: &CancelToken) -> Result<(), GitError> {
+  let options = AddLinkedWorktreeOptions {
+    path: parts.path.clone(),
+    branch: Some(WorktreeBranch::CreateOrReset(parts.branch.clone())),
+    start_point: Some("HEAD".to_owned()),
+    force: false,
+    lock: None,
+    no_checkout: false,
+    track: false,
+  };
+  parts.open_clone()?.worktrees().add_with_cancel(&options, cancel).map(drop).map_err(GitError::Grit)
+}
+
+fn worktree_commit_blocking(parts: &WorktreeParts, message: &str, cancel: &CancelToken) -> Result<String, GitError> {
+  let (git_repo, _) = parts.open(None)?;
+  // Staged explicitly, as auto-staging leaves untracked files out when `status.showUntrackedFiles=no`.
+  git_repo.index().stage(&StageOptions::default(), &mut NullProgress, cancel).map_err(GitError::Grit)?;
+  let mut request = CommitRequest::new(message);
+  request.sign_override = Some(false);
+  request.hooks = HookPolicy::SkipVerify;
+  match git_repo.commits().create_staged(&request, &mut NullProgress, cancel) {
+    Ok(outcome) => Ok(outcome.oid.to_hex()),
+    Err(Error::Commit(CommitError::NothingToCommit | CommitError::NothingStagedToCommit { .. })) => {
+      Err(GitError::NothingToCommit)
+    }
+    Err(err) => Err(GitError::Grit(err)),
+  }
+}
+
+/// Pushes the worktree's branch, forcing with `lease` when it is `Some`.
+async fn push(worktree: &Worktree, lease: Option<Option<String>>) -> Result<String, GitError> {
+  let parts = WorktreeParts::of(worktree);
+  let agent = SshAgent::for_auth(parts.repo.auth())?;
+  let ssh_command = agent.as_ref().map(SshAgent::ssh_command).transpose()?;
+  let cancel = CancelToken::new();
+  let _cancel_on_drop = CancelOnDrop(cancel.clone());
+  let result = tokio::task::spawn_blocking(move || push_blocking(&parts, lease, ssh_command, &cancel)).await?;
+  drop(agent);
+  result
+}
+
+fn push_blocking(
+  parts: &WorktreeParts,
+  lease: Option<Option<String>>,
+  ssh_command: Option<String>,
+  cancel: &CancelToken,
+) -> Result<String, GitError> {
+  let (git_repo, http_factory) = parts.open(ssh_command)?;
+  let dst = format!("refs/heads/{}", parts.branch);
+  let id = git_repo.revwalk().resolve(&dst, &ResolveOptions::default()).map_err(GitError::Grit)?;
+  let expected_old = match lease.as_ref().and_then(Option::as_deref) {
+    Some(lease) => Some(ObjectId::from_hex(lease).map_err(GitError::Grit)?),
+    None => None,
+  };
+  let spec = PushRefSpec {
+    src: Some(id),
+    src_ref: Some(dst.clone()),
+    dst,
+    force: lease.is_some(),
+    expected_old,
+    expect_absent: matches!(lease, Some(None)),
+    ..PushRefSpec::default()
+  };
+  let options = PushOptions { no_verify: true, ..PushOptions::default() };
+
+  let pushed = git_repo.remotes().get(DEFAULT_REMOTE).and_then(|remote| {
+    let http_factory = http_factory.as_ref().map(|factory| factory as &dyn HttpClientFactory);
+    git_repo.remotes().push(&remote, &[spec], options, &mut NoProgress, cancel, http_factory)
+  });
+  let outcome = pushed.map_err(|err| classify_failure(parts.repo.url(), &err).unwrap_or(GitError::Grit(err)))?;
+  match outcome.results.iter().find(|result| result.status.is_error()) {
+    Some(rejected) => Err(classify_push_rejection(&parts.branch, rejected)),
+    None => Ok(id.to_hex()),
+  }
+}
+
+fn classify_push_rejection(branch: &str, rejected: &PushRefResult) -> GitError {
+  let branch = branch.to_owned();
+  let reason = match rejected.status {
+    PushRefStatus::RejectStale => return GitError::StaleLease { branch },
+    PushRefStatus::RejectNonFastForward => "non-fast-forward",
+    PushRefStatus::RejectAlreadyExists => "already exists",
+    PushRefStatus::RejectFetchFirst => "fetch first",
+    PushRefStatus::RejectNeedsForce => "needs force",
+    PushRefStatus::RejectRemoteRefMissing => "remote ref does not exist",
+    PushRefStatus::AtomicPushFailed => "atomic push failed",
+    _ => rejected.message.as_deref().unwrap_or("remote rejected"),
+  };
+  GitError::PushRejected { branch, reason: reason.to_owned() }
+}
+
+fn worktree_remove_blocking(parts: &WorktreeParts) -> Result<(), GitError> {
+  parts.open_clone()?.worktrees().remove(&parts.path, true).map_err(GitError::Grit)
 }
 
 /// grit is synchronous, so stop its blocking work if the awaiting future is dropped.

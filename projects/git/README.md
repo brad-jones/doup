@@ -23,6 +23,12 @@ let branches = repo.list_remote_branches().await?; // like `git ls-remote --head
 let default = repo.default_branch().await?; // the branch origin's HEAD points at, e.g. "main"
 let commits = repo.branch_commits("doup/foo").await?; // like `git log origin/HEAD..origin/doup/foo`
 let authors = repo.branch_authors("doup/foo").await?; // their `%ae`, sorted and deduplicated
+
+let worktree = repo.worktree_add("doup/foo").await?; // like `git worktree add -B doup/foo <tmp> HEAD`
+std::fs::write(worktree.path().join("Cargo.lock"), lockfile)?;
+let id = worktree.commit("chore(doup): update foo").await?; // `git add --all && git commit`
+worktree.push().await?; // or `push_force()`, a `--force-with-lease`
+worktree.remove().await?; // or just drop it
 ```
 
 Every operation is async (built on `tokio`) and fails with a typed `GitError`.
@@ -49,6 +55,27 @@ branch, and work whatever state the clone is in (shallow, single-branch, branch 
 - **Merges stop the walk.** Shallow boundaries are per commit, so a merge of the default branch into the branch is a
   boundary and the commits behind it are not fetched or listed. The merge itself is listed with `is_merge()` set, so a
   caller can treat any merge as "the list may be incomplete".
+
+### Worktrees
+
+`worktree_add(branch)` checks `branch` out in a linked worktree in its own temp dir, so the clone's working tree is
+never touched and each update starts clean. The branch is created, or reset if the clone already has it, at the clone's
+`HEAD` (the default branch for a plain clone). It works from a shallow clone.
+
+- `commit(message)` stages every change (`git add --all`) and commits it, returning the new commit's id. It fails with
+  `GitError::NothingToCommit` when nothing changed.
+- `push()` pushes the branch to the same name on `origin`, creating it if needed. It never overwrites: a
+  non-fast-forward fails with `GitError::PushRejected`.
+- `push_force()` overwrites the branch with `--force-with-lease`. The lease is `origin`'s tip of the branch when the
+  worktree was added (or that it did not exist then), then whatever this worktree last pushed. So a branch someone else
+  pushed to or created in the meantime is never overwritten: that fails with `GitError::StaleLease`.
+- `remove()` is `git worktree remove --force`. Dropping a `Worktree` without calling it does the same on disk, blocking:
+  it deletes the worktree's `.git/worktrees/<id>` admin dir and then the worktree, so the branch can be checked out
+  again.
+
+Commits are made as the clone's `Identity` (`CloneOptions::with_identity`, default `doup[bot]
+<doup[bot]@users.noreply.github.com>`) for both author and committer, are never signed, and no hooks run at any step:
+`core.hooksPath` points at an empty dir, so neither the user's (e.g. a global hooks path) nor the clone's run.
 
 ## Backends
 
@@ -86,6 +113,14 @@ Notes from building this crate against `grit-lib` 0.5.x:
   fetching from a local remote.
 - Walks (`revwalk().commits`) honour shallow grafts, so read raw objects (`objects().read`) when the real parents
   matter.
+- `Environment::with_var` only reaches `Environment::var_os` lookups and subprocesses. Variables grit keeps in fields,
+  such as `GIT_AUTHOR_*`/`GIT_COMMITTER_*` and `GIT_CONFIG_COUNT`, must be set on those fields, and config overrides go
+  through `push_config_override` (`git -c`).
+- A linked worktree is opened with `Repository::open` on its admin dir (`.git/worktrees/<id>`, named in its `.git` file)
+  and `with_work_tree`.
+- Push rejections are not errors: check each `PushOutcome::results` status. A lost lease is `RejectStale`.
+- `porcelain::commit::CommitScope::AutoStage` leaves untracked files out when `status.showUntrackedFiles=no`, so stage
+  with `index().stage` (`StageMode::All`) and commit what is staged.
 
 ## Authentication
 

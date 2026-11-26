@@ -1,7 +1,7 @@
 use crate::auth::basic_auth_header;
 use crate::remote_url::{RemoteUrl, redact};
 use crate::ssh_agent::SshAgent;
-use crate::{Auth, CloneOptions, ClonedRepo, GitBackend, GitCommit, GitError, RemoteTips};
+use crate::{Auth, CloneOptions, ClonedRepo, GitBackend, GitCommit, GitError, RemoteTips, Worktree};
 use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -64,6 +64,61 @@ impl GitBackend for GitCli {
     let objects = run(local(&["cat-file", "--batch"], Some(ids)), |_| None).await?;
     parse_cat_file_batch(&objects)
   }
+
+  async fn worktree_add(&self, worktree: &Worktree) -> Result<(), GitError> {
+    run(worktree_add_invocation(worktree), |_| None).await.map(drop)
+  }
+
+  async fn worktree_commit(&self, worktree: &Worktree, message: &str) -> Result<String, GitError> {
+    run(in_worktree(worktree, ["add", "--all"]), |_| None).await?;
+    // Exits 1 when something is staged.
+    match run(in_worktree(worktree, ["diff", "--cached", "--quiet"]), |_| None).await {
+      Ok(_) => return Err(GitError::NothingToCommit),
+      Err(GitError::CommandFailed { status, .. }) if status.code() == Some(1) => {}
+      Err(err) => return Err(err),
+    }
+    run(commit_invocation(worktree, message), |_| None).await?;
+    branch_tip(worktree).await
+  }
+
+  async fn worktree_push(&self, worktree: &Worktree) -> Result<String, GitError> {
+    push(worktree, Push::FastForward).await
+  }
+
+  async fn worktree_push_force(&self, worktree: &Worktree, lease: Option<&str>) -> Result<String, GitError> {
+    push(worktree, Push::ForceWithLease(lease)).await
+  }
+
+  async fn worktree_remove(&self, worktree: &Worktree) -> Result<(), GitError> {
+    let mut invocation = in_worktree(worktree, ["worktree", "remove", "--force"]);
+    invocation.args.push(worktree.path().into());
+    invocation.current_dir = Some(worktree.repo().path().to_path_buf());
+    run(invocation, |_| None).await.map(drop)
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Push<'a> {
+  FastForward,
+  /// Overwrite the branch as long as `origin` still has it at this id, or not at all for `None`.
+  ForceWithLease(Option<&'a str>),
+}
+
+async fn push(worktree: &Worktree, mode: Push<'_>) -> Result<String, GitError> {
+  // Pushing this exact id means what is returned is what was pushed.
+  let id = branch_tip(worktree).await?;
+  let repo = worktree.repo();
+  let agent = SshAgent::for_auth(repo.auth())?;
+  let invocation = push_invocation(worktree, &id, mode, agent.as_ref())?;
+  let result = run(invocation, |stderr| classify_push_failure(repo.url(), worktree.branch(), stderr)).await;
+  drop(agent);
+  result.map(|_| id)
+}
+
+async fn branch_tip(worktree: &Worktree) -> Result<String, GitError> {
+  let tip = format!("refs/heads/{}", worktree.branch());
+  let stdout = run(in_worktree(worktree, ["rev-parse", "--verify", "--end-of-options", &tip]), |_| None).await?;
+  Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
 }
 
 #[derive(Debug)]
@@ -175,6 +230,48 @@ fn fetch_branch_invocation(
   })
 }
 
+/// Runs git `args` in `worktree` as the clone's identity, with an empty hooks path so none of the
+/// user's hooks run.
+fn in_worktree<'a>(worktree: &Worktree, args: impl IntoIterator<Item = &'a str>) -> Invocation {
+  let mut hooks_path = OsString::from("core.hooksPath=");
+  hooks_path.push(worktree.hooks_path());
+  let mut all: Vec<OsString> = vec!["-c".into(), hooks_path];
+  all.extend(args.into_iter().map(Into::into));
+  let envs = worktree.repo().identity().envs().into_iter().map(|(key, value)| (key, value.into())).collect();
+  Invocation { args: all, envs, current_dir: Some(worktree.path().to_path_buf()), stdin: None }
+}
+
+fn worktree_add_invocation(worktree: &Worktree) -> Invocation {
+  let mut invocation = in_worktree(worktree, ["worktree", "add", "--quiet", "--no-track", "-B", worktree.branch()]);
+  invocation.args.extend([worktree.path().into(), "HEAD".into()]);
+  invocation.current_dir = Some(worktree.repo().path().to_path_buf());
+  invocation
+}
+
+fn commit_invocation(worktree: &Worktree, message: &str) -> Invocation {
+  let message = format!("--message={message}");
+  in_worktree(worktree, ["-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", &message])
+}
+
+fn push_invocation(
+  worktree: &Worktree,
+  id: &str,
+  mode: Push<'_>,
+  agent: Option<&SshAgent>,
+) -> Result<Invocation, GitError> {
+  let dst = format!("refs/heads/{}", worktree.branch());
+  let lease = match mode {
+    Push::FastForward => None,
+    Push::ForceWithLease(lease) => Some(format!("--force-with-lease={dst}:{}", lease.unwrap_or_default())),
+  };
+  let refspec = format!("{id}:{dst}");
+  let args = ["push", "--quiet", "--no-verify"].into_iter().chain(lease.as_deref()).chain(["origin", &refspec]);
+  let mut invocation = in_worktree(worktree, args);
+  let repo = worktree.repo();
+  invocation.envs.extend(auth_envs(repo.url(), repo.auth(), agent)?);
+  Ok(invocation)
+}
+
 /// Secrets only ever go in the environment, never in args that `ps` can show.
 fn auth_envs(
   url: &str,
@@ -261,6 +358,26 @@ fn classify_fetch_branch_failure(url: &str, branch: &str, stderr: &str) -> Optio
   } else {
     classify_failure(url, stderr)
   }
+}
+
+/// Failures only a push can have, falling back to [`classify_failure`].
+///
+/// git reports each refused ref as ` ! [rejected] <src> -> <dst> (<reason>)`, or `[remote
+/// rejected]` when `origin` refused it, even with `--quiet`.
+fn classify_push_failure(url: &str, branch: &str, stderr: &str) -> Option<GitError> {
+  let rejected = stderr.lines().map(str::trim).find(|line| line.starts_with("! [") && line.contains("rejected]"));
+  let Some(rejected) = rejected else {
+    return classify_failure(url, stderr);
+  };
+  let reason = match (rejected.rfind('('), rejected.ends_with(')')) {
+    (Some(open), true) => &rejected[open + 1..rejected.len() - 1],
+    _ => rejected,
+  };
+  Some(if reason == "stale info" {
+    GitError::StaleLease { branch: branch.to_owned() }
+  } else {
+    GitError::PushRejected { branch: branch.to_owned(), reason: reason.to_owned() }
+  })
 }
 
 /// Failures only a clone can have, falling back to [`classify_failure`].
@@ -457,6 +574,84 @@ mod tests {
       let err = parse_cat_file_batch(bad.as_bytes()).unwrap_err();
       assert!(matches!(&err, GitError::InvalidCommit { id } if id == "aaaa"), "{bad}: {err:?}");
     }
+  }
+
+  fn worktree() -> Worktree {
+    Worktree::new(https_repo(), "doup/x", None).unwrap()
+  }
+
+  #[test]
+  fn worktree_commands_disable_hooks_and_commit_as_the_identity() {
+    let worktree = worktree();
+    let hooks = format!("core.hooksPath={}", worktree.hooks_path().display());
+    let invocation = commit_invocation(&worktree, "-m msg");
+    assert_eq!(
+      args(&invocation),
+      ["-c", &hooks, "-c", "commit.gpgsign=false", "commit", "--quiet", "--no-verify", "--message=-m msg"]
+    );
+    assert_eq!(invocation.current_dir.as_deref(), Some(worktree.path()));
+    assert_eq!(env(&invocation, "GIT_AUTHOR_EMAIL"), Some("doup[bot]@users.noreply.github.com"));
+    assert_eq!(env(&invocation, "GIT_COMMITTER_NAME"), Some("doup[bot]"));
+
+    let invocation = worktree_add_invocation(&worktree);
+    let path = worktree.path().to_str().unwrap();
+    assert_eq!(
+      args(&invocation),
+      ["-c", &hooks, "worktree", "add", "--quiet", "--no-track", "-B", "doup/x", path, "HEAD"]
+    );
+    assert_eq!(invocation.current_dir.as_deref(), Some(std::path::Path::new("/tmp/b")));
+  }
+
+  #[test]
+  fn builds_pushes_of_an_exact_id_with_an_optional_lease() {
+    let worktree = worktree();
+    let push = |mode| {
+      let invocation = push_invocation(&worktree, "1111", mode, None).unwrap();
+      assert!(args(&invocation).iter().all(|arg| !arg.contains("hunter2")));
+      assert_eq!(env(&invocation, "GIT_CONFIG_VALUE_0"), Some(basic_auth_header("user", "hunter2").as_str()));
+      args(&invocation)[2..].iter().map(|arg| arg.to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(push(Push::FastForward), ["push", "--quiet", "--no-verify", "origin", "1111:refs/heads/doup/x"]);
+    assert_eq!(
+      push(Push::ForceWithLease(Some("2222"))),
+      [
+        "push",
+        "--quiet",
+        "--no-verify",
+        "--force-with-lease=refs/heads/doup/x:2222",
+        "origin",
+        "1111:refs/heads/doup/x"
+      ]
+    );
+    assert_eq!(push(Push::ForceWithLease(None))[3], "--force-with-lease=refs/heads/doup/x:");
+  }
+
+  #[test]
+  fn classifies_push_failures() {
+    let url = "https://u:secret@github.com/a/b.git";
+    let cases: &[(&str, Expect)] = &[
+      (
+        " ! [rejected]        1111 -> doup/x (stale info)\nerror: failed to push some refs",
+        |e| matches!(e, GitError::StaleLease { branch } if branch == "doup/x"),
+      ),
+      (
+        " ! [rejected]        1111 -> doup/x (fetch first)\nerror: failed to push some refs",
+        |e| matches!(e, GitError::PushRejected { reason, .. } if reason == "fetch first"),
+      ),
+      (
+        " ! [remote rejected] 1111 -> doup/x (protected branch hook declined)\n",
+        |e| matches!(e, GitError::PushRejected { reason, .. } if reason == "protected branch hook declined"),
+      ),
+      ("fatal: Authentication failed for 'https://github.com/a/b.git/'", |e| {
+        matches!(e, GitError::AuthenticationFailed { .. })
+      }),
+    ];
+    for (stderr, expected) in cases {
+      let err = classify_push_failure(url, "doup/x", stderr).unwrap();
+      assert!(expected(&err), "{stderr} => {err:?}");
+      assert!(!err.to_string().contains("secret"), "{err}");
+    }
+    assert!(classify_push_failure(url, "doup/x", "fatal: something else").is_none());
   }
 
   #[test]

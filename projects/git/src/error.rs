@@ -34,6 +34,24 @@ pub enum GitError {
   #[error("branch name must not be empty")]
   EmptyBranch,
 
+  #[error("'{branch}' is not a valid branch name")]
+  InvalidBranch { branch: String },
+
+  #[error("'{name} <{email}>' is not a valid commit identity")]
+  InvalidIdentity { name: String, email: String },
+
+  #[error("commit message must not be empty")]
+  EmptyCommitMessage,
+
+  #[error("there are no changes to commit")]
+  NothingToCommit,
+
+  #[error("push to remote branch '{branch}' was rejected: {reason}")]
+  PushRejected { branch: String, reason: String },
+
+  #[error("remote branch '{branch}' changed since it was last seen, so it was not overwritten")]
+  StaleLease { branch: String },
+
   #[error("destination '{}' already exists and is not an empty directory", path.display())]
   DestinationNotEmpty { path: PathBuf },
 

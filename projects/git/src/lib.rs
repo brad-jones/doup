@@ -18,9 +18,11 @@ mod cloned_repo;
 mod commit;
 mod error;
 mod grit;
+mod identity;
 mod options;
 mod remote_url;
 mod ssh_agent;
+mod worktree;
 
 #[cfg(test)]
 mod test_support;
@@ -32,7 +34,9 @@ pub use cloned_repo::ClonedRepo;
 pub use commit::GitCommit;
 pub use error::GitError;
 pub use grit::Grit;
+pub use identity::Identity;
 pub use options::CloneOptions;
+pub use worktree::Worktree;
 
 use remote_url::{RemoteUrl, redact};
 use spire_enum::prelude::delegated_enum;

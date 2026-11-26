@@ -10,7 +10,7 @@ use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
 
-use crate::reconciliation::{PullRequest, PullRequestState, doup_branch, reconcile};
+use crate::reconciliation::{DoupAction, PullRequest, PullRequestState, doup_branch, reconcile};
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -20,7 +20,7 @@ pub struct UpdateArgs {
   dry_run: bool,
 }
 
-pub async fn update(_args: UpdateArgs) -> Result<()> {
+pub async fn update(args: UpdateArgs) -> Result<()> {
   // Load the bot config. This controls settings that affect the
   // overall operation of doup - eg: which git backend to use.
   let config = DoupBotConfigFile::load(None, None)?.merged;
@@ -77,25 +77,6 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       eprintln!("DONE");
     }
 
-    eprint!("Listing existing branches... ");
-    let mut existing_branches: Vec<String> = Vec::new();
-    for branch in repo.list_remote_branches().await? {
-      // Ignore any branch that doup does not manage
-      if !branch.starts_with("doup/") {
-        continue;
-      }
-
-      // A branch with no authors has no commits, so it is safe to delete.
-      // Otherwise, any author other than doup means the branch must be left
-      // alone so it is never scheduled for deletion.
-      let authors = repo.branch_authors(&branch).await?;
-      let only_doup = authors.iter().all(|a| a == "doup[bot]@users.noreply.github.com");
-      if only_doup {
-        existing_branches.push(branch);
-      }
-    }
-    eprintln!("found {} branches", existing_branches.len());
-
     // Now discover all the dependencies that may need updating
     let mut dependencies_by_ecosystem = HashMap::new();
     for (&ecosystem_ref, ecosystem_plugin) in &ecosystems {
@@ -130,6 +111,25 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       candidates.push((ecosystem_ref, dependency, versions, notes));
     }
 
+    eprint!("Listing existing branches... ");
+    let mut existing_branches: Vec<String> = Vec::new();
+    for branch in repo.list_remote_branches().await? {
+      // Ignore any branch that doup does not manage
+      if !branch.starts_with("doup/") {
+        continue;
+      }
+
+      // A branch with no authors has no commits, so it is safe to delete.
+      // Otherwise, any author other than doup means the branch must be left
+      // alone so it is never scheduled for deletion.
+      let authors = repo.branch_authors(&branch).await?;
+      let only_doup = authors.iter().all(|a| a == repo.identity().email());
+      if only_doup {
+        existing_branches.push(branch);
+      }
+    }
+    eprintln!("found {}", existing_branches.len());
+
     // List existing PRs.
     // We need to fetch all open PRs with a head branch starting with `doup/`.
     let mut existing_prs: Vec<PullRequest> = Vec::new();
@@ -158,79 +158,88 @@ pub async fn update(_args: UpdateArgs) -> Result<()> {
       state: PullRequestState::Closed,
     }));
 
-    let _actions = reconcile(candidates, existing_prs, existing_branches)?;
+    // Now work out what actions we need to take.
+    // This won't actually do anything, it just takes the data we have collected
+    // thus far and returns a list of actions to take, whether or not we perform
+    // the actions depends on if this a dry run or not.
+    let actions = reconcile(candidates, existing_prs, existing_branches)?;
+    eprintln!("Planned actions: {}", actions.len());
+    for action in &actions {
+      eprintln!("  {}", action.summary());
+    }
+    if args.dry_run {
+      return Ok(());
+    }
 
-    /*
-      TODO:
-
-      - Collect all remaining information, such as remote branches, existing PRs, etc.
-        To be able to create a list of actions to perform:
-
-        - Upsert (that is create or replace) a PR because we have detected a
-          difference between the current version and the next version.
-          - There may in fact be 2 PRs, one for the `next` version
-            and one for the `latest` version.
-
-          - The ecosystem world gets a new method, which would actually make the changes inside a git worktree.
-            But the host still does all the actual git operations, the guest is only writing to files inside the provided worktree @ /workspace.
-            Then once done the host pushes the changes to the PR.
-            eg: export async apply-updates(dependency: dependency, to: string) -> result<(), string>
-
-        - Skip the update because it was excluded by a set of blacklist rules.
-          NB: These rules are yet to be added into `DoupRepoConfigFile`.
-          But the plan is to allow the user to configure doup to ignore certain updates.
-          The exact shape & form these rules will take are to be determined.
-          We should look at what RenovateBot does here for inspiration.
-
-        - Close existing PRs (& delete their branch) because we detected that
-          the default branch is already up to date. ie: A user manually updated
-          outside of doup.
-
-        - Delete any remaining orphaned branches. (That is branches without PRs)
-
-        - IMPORTANT: Only ever delete branches that are the sole author of the
-          doup bot, any commits from any other authors means the branch stays.
-
-      - A dry run prints a summary of all the info we have up until this point and then dies.
-
-      - Otherwise perform each action
-
-      Reconciliation DESIGN:
-
-      ```
-      // NB: Whether or not we actually bother with these newtypes I'm not sure
-      // but just to communicate intent I think this is helpful.
-      struct ToVersion(String);
-      struct PRNumber(i64);
-      struct BranchName(String);
-
-      enum DoupAction {
-        /// Use ecosystems[DoupRepoPlugin].apply_updates(Dependency, ToVersion) inside a new git worktree.
-        /// Maybe we also give the ecosystem plugin an opportunity to participate in the PR title & body building?
-        /// There is the commit message too.
-        /// The problem we have at the moment is that the host does not have a reliable way to define the "current" version.
-        /// At the moment the "current" version is buried in the occurrences.
-        /// We will want to use phrases like: "updating {{name}} from {{current}} to {{next}}"
-        /// let body = pr_body_template(Vec<ReleaseNote>);
-        /// Then platform.create_pull_request(title, body)
-        UpsertPR(DoupRepoPlugin, Dependency, ToVersion, Vec<ReleaseNote>),
-
-        /// Here we are saying we have on purpose decided to not update this dependency to this version.
-        /// This would ultimately result in a log message, nothing more.
-        /// Again we kind of need to know the "CurrentVersion"?
-        /// This action is probably out of scope for now as it depends on defining the exclusion rules.
-        SkipUpdate(Dependency, ToVersion),
-
-        /// In order to know what PRs to close we need to know what PRs already exist.
-        ClosePR(PRNumber),
-
-        /// Likewise, in order to know what branches to delete we need to know what branches already exist.
-        DeleteBranch(BranchName),
+    // Create and update all pull requests first
+    for action in &actions {
+      match action {
+        DoupAction::CreatePR(doup_repo_plugin, dependency, to_version, release_notes, reason) => {
+          let ecosystem_plugin = &ecosystems[doup_repo_plugin];
+          let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
+          let worktree = repo.worktree_add(&branch).await?;
+          ecosystem_plugin.apply_updates(worktree.path()).await?;
+          worktree
+            .commit(format!(
+              "chore(doup): update {} from {} to {}",
+              dependency.name, dependency.current_version, to_version.version
+            ))
+            .await?;
+          worktree.push().await?;
+          worktree.remove().await?;
+          let pr = platform
+            .upcert_pr(PrRequest {
+              number: None,
+              base_branch: repo.default_branch()?,
+              head_branch: branch,
+              title: format!("todo"),
+              body: format!("todo"),
+            })
+            .await?;
+          eprintln!("Created PR {}", pr.url);
+        }
+        DoupAction::UpdatePR(prnumber, doup_repo_plugin, dependency, to_version, release_notes, reason) => {
+          // The update case is basically identical to create, except we force push our changes
+          let ecosystem_plugin = &ecosystems[doup_repo_plugin];
+          let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
+          let worktree = repo.worktree_add(&branch).await?;
+          ecosystem_plugin.apply_updates(worktree.path()).await?;
+          worktree
+            .commit(format!(
+              "chore(doup): update {} from {} to {}",
+              dependency.name, dependency.current_version, to_version.version
+            ))
+            .await?;
+          worktree.push_force().await?;
+          worktree.remove().await?;
+          let pr = platform
+            .upcert_pr(PrRequest {
+              number: prnumber.as_ref(),
+              base_branch: repo.default_branch()?,
+              head_branch: branch,
+              title: format!("todo"),
+              body: format!("todo"),
+            })
+            .await?;
+          eprintln!("Updated PR {}", pr.url);
+        }
+        _ => {}
       }
-      ```
+    }
 
-      - reconcile(release_notes, existing_prs, existing_branches) -> Result<Vec<Action>>
-    */
+    // Then close any old prs
+    for action in &actions {
+      if let DoupAction::ClosePR(prnumber, _reason) = action {
+        eprintln!("TODO: Close PR #{}", prnumber)
+      }
+    }
+
+    // Finally delete any branches
+    for action in &actions {
+      if let DoupAction::DeleteBranch(branch_name, _reason) = action {
+        eprintln!("TODO: Delete branch {}", branch_name)
+      }
+    }
   }
 
   if failed > 0 {

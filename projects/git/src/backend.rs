@@ -1,4 +1,4 @@
-use crate::{CloneOptions, ClonedRepo, GitCommit, GitError};
+use crate::{CloneOptions, ClonedRepo, GitCommit, GitError, Worktree};
 use std::future::Future;
 
 /// What `origin` says about its default branch and, optionally, one other branch.
@@ -72,4 +72,55 @@ pub trait GitBackend: Send + Sync {
     repo: &ClonedRepo,
     branch: &str,
   ) -> impl Future<Output = Result<Vec<GitCommit>, GitError>> + Send;
+
+  /// Creates a linked worktree of `worktree.repo()` at `worktree.path()` with `worktree.branch()`
+  /// created or reset at the clone's `HEAD`, like `git worktree add --no-track -B <branch> <path>
+  /// HEAD`. Hooks never run, see [`Worktree`].
+  ///
+  /// # Errors
+  ///
+  /// Returns a [`GitError`] when the worktree cannot be created.
+  fn worktree_add(&self, worktree: &Worktree) -> impl Future<Output = Result<(), GitError>> + Send;
+
+  /// Stages every change in `worktree` and commits it as the clone's identity, unsigned and
+  /// without hooks, returning the new commit's full hex id.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`GitError::NothingToCommit`] when there are no changes, or another [`GitError`] when
+  /// the commit cannot be made.
+  fn worktree_commit(
+    &self,
+    worktree: &Worktree,
+    message: &str,
+  ) -> impl Future<Output = Result<String, GitError>> + Send;
+
+  /// Pushes the worktree's branch to the same name on `origin` without forcing, returning the
+  /// full hex id pushed.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`GitError::PushRejected`] when `origin` refuses the update, or another [`GitError`]
+  /// when the remote cannot be reached.
+  fn worktree_push(&self, worktree: &Worktree) -> impl Future<Output = Result<String, GitError>> + Send;
+
+  /// Like [`Self::worktree_push`], but overwrites `origin`'s branch as long as it is still at
+  /// `lease`, or still does not exist when `lease` is `None`.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`GitError::StaleLease`] when the lease does not hold, otherwise as for
+  /// [`Self::worktree_push`].
+  fn worktree_push_force(
+    &self,
+    worktree: &Worktree,
+    lease: Option<&str>,
+  ) -> impl Future<Output = Result<String, GitError>> + Send;
+
+  /// Deletes `worktree` and unregisters it from its clone, like `git worktree remove --force`.
+  ///
+  /// # Errors
+  ///
+  /// Returns a [`GitError`] when the worktree cannot be removed.
+  fn worktree_remove(&self, worktree: &Worktree) -> impl Future<Output = Result<(), GitError>> + Send;
 }

@@ -1,18 +1,20 @@
 use crate::remote_url::redact;
-use crate::{Auth, CloneOptions, Git, GitBackend, GitCommit, GitError};
+use crate::{Auth, CloneOptions, Git, GitBackend, GitCommit, GitError, Identity, Worktree};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// A repository that [`Git::clone_repo`] just cloned, with operations that act on it.
 ///
 /// The clone's [`Auth`] is kept in memory, as it is never written into the clone itself, so that
-/// later operations can reach the remote with the same credentials.
+/// later operations can reach the remote with the same credentials. Likewise its [`Identity`] is
+/// only ever handed to the commands that commit, never written to config.
 #[derive(Clone)]
 pub struct ClonedRepo {
   git: Git,
   path: PathBuf,
   url: String,
   auth: Option<Auth>,
+  identity: Identity,
 }
 
 impl ClonedRepo {
@@ -22,6 +24,7 @@ impl ClonedRepo {
       path: options.destination().to_path_buf(),
       url: options.url().to_owned(),
       auth: options.auth().cloned(),
+      identity: options.identity().clone(),
     }
   }
 
@@ -38,6 +41,44 @@ impl ClonedRepo {
   /// The credentials the repository was cloned with, reused to reach `origin`.
   pub fn auth(&self) -> Option<&Auth> {
     self.auth.as_ref()
+  }
+
+  /// Who commits made in this clone's worktrees are attributed to.
+  pub fn identity(&self) -> &Identity {
+    &self.identity
+  }
+
+  pub(crate) fn git(&self) -> &Git {
+    &self.git
+  }
+
+  /// Checks out `branch` in a new linked worktree in a temp dir, like `git worktree add --no-track
+  /// -B <branch> <tmp> HEAD`, leaving this clone's own working tree alone.
+  ///
+  /// The branch starts at the clone's `HEAD` (the default branch, unless the clone was made with
+  /// [`CloneOptions::with_branch`]), replacing any local branch of that name. `origin`'s tip of
+  /// `branch` is recorded first, as the lease for [`Worktree::push_force`].
+  ///
+  /// Hooks never run in the worktree and its commits are never signed, whatever the user's Git
+  /// config says.
+  ///
+  /// # Errors
+  ///
+  /// - [`GitError::EmptyBranch`] or [`GitError::InvalidBranch`] when `branch` is not a valid name.
+  /// - Another [`GitError`] when the remote cannot be reached or the worktree cannot be created,
+  ///   e.g. because `branch` is already checked out in this clone.
+  pub async fn worktree_add(&self, branch: &str) -> Result<Worktree, GitError> {
+    if branch.trim().is_empty() {
+      return Err(GitError::EmptyBranch);
+    }
+    if grit_lib::refs::check_ref_format::RefName::branch(branch).is_err() {
+      return Err(GitError::InvalidBranch { branch: branch.to_owned() });
+    }
+    let git = &self.git;
+    let lease = crate::delegate_git!(git.remote_tips(self, Some(branch)).await)?.branch_tip;
+    let worktree = Worktree::new(self.clone(), branch, lease)?;
+    crate::delegate_git!(git.worktree_add(&worktree).await)?;
+    Ok(worktree)
   }
 
   /// Lists every branch on the `origin` remote, like `git ls-remote --heads origin`.
@@ -152,6 +193,7 @@ impl fmt::Debug for ClonedRepo {
       .field("path", &self.path)
       .field("url", &redact(&self.url))
       .field("auth", &self.auth)
+      .field("identity", &self.identity)
       .finish()
   }
 }

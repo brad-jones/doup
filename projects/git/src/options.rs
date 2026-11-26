@@ -1,4 +1,4 @@
-use crate::Auth;
+use crate::{Auth, Identity};
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 
@@ -10,12 +10,20 @@ pub struct CloneOptions {
   branch: Option<String>,
   depth: Option<NonZeroU32>,
   auth: Option<Auth>,
+  identity: Identity,
 }
 
 impl CloneOptions {
   /// Clone `url` into `destination`, which must not exist or be an empty directory.
   pub fn new(url: impl Into<String>, destination: impl Into<PathBuf>) -> Self {
-    Self { url: url.into(), destination: destination.into(), branch: None, depth: None, auth: None }
+    Self {
+      url: url.into(),
+      destination: destination.into(),
+      branch: None,
+      depth: None,
+      auth: None,
+      identity: Identity::default(),
+    }
   }
 
   /// Check out this branch instead of the remote's default branch.
@@ -39,6 +47,13 @@ impl CloneOptions {
     self
   }
 
+  /// Attribute commits made in the clone's worktrees to `identity` instead of doup[bot].
+  #[must_use]
+  pub fn with_identity(mut self, identity: Identity) -> Self {
+    self.identity = identity;
+    self
+  }
+
   pub fn url(&self) -> &str {
     &self.url
   }
@@ -57,5 +72,9 @@ impl CloneOptions {
 
   pub fn auth(&self) -> Option<&Auth> {
     self.auth.as_ref()
+  }
+
+  pub fn identity(&self) -> &Identity {
+    &self.identity
   }
 }

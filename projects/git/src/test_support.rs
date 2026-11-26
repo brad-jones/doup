@@ -83,6 +83,40 @@ impl Fixture {
     self.in_src(branch, author, &["merge", "-q", "--no-ff", "--no-edit", "main"]);
   }
 
+  /// The full id `branch` points at on the remote, if it exists.
+  pub(crate) fn tip(&self, branch: &str) -> Option<String> {
+    let tip = format!("refs/heads/{branch}");
+    let output = self.remote_git(&["rev-parse", "-q", "--verify", &tip]);
+    output.status.success().then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
+  }
+
+  /// `git show -s --format=<format> <rev>` on the remote.
+  pub(crate) fn show(&self, rev: &str, format: &str) -> String {
+    let output = self.remote_git(&["show", "-s", &format!("--format={format}"), rev]);
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+  }
+
+  /// Every file in `rev`'s tree on the remote, with its contents.
+  pub(crate) fn files(&self, rev: &str) -> Vec<(String, String)> {
+    let output = self.remote_git(&["ls-tree", "-r", "--name-only", rev]);
+    assert!(output.status.success(), "{output:?}");
+    let names = String::from_utf8(output.stdout).unwrap();
+    names
+      .lines()
+      .map(|name| {
+        let blob = self.remote_git(&["cat-file", "blob", &format!("{rev}:{name}")]);
+        (name.to_owned(), String::from_utf8(blob.stdout).unwrap())
+      })
+      .collect()
+  }
+
+  fn remote_git(&self, args: &[&str]) -> std::process::Output {
+    let git_dir = format!("--git-dir={}", self.path("origin.git").display());
+    let args: Vec<&str> = std::iter::once(git_dir.as_str()).chain(args.iter().copied()).collect();
+    git_output(&self.path("gitconfig"), self.dir.path(), "doup@example.com", &args)
+  }
+
   /// Runs `args` in the source repo on `branch`, then pushes it to the remote.
   fn in_src(&self, branch: &str, author: &str, args: &[&str]) {
     let (global, src) = (self.path("gitconfig"), self.path("src"));
@@ -131,12 +165,26 @@ pub(crate) fn commit_count(repo: &Path) -> u32 {
   String::from_utf8(output.stdout).unwrap().trim().parse().unwrap()
 }
 
+/// The worktrees registered in the clone at `repo`, its own included.
+pub(crate) fn worktree_count(repo: &Path) -> usize {
+  let output = Command::new("git").current_dir(repo).args(["worktree", "list", "--porcelain"]).output().unwrap();
+  assert!(output.status.success(), "{output:?}");
+  String::from_utf8(output.stdout).unwrap().lines().filter(|line| line.starts_with("worktree ")).count()
+}
+
+/// The branch checked out in a working tree, which may be a linked worktree.
+pub(crate) fn checked_out(path: &Path) -> String {
+  let output = Command::new("git").current_dir(path).args(["symbolic-ref", "--short", "HEAD"]).output().unwrap();
+  assert!(output.status.success(), "{output:?}");
+  String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
 /// Behaviour every [`crate::GitBackend`] must share, generated as tests for `$backend`.
 macro_rules! backend_contract_tests {
   ($backend:expr) => {
     mod contract {
-      use crate::test_support::{Fixture, commit_count, file_url, head_branch};
-      use crate::{CloneOptions, ClonedRepo, Git, GitCommit, GitError};
+      use crate::test_support::{Fixture, checked_out, commit_count, file_url, head_branch, worktree_count};
+      use crate::{CloneOptions, ClonedRepo, Git, GitCommit, GitError, Identity, Worktree};
       use std::num::NonZeroU32;
 
       async fn clone(options: CloneOptions) -> Result<ClonedRepo, GitError> {
@@ -378,6 +426,200 @@ macro_rules! backend_contract_tests {
           .unwrap_err();
         assert!(matches!(err, GitError::BranchNotFound { .. }), "{err:?}");
         assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 0);
+      }
+
+      const BRANCH: &str = "doup/cargo/serde";
+
+      fn write(worktree: &Worktree, name: &str, contents: &str) {
+        std::fs::write(worktree.path().join(name), contents).unwrap();
+      }
+
+      #[tokio::test]
+      async fn adds_a_worktree_on_a_new_branch_at_the_clones_head() {
+        let fixture = Fixture::new();
+        let repo = clone(CloneOptions::new(&fixture.url, fixture.path("clone")).with_branch("feature")).await.unwrap();
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        assert_ne!(worktree.path(), repo.path());
+        assert_eq!(worktree.branch(), BRANCH);
+        assert_eq!(checked_out(worktree.path()), BRANCH);
+        assert!(worktree.path().join("feature.txt").exists());
+        assert_eq!(head_branch(repo.path()), "feature");
+        assert_eq!(worktree_count(repo.path()), 2);
+
+        let path = worktree.path().to_path_buf();
+        worktree.remove().await.unwrap();
+        assert!(!path.exists());
+        assert_eq!(worktree_count(repo.path()), 1);
+        assert_eq!(fixture.tip(BRANCH), None, "nothing is pushed until asked");
+      }
+
+      #[tokio::test]
+      async fn commits_every_change_and_pushes_a_new_branch() {
+        let fixture = Fixture::new();
+        let depth = NonZeroU32::new(1).unwrap();
+        let options = CloneOptions::new(&fixture.url, fixture.path("clone")).with_branch("feature").with_depth(depth);
+        let repo = clone(options).await.unwrap();
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "README", "three\n");
+        write(&worktree, "new.txt", "new\n");
+        std::fs::remove_file(worktree.path().join("feature.txt")).unwrap();
+
+        let id = worktree.commit("chore(doup): update serde").await.unwrap();
+        worktree.push().await.unwrap();
+        assert_eq!(fixture.tip(BRANCH).as_deref(), Some(id.as_str()));
+        assert_eq!(
+          fixture.files(&id),
+          [("README".to_owned(), "three\n".to_owned()), ("new.txt".to_owned(), "new\n".to_owned())]
+        );
+        assert_eq!(
+          fixture.show(&id, "%an <%ae>%n%cn <%ce>%n%P%n%B"),
+          format!(
+            "doup[bot] <doup[bot]@users.noreply.github.com>\ndoup[bot] <doup[bot]@users.noreply.github.com>\n{}\nchore(doup): update serde\n\n",
+            fixture.tip("feature").unwrap()
+          )
+        );
+      }
+
+      #[tokio::test]
+      async fn commits_as_the_configured_identity() {
+        let fixture = Fixture::new();
+        let identity = Identity::new("Jane Doe", "jane@example.com").unwrap();
+        let repo = clone(CloneOptions::new(&fixture.url, fixture.path("clone")).with_identity(identity)).await.unwrap();
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "README", "three\n");
+        let id = worktree.commit("x").await.unwrap();
+        worktree.push().await.unwrap();
+        assert_eq!(fixture.show(&id, "%an <%ae> %cn <%ce>"), "Jane Doe <jane@example.com> Jane Doe <jane@example.com>\n");
+      }
+
+      #[tokio::test]
+      async fn refuses_to_commit_nothing() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        let err = worktree.commit("x").await.unwrap_err();
+        assert!(matches!(err, GitError::NothingToCommit), "{err:?}");
+        write(&worktree, "README", "three\n");
+        let err = worktree.commit(" \n").await.unwrap_err();
+        assert!(matches!(err, GitError::EmptyCommitMessage), "{err:?}");
+      }
+
+      #[tokio::test]
+      async fn rejects_invalid_branch_names() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let err = repo.worktree_add(" ").await.unwrap_err();
+        assert!(matches!(err, GitError::EmptyBranch), "{err:?}");
+        for branch in ["a..b", "-x", "a b", "x.lock"] {
+          let err = repo.worktree_add(branch).await.unwrap_err();
+          assert!(matches!(&err, GitError::InvalidBranch { branch: b } if b == branch), "{err:?}");
+        }
+      }
+
+      #[tokio::test]
+      async fn push_does_not_overwrite_but_push_force_does() {
+        let fixture = Fixture::new();
+        fixture.commit(BRANCH, "someone@example.com", "theirs");
+        let theirs = fixture.tip(BRANCH).unwrap();
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "README", "three\n");
+        let id = worktree.commit("ours").await.unwrap();
+
+        let err = worktree.push().await.unwrap_err();
+        assert!(matches!(&err, GitError::PushRejected { branch, .. } if branch == BRANCH), "{err:?}");
+        assert_eq!(fixture.tip(BRANCH), Some(theirs));
+
+        worktree.push_force().await.unwrap();
+        assert_eq!(fixture.tip(BRANCH), Some(id));
+      }
+
+      #[tokio::test]
+      async fn push_force_refuses_a_branch_moved_since_the_worktree_was_added() {
+        let fixture = Fixture::new();
+        fixture.commit(BRANCH, "someone@example.com", "theirs");
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        fixture.commit(BRANCH, "someone@example.com", "moved");
+        let moved = fixture.tip(BRANCH);
+        write(&worktree, "README", "three\n");
+        worktree.commit("ours").await.unwrap();
+        let err = worktree.push_force().await.unwrap_err();
+        assert!(matches!(&err, GitError::StaleLease { branch } if branch == BRANCH), "{err:?}");
+        assert_eq!(fixture.tip(BRANCH), moved);
+      }
+
+      #[tokio::test]
+      async fn push_force_refuses_a_branch_created_since_the_worktree_was_added() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        fixture.commit(BRANCH, "someone@example.com", "created");
+        let created = fixture.tip(BRANCH);
+        write(&worktree, "README", "three\n");
+        worktree.commit("ours").await.unwrap();
+        let err = worktree.push_force().await.unwrap_err();
+        assert!(matches!(err, GitError::StaleLease { .. }), "{err:?}");
+        assert_eq!(fixture.tip(BRANCH), created);
+      }
+
+      #[tokio::test]
+      async fn the_lease_follows_each_push() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "README", "three\n");
+        worktree.commit("first").await.unwrap();
+        worktree.push().await.unwrap();
+        write(&worktree, "README", "four\n");
+        let second = worktree.commit("second").await.unwrap();
+        worktree.push_force().await.unwrap();
+        assert_eq!(fixture.tip(BRANCH).as_deref(), Some(second.as_str()));
+        worktree.remove().await.unwrap();
+
+        // A new worktree resets the branch to HEAD, so this is the doup update case.
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        assert_eq!(std::fs::read_to_string(worktree.path().join("README")).unwrap(), "two\n");
+        write(&worktree, "README", "five\n");
+        let third = worktree.commit("third").await.unwrap();
+        worktree.push_force().await.unwrap();
+        assert_eq!(fixture.tip(BRANCH), Some(third));
+        assert_eq!(fixture.show(BRANCH, "%P"), format!("{}\n", fixture.tip("main").unwrap()));
+        // Commits doup pushed are recognised as doup's own.
+        assert_eq!(repo.branch_authors(BRANCH).await.unwrap(), [repo.identity().email()]);
+      }
+
+      #[cfg(unix)]
+      #[tokio::test]
+      async fn never_runs_hooks() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let (hooks, ran) = (repo.path().join(".git/hooks"), fixture.path("hook-ran"));
+        for hook in ["post-checkout", "pre-commit", "prepare-commit-msg", "commit-msg", "post-commit", "pre-push"] {
+          let path = hooks.join(hook);
+          std::fs::write(&path, format!("#!/bin/sh\necho {hook} >> '{}'\nexit 1\n", ran.display())).unwrap();
+          std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "README", "three\n");
+        worktree.commit("x").await.unwrap();
+        worktree.push().await.unwrap();
+        assert!(!ran.exists(), "{}", std::fs::read_to_string(&ran).unwrap());
+      }
+
+      #[tokio::test]
+      async fn dropping_a_worktree_removes_it() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let worktree = repo.worktree_add(BRANCH).await.unwrap();
+        write(&worktree, "untracked.txt", "x\n");
+        let path = worktree.path().to_path_buf();
+        drop(worktree);
+        assert!(!path.exists());
+        assert_eq!(worktree_count(repo.path()), 1);
+        // The branch is no longer checked out anywhere, so can be again.
+        repo.worktree_add(BRANCH).await.unwrap().remove().await.unwrap();
       }
     }
   };

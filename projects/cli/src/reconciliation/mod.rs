@@ -13,13 +13,13 @@ pub struct ToVersion {
   pub latest: bool,
 }
 
-#[nutype(derive(AsRef, Debug))]
+#[nutype(derive(AsRef, Debug, Display))]
 pub struct PRNumber(i64);
 
-#[nutype(derive(AsRef, Debug))]
+#[nutype(derive(AsRef, Debug, Display))]
 pub struct BranchName(String);
 
-#[nutype(derive(AsRef, Debug))]
+#[nutype(derive(AsRef, Debug, Display))]
 pub struct Reason(String);
 
 #[derive(Debug)]
@@ -29,6 +29,36 @@ pub enum DoupAction {
   ClosePR(PRNumber, Reason),
   DeleteBranch(BranchName, Reason),
   SkipUpdate(Dependency, ToVersion, Reason),
+}
+
+impl DoupAction {
+  /// A one-line, human friendly summary of the action, for debugging output.
+  pub fn summary(&self) -> String {
+    match self {
+      Self::CreatePR(plugin, dep, to, ..) => {
+        format!("CREATE PR: {} {} -> {}", plugin.plugin, dep_label(dep), to_label(to))
+      }
+      Self::UpdatePR(pr, plugin, dep, to, ..) => {
+        format!("UPDATE PR: #{} {} {} -> {}", pr.as_ref(), plugin.plugin, dep_label(dep), to_label(to),)
+      }
+      Self::ClosePR(pr, reason) => format!("CLOSE PR: #{} ({})", pr.as_ref(), reason.as_ref()),
+      Self::DeleteBranch(branch, reason) => format!("DELETE BRANCH: {} ({})", branch.as_ref(), reason.as_ref()),
+      Self::SkipUpdate(dep, to, reason) => {
+        format!("SKIP: {} -> {} ({})", dep_label(dep), to_label(to), reason.as_ref())
+      }
+    }
+  }
+}
+
+fn dep_label(dep: &Dependency) -> String {
+  match dep.registry {
+    Some(ref reg) => format!("{}/{}", reg, dep.name),
+    None => dep.name.clone(),
+  }
+}
+
+fn to_label(to: &ToVersion) -> String {
+  if to.latest { format!("{} (latest)", to.version) } else { to.version.clone() }
 }
 
 pub struct PullRequest {
@@ -84,7 +114,7 @@ pub fn doup_branch(plugin: &DoupRepoPlugin, dependency: &Dependency, latest: boo
 /// Based on a set of inputs, it will decide what actions doup should take.
 ///
 /// - `candidates`: The list of candidate updates that have been discovered by
-///    inspecting the default branch of a given repo.
+///   inspecting the default branch of a given repo.
 ///
 /// - `existing_prs`: A list of existing pull request metadata.
 ///   All Open PRs with the prefix `doup/` should be included.
@@ -194,7 +224,7 @@ pub fn reconcile(
 fn reconcile_candidate(
   actions: &mut Vec<DoupAction>,
   candidate: (ToVersion, &DoupRepoPlugin, &Dependency, &Vec<ReleaseNote>),
-  existing_prs: &Vec<PullRequest>,
+  existing_prs: &[PullRequest],
 ) {
   let (to_version, ecosystem_ref, dependency, notes) = candidate;
 
