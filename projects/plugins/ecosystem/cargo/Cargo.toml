@@ -7,7 +7,6 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-futures = { version = "0.3.34", default-features = false, features = ["std", "async-await"] }
 garde = { version = "0.23.0", features = ["derive", "regex"] }
 ignore = "0.4.35"
 semver = "1.0.28"

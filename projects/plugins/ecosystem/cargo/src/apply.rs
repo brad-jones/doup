@@ -1,123 +1,217 @@
-//! Applies an update to the workspace: bumps the manifests, then re-resolves every affected
-//! lockfile, fetching the index files the resolver asks for.
+//! Applies an update to the workspace.
+//!
+//! The manifests are bumped here, in Rust, as `toml_edit` keeps their formatting & it's cheap. The
+//! lockfiles are then re-resolved by real cargo, run in a container by the host, rather than trying
+//! to replicate cargo's resolver. The cargo commands are the same ones renovate runs.
 
 use crate::{
-  Dependency, http,
-  index::{self, IndexCache},
-  lockfile::{Lockfile, PackageId},
-  manifest, registry,
-  resolve::{self, ResolveError, Target},
-  workspace::{self, Workspace},
+  Dependency,
+  bindings::doup::plugin::host_api::{self, RunRequest},
+  config,
+  discover::{self, LockPackage},
+  manifest,
 };
-use futures::{StreamExt, stream};
 use semver::Version;
-use std::{
-  collections::{BTreeMap, BTreeSet, HashMap},
-  fs,
-  path::Path,
-};
+use std::{collections::BTreeSet, fs, path::Path};
 
-/// How many index files are fetched at once.
-const CONCURRENT_FETCHES: usize = 16;
+/// Where the host mounts the guest's workspace inside the container.
+const CONTAINER_WORKSPACE: &str = "/workspace";
+
+/// Runs cargo, with any arguments given, in the container.
+///
+/// - The image's own toolchain is used, a `rust-toolchain.toml` in the workspace would otherwise
+///   make rustup download the toolchain it names, cargo's resolver doesn't depend on it.
+/// - The container runs as the workspace's owner, who can't write to the image's `CARGO_HOME`.
+const CARGO_SH: &str = r#"#!/bin/sh
+set -eu
+if command -v rustup >/dev/null 2>&1; then
+  RUSTUP_TOOLCHAIN="$(rustup default | cut -d ' ' -f 1)"
+  export RUSTUP_TOOLCHAIN
+fi
+export CARGO_HOME=/tmp/cargo-home
+exec cargo "$@"
+"#;
 
 /// Updates every occurrence of `dependency` beneath `root` to version `to`.
-pub async fn apply(root: &Path, dependency: &Dependency, to: &str) -> Result<(), String> {
+///
+/// `init` is the guest's view of the `/container-init` dir mounted into the containers it runs.
+pub async fn apply(root: &Path, init: &Path, dependency: &Dependency, to: &str) -> Result<(), String> {
   let to = Version::parse(to).map_err(|err| format!("invalid version `{to}` for {}: {err}", dependency.name))?;
-  let source = index::source_for_registry(dependency.registry.as_deref());
-  let mut cache = IndexCache::default();
-
-  // Before anything changes, re-resolve each lockfile as is. Any difference means it is out of
-  // date (which cargo would also fix) or the resolver doesn't model the workspace exactly, so the
-  // update will carry those differences too.
-  let lock_paths: BTreeSet<&str> = dependency.occurrences.iter().filter_map(|o| o.lock_path.as_deref()).collect();
-  let mut locks = Vec::new();
-  for lock_path in lock_paths {
-    let path = root.join(lock_path);
-    let lock_dir = Path::new(lock_path).parent().unwrap_or(Path::new("")).to_path_buf();
-    let content = fs::read_to_string(&path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-    let lock = Lockfile::parse(&content).map_err(|err| format!("{}: {err}", path.display()))?;
-
-    let workspace = load_workspace(root, &lock_dir, &lock).map_err(|err| format!("{}: {err}", path.display()))?;
-    let baseline = resolve(&path, &lock, &workspace, None, &mut cache).await?;
-    if baseline.to_string() != content {
-      eprintln!(
-        "warning: {} changes even without updating {} ({}). Either it is out of date or doup doesn't \
-         resolve this workspace exactly as cargo would, the update includes these changes.",
-        path.display(),
-        dependency.name,
-        describe_differences(&lock, &baseline)
-      );
-    }
-    locks.push((path, lock_dir, content, lock));
-  }
-
   manifest::update(root, dependency, &to)?;
 
-  for (path, lock_dir, content, lock) in locks {
-    let workspace = load_workspace(root, &lock_dir, &lock).map_err(|err| format!("{}: {err}", path.display()))?;
-    let target = Target { name: &dependency.name, source: &source, to: &to };
-    let updated = resolve(&path, &lock, &workspace, Some(&target), &mut cache).await?.to_string();
-    if updated != content {
-      fs::write(&path, updated).map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+  let lock_paths = lock_paths(dependency);
+  if lock_paths.is_empty() {
+    return Ok(());
+  }
+
+  let script = init.join("cargo.sh");
+  fs::write(&script, CARGO_SH).map_err(|err| format!("failed to write {}: {err}", script.display()))?;
+
+  for lock_path in lock_paths {
+    let manifest_path = container_manifest_path(lock_path);
+
+    // Re-resolves just enough of the lockfile to satisfy the bumped manifests, like renovate does.
+    cargo(&["update", "--manifest-path", &manifest_path, "--workspace"])
+      .await
+      .map_err(|err| format!("{lock_path}: {err}"))?;
+
+    // A requirement that already allowed `to` wasn't changed by the bump, so its locked version
+    // still needs moving to `to` explicitly.
+    let packages = discover::parse_lock(&root.join(lock_path))?;
+    for spec in precise_specs(&packages, dependency, lock_path, &to) {
+      cargo(&["update", "--manifest-path", &manifest_path, "--package", &spec, "--precise", &to.to_string()])
+        .await
+        .map_err(|err| format!("{lock_path}: {err}"))?;
     }
   }
   Ok(())
 }
 
-fn load_workspace(root: &Path, lock_dir: &Path, lock: &Lockfile) -> Result<Workspace, String> {
-  let locked: HashMap<String, Version> =
-    lock.packages.iter().filter(|p| p.id.source.is_none()).map(|p| (p.id.name.clone(), p.id.version.clone())).collect();
-  workspace::load(root, lock_dir, &locked)
+/// The distinct lockfiles that lock an occurrence of `dependency`.
+fn lock_paths(dependency: &Dependency) -> BTreeSet<&str> {
+  dependency.occurrences.iter().filter_map(|o| o.lock_path.as_deref()).collect()
 }
 
-/// Resolves `lock`, fetching index files until the resolver has every one it needs.
-async fn resolve(
-  path: &Path,
-  lock: &Lockfile,
-  workspace: &Workspace,
-  target: Option<&Target<'_>>,
-  cache: &mut IndexCache,
-) -> Result<Lockfile, String> {
-  loop {
-    match resolve::update(lock, workspace, target, cache) {
-      Ok(resolved) => return Ok(resolved),
-      Err(ResolveError::Failed(err)) => return Err(format!("{}: {err}", path.display())),
-      Err(ResolveError::Missing(missing)) => {
-        if let Some((_, name)) = missing.iter().find(|(source, name)| cache.get(source, name).is_some()) {
-          return Err(format!("{}: the index file of {name} was requested twice", path.display()));
-        }
-        let fetched: Vec<_> = stream::iter(missing)
-          .map(|(source, name)| async move {
-            let body = fetch(&source, &name).await;
-            (source, name, body)
-          })
-          .buffer_unordered(CONCURRENT_FETCHES)
-          .collect()
-          .await;
-        for (source, name, body) in fetched {
-          cache.insert(&source, &name, &body?)?;
-        }
-      }
+/// The container path of the workspace manifest that sits beside `lock_path`.
+fn container_manifest_path(lock_path: &str) -> String {
+  match lock_path.rsplit_once('/') {
+    Some((dir, _)) => format!("{CONTAINER_WORKSPACE}/{dir}/Cargo.toml"),
+    None => format!("{CONTAINER_WORKSPACE}/Cargo.toml"),
+  }
+}
+
+/// Package ID specs, for `cargo update --precise`, of the versions of `dependency` that are still
+/// locked by `lock_path` but are older than `to`.
+///
+/// Only the versions the occurrences were originally locked at are considered, other versions of
+/// the same crate (eg: another major pulled in transitively) are left alone.
+fn precise_specs(packages: &[LockPackage], dependency: &Dependency, lock_path: &str, to: &Version) -> Vec<String> {
+  let originally_locked: BTreeSet<&str> = dependency
+    .occurrences
+    .iter()
+    .filter(|o| o.lock_path.as_deref() == Some(lock_path))
+    .filter_map(|o| o.locked_version.as_deref())
+    .collect();
+
+  let specs: BTreeSet<String> = packages
+    .iter()
+    .filter(|p| p.name == dependency.name && is_from_registry(p, dependency.registry.as_deref()))
+    .filter(|p| originally_locked.contains(p.version.as_str()))
+    .filter(|p| Version::parse(&p.version).is_ok_and(|v| v < *to))
+    .map(|p| match (&dependency.registry, &p.source) {
+      (Some(_), Some(source)) => format!("{source}#{}@{}", p.name, p.version),
+      _ => format!("{}@{}", p.name, p.version),
+    })
+    .collect();
+  specs.into_iter().collect()
+}
+
+/// Whether `package` came from `registry`, an index URL as resolved by discover, `None` being crates.io.
+fn is_from_registry(package: &LockPackage, registry: Option<&str>) -> bool {
+  match registry {
+    None => package.is_crates_io(),
+    Some(registry) => {
+      package.is_alternate_registry()
+        && package.source.as_deref().and_then(|s| s.strip_prefix("sparse+")).map(|s| s.trim_end_matches('/'))
+          == Some(registry.trim_end_matches('/'))
     }
   }
 }
 
-async fn fetch(source: &str, name: &str) -> Result<String, String> {
-  let base = index::index_base(source)?;
-  let url = registry::index_url(base.as_deref(), name);
-  http::get(&url, &[]).await?.into_success(&url)
+/// Runs `cargo` with `args` in a container.
+async fn cargo(args: &[&str]) -> Result<(), String> {
+  let mut command = vec!["sh".to_string(), "/container-init/cargo.sh".to_string()];
+  command.extend(args.iter().map(ToString::to_string));
+  host_api::run(RunRequest {
+    image: config::image().to_string(),
+    entrypoint: None,
+    command,
+    env: vec![],
+    working_dir: None,
+  })
+  .await?;
+  Ok(())
 }
 
-/// Summarises how `resolved` differs from `lock`, eg: `+1 -2 ~3: foo@1.0.0, …`.
-fn describe_differences(lock: &Lockfile, resolved: &Lockfile) -> String {
-  let packages = |lock: &Lockfile| -> BTreeMap<PackageId, Vec<PackageId>> {
-    lock.packages.iter().map(|p| (p.id.clone(), p.dependencies.clone())).collect()
-  };
-  let (before, after) = (packages(lock), packages(resolved));
-  let added: Vec<_> = after.keys().filter(|id| !before.contains_key(id)).collect();
-  let removed: Vec<_> = before.keys().filter(|id| !after.contains_key(id)).collect();
-  let changed: Vec<_> =
-    after.iter().filter(|(id, deps)| before.get(id).is_some_and(|b| b != *deps)).map(|(id, _)| id).collect();
-  let examples: Vec<String> = added.iter().chain(&removed).chain(&changed).take(5).map(|id| id.to_string()).collect();
-  format!("+{} -{} ~{}: {}", added.len(), removed.len(), changed.len(), examples.join(", "))
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::Occurrence;
+
+  fn occurrence(lock_path: Option<&str>, locked_version: Option<&str>) -> Occurrence {
+    Occurrence {
+      manifest_path: "Cargo.toml".to_string(),
+      lock_path: lock_path.map(ToString::to_string),
+      current_version: "1".to_string(),
+      locked_version: locked_version.map(ToString::to_string),
+    }
+  }
+
+  fn dependency(registry: Option<&str>, occurrences: Vec<Occurrence>) -> Dependency {
+    Dependency {
+      name: "serde".to_string(),
+      registry: registry.map(ToString::to_string),
+      occurrences,
+      current_version: "1.0.0".to_string(),
+    }
+  }
+
+  fn package(name: &str, version: &str, source: &str) -> LockPackage {
+    LockPackage { name: name.to_string(), version: version.to_string(), source: Some(source.to_string()) }
+  }
+
+  const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
+
+  #[test]
+  fn manifest_paths_sit_beside_the_lockfile() {
+    assert_eq!(container_manifest_path("Cargo.lock"), "/workspace/Cargo.toml");
+    assert_eq!(container_manifest_path("tools/x/Cargo.lock"), "/workspace/tools/x/Cargo.toml");
+  }
+
+  #[test]
+  fn lock_paths_are_distinct_and_skip_unlocked_occurrences() {
+    let dependency = dependency(
+      None,
+      vec![occurrence(Some("Cargo.lock"), None), occurrence(None, None), occurrence(Some("Cargo.lock"), None)],
+    );
+    assert_eq!(lock_paths(&dependency).into_iter().collect::<Vec<_>>(), ["Cargo.lock"]);
+  }
+
+  #[test]
+  fn only_originally_locked_older_versions_are_updated_precisely() {
+    let dependency = dependency(
+      None,
+      vec![
+        occurrence(Some("Cargo.lock"), Some("1.0.1")),
+        occurrence(Some("Cargo.lock"), Some("1.0.1")),
+        occurrence(Some("other/Cargo.lock"), Some("1.0.2")),
+      ],
+    );
+    let packages = [
+      package("serde", "1.0.1", CRATES_IO),
+      package("serde", "0.9.0", CRATES_IO),
+      package("serde", "1.0.2", CRATES_IO),
+      package("serde", "1.0.1", "sparse+https://example.com/index/"),
+      package("serde_json", "1.0.1", CRATES_IO),
+    ];
+    let to = Version::new(1, 0, 5);
+    assert_eq!(precise_specs(&packages, &dependency, "Cargo.lock", &to), ["serde@1.0.1"]);
+    assert_eq!(precise_specs(&packages, &dependency, "other/Cargo.lock", &to), ["serde@1.0.2"]);
+    assert!(precise_specs(&packages, &dependency, "Cargo.lock", &Version::new(1, 0, 1)).is_empty());
+  }
+
+  #[test]
+  fn alternate_registries_use_fully_qualified_specs() {
+    let dependency =
+      dependency(Some("https://example.com/index/"), vec![occurrence(Some("Cargo.lock"), Some("1.0.1"))]);
+    let packages = [
+      package("serde", "1.0.1", CRATES_IO),
+      package("serde", "1.0.1", "sparse+https://other.com/index/"),
+      package("serde", "1.0.1", "sparse+https://example.com/index/"),
+    ];
+    assert_eq!(
+      precise_specs(&packages, &dependency, "Cargo.lock", &Version::new(1, 1, 0)),
+      ["sparse+https://example.com/index/#serde@1.0.1"]
+    );
+  }
 }

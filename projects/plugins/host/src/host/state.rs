@@ -1,6 +1,8 @@
-use super::http::{HttpHooks, HttpPolicy};
+use super::container_runner::{self as runner, ContainerPolicy};
+use super::http::HttpHooks;
+use super::policy::SessionPolicy;
 use anyhow::Result;
-use wasmtime::component::{ResourceTable, bindgen};
+use wasmtime::component::{Accessor, HasSelf, ResourceTable, bindgen};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
 
@@ -16,6 +18,7 @@ pub struct HostState {
   wasi: WasiCtx,
   http: WasiHttpCtx,
   http_hooks: HttpHooks,
+  container_policy: ContainerPolicy,
   table: ResourceTable,
 }
 
@@ -24,19 +27,20 @@ impl HostState {
   ///
   /// `configure` receives the [`WasiCtxBuilder`] so callers can customise the
   /// WASI context (e.g. inherit stdio, preopen directories, set env vars)
-  /// before it is built. `http_policy` decides whether the guest's `wasi:http` requests are sent.
+  /// before it is built. `policy` decides which capabilities beyond WASI the guest is granted.
   ///
   /// # Errors
   ///
   /// Returns an error if `configure` fails, e.g. a preopened directory cannot be opened.
   pub fn new(
-    http_policy: HttpPolicy,
+    policy: SessionPolicy,
     configure: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<Self> {
     Ok(Self {
       wasi: configure(&mut WasiCtxBuilder::new())?.build(),
       http: WasiHttpCtx::new(),
-      http_hooks: HttpHooks { http_policy },
+      http_hooks: HttpHooks { http_policy: policy.http },
+      container_policy: policy.container,
       table: ResourceTable::new(),
     })
   }
@@ -62,5 +66,15 @@ impl host_api::Host for HostState {
   /// Returns the host's version as `host-<crate version>`.
   fn host_version(&mut self) -> String {
     format!("host-{}", env!("CARGO_PKG_VERSION"))
+  }
+}
+
+/// Implements the `host_api` functions that need access to the store.
+impl<T> host_api::HostWithStore<T> for HasSelf<HostState> {
+  /// Runs a container, as permitted by the session's [`ContainerPolicy`].
+  async fn run(accessor: &Accessor<T, Self>, request: host_api::RunRequest) -> Result<host_api::RunOutput, String> {
+    // The store can't be held across an await, so take what's needed from it up front.
+    let policy = accessor.with(|mut access| access.get().container_policy.clone());
+    runner::run(&policy, request).await
   }
 }

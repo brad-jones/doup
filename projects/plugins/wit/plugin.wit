@@ -2,9 +2,52 @@ package doup:plugin@0.1.0;
 
 interface host-api {
   host-version: func() -> string;
+
+  record run-request {
+    /// The image to run, eg: "docker.io/library/rust:slim". The tag defaults to `latest`.
+    image: string,
+
+    /// Overrides the image's entrypoint.
+    entrypoint: option<string>,
+
+    /// The command to run, as an argv list. There is no implicit shell, use eg:
+    /// `["sh", "-c", "..."]` or `["sh", "/container-init/script.sh"]` if you need one.
+    command: list<string>,
+
+    /// Extra environment variables for the command.
+    env: list<tuple<string, string>>,
+
+    /// The working directory of the command, defaults to `/workspace`.
+    working-dir: option<string>,
+  }
+
+  record run-output {
+    stdout: string,
+    stderr: string,
+  }
+
+  /// Runs a short lived container, managed by the host, to completion & returns its output.
+  ///
+  /// This keeps the guest sandboxed while letting it lean on real tooling (eg: `cargo update`)
+  /// rather than re-implementing it in WASM. Only some exports are permitted to call it, see the
+  /// docs of each export, every other call gets an error.
+  ///
+  /// Two directories are mounted into the container:
+  ///
+  /// - `/workspace`: the guest's own `/workspace`, with the same permissions.
+  ///
+  /// - `/container-init`: the guest's own `/container-init`, read-only. Write scripts, config, etc
+  ///   there first so they don't end up in the workspace (& accidentally committed). WASI can't set
+  ///   the executable bit so run scripts through an interpreter, eg: `sh /container-init/run.sh`.
+  ///
+  /// The command runs as the owner of the workspace, so `HOME` may not be writable.
+  ///
+  /// Returns an error if containers are not permitted for the current call, the container runtime
+  /// is unavailable, the image can't be pulled, or the command exits with a non-zero code.
+  run: async func(request: run-request) -> result<run-output, string>;
 }
 
-/// Host-only world used to generate the shared host-api bindings.
+/// Host-only world used to generate the shared host bindings.
 world shared {
   import host-api;
 }
@@ -144,5 +187,8 @@ world ecosystem {
   /// The guest is given read-write access to the workspace (a fresh git worktree mounted at
   /// `/workspace`) & may make HTTP calls. It is expected to edit manifests & lockfiles in place,
   /// the host then commits whatever changed.
+  ///
+  /// This is the only export that may call `host-api.run`. It is also given an empty, read-write
+  /// `/container-init` directory, scratch space for files to mount into those containers.
   export apply-updates: async func(dependency: dependency, to: string) -> result<_, string>;
 }

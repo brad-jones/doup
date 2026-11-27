@@ -5,7 +5,7 @@
 //! generates the component bindings for that world and exposes
 //! [`PlatformPlugin`], a handle that runs calls against pooled plugin sessions.
 
-use crate::host::{HostState, HttpPolicy};
+use crate::host::{HostState, SessionPolicy};
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
 use anyhow::Result;
@@ -79,13 +79,13 @@ impl PlatformPlugin {
   }
 
   pub async fn list_open_prs(&self, head_branch_prefix: &str) -> Result<Vec<PullRequest>> {
-    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
     let result = session.call_async(async |b, a| b.call_list_open_prs(a, head_branch_prefix.to_string()).await).await?;
     result.map_err(anyhow::Error::msg)
   }
 
   pub async fn list_closed_prs(&self, head_branches: &[String]) -> Result<Vec<PullRequest>> {
-    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
     let result = session.call_async(async |b, a| b.call_list_closed_prs(a, head_branches.to_vec()).await).await?;
     result.map_err(anyhow::Error::msg)
   }

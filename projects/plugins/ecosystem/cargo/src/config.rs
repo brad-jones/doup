@@ -6,6 +6,9 @@ use std::sync::OnceLock;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
+/// The image cargo is run in when the config doesn't name one.
+pub const DEFAULT_IMAGE: &str = "docker.io/library/rust:slim";
+
 /// The plugin's config, as given by the `with` of the repo config.
 #[derive(Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -13,6 +16,10 @@ pub struct Config {
   /// Authenticates requests to the GitHub API, which are otherwise limited to 60 an hour.
   #[garde(inner(pattern(r"^[!-~]+$")))]
   pub github_token: Option<String>,
+
+  /// The container image that cargo is run in to update lockfiles, defaults to [`DEFAULT_IMAGE`].
+  #[garde(inner(pattern(r"^[!-~]+$")))]
+  pub image: Option<String>,
 }
 
 impl Config {
@@ -33,6 +40,11 @@ pub fn get() -> Option<&'static Config> {
   CONFIG.get()
 }
 
+/// The container image that cargo is run in.
+pub fn image() -> &'static str {
+  get().and_then(|config| config.image.as_deref()).unwrap_or(DEFAULT_IMAGE)
+}
+
 #[cfg(test)]
 mod tests {
   use super::Config;
@@ -45,6 +57,12 @@ mod tests {
   #[test]
   fn the_github_token_is_read() {
     assert_eq!(Config::parse(r#"{"github_token":"abc"}"#).unwrap().github_token.as_deref(), Some("abc"));
+  }
+
+  #[test]
+  fn the_image_is_read() {
+    assert_eq!(Config::parse(r#"{"image":"rust:1.90"}"#).unwrap().image.as_deref(), Some("rust:1.90"));
+    assert!(Config::parse(r#"{"image":"rust 1.90"}"#).is_err());
   }
 
   #[test]

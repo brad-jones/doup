@@ -1,5 +1,5 @@
 use super::plugin_session::PluginSession;
-use crate::host::{HostState, HttpPolicy};
+use crate::host::{HostState, SessionPolicy};
 use crate::wkg::is_wkg_reference;
 use crate::world::PluginWorld;
 use anyhow::{Context, Result, bail};
@@ -150,14 +150,14 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// custom WASI context overrides need to be given. Do not attempt to check
   /// the resulting session into the pool, just drop it.
   ///
-  /// `http_policy` decides whether the guest may make outbound `wasi:http` requests,
-  /// pooled sessions never can, see [`Self::checkout_session`].
+  /// `policy` decides which capabilities beyond WASI (eg: outbound `wasi:http` requests) the guest
+  /// is granted, pooled sessions are never granted any, see [`Self::checkout_session`].
   pub async fn create_session(
     &self,
-    http_policy: HttpPolicy,
+    policy: SessionPolicy,
     wasi: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<PluginSession<W>> {
-    let mut store = Store::new(self.engine()?, HostState::new(http_policy, |b| wasi(W::wasi(b)?))?);
+    let mut store = Store::new(self.engine()?, HostState::new(policy, |b| wasi(W::wasi(b)?))?);
     let bindings = W::instantiate(self.component_pre()?, &mut store).await?;
 
     let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())?;
@@ -172,12 +172,12 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// Takes an idle session, or creates and configures a new one. Hand it back with [`Self::checkin_session`].
   /// A session that is never checked in (error, or the caller's future cancelled) is simply dropped.
   ///
-  /// Pooled sessions have no HTTP access, use [`Self::create_session`] for calls that need it.
+  /// Pooled sessions have no HTTP or container access, use [`Self::create_session`] for calls that need it.
   pub async fn checkout_session(&self) -> Result<PluginSession<W>> {
     let session = self.session_pool.lock().unwrap_or_else(PoisonError::into_inner).pop();
     match session {
       Some(session) => Ok(session),
-      None => self.create_session(HttpPolicy::Denied, |b| Ok(b)).await,
+      None => self.create_session(SessionPolicy::default(), |b| Ok(b)).await,
     }
   }
 

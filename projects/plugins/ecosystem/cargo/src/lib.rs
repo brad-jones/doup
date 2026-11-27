@@ -15,15 +15,11 @@ mod config;
 mod discover;
 mod fetch;
 mod http;
-mod index;
-mod lockfile;
 mod lookup;
 mod manifest;
 mod registry;
 mod release_notes;
 mod requirement;
-mod resolve;
-mod workspace;
 
 use std::path::Path;
 
@@ -49,7 +45,7 @@ impl Guest for DoupEcosystemPluginCargo {
   }
 
   async fn apply_updates(dependency: Dependency, to: String) -> Result<(), String> {
-    apply::apply(Path::new("/workspace"), &dependency, &to).await
+    apply::apply(Path::new("/workspace"), Path::new("/container-init"), &dependency, &to).await
   }
 }
 

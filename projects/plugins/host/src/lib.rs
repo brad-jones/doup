@@ -43,7 +43,16 @@
 //! - **HTTP**: outbound `wasi:http` requests are denied unless a session is created with
 //!   `HttpPolicy::Allowed`. Pooled sessions never have network access.
 //!
+//! - **Containers**: the `run` function of `doup:plugin/host-api` lets a guest run a short lived container
+//!   of any image, with its `/workspace` & a scratch `/container-init` dir mounted in. This lets a
+//!   plugin lean on an ecosystem's own tooling (eg: `cargo update`) rather than re-implementing it.
+//!   Runs are denied unless a session is created with `ContainerPolicy::Allowed`, currently only
+//!   `apply-updates` is. Containers are run with Docker (or anything compatible), configured by the
+//!   usual `DOCKER_HOST` etc. environment variables.
+//!
 //! - **Host API**: the `doup:plugin/host-api` imports, which are provided to every plugin.
+//!
+//! Every capability beyond WASI is described by the `SessionPolicy` a session is created with.
 //!
 //! Stdout and stderr are inherited so plugin output is visible to the user.
 //!
@@ -80,7 +89,7 @@ pub use platform_plugin::PlatformPlugin;
 /// ```ignore
 /// let mut session = self
 ///   .session_pool
-///   .create_session(HttpPolicy::Denied, |b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?))
+///   .create_session(SessionPolicy::default(), |b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?))
 ///   .await?;
 /// ```
 ///
@@ -88,7 +97,7 @@ pub use platform_plugin::PlatformPlugin;
 ///
 /// ```ignore
 /// let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
-/// let mut session = self.session_pool.create_session(HttpPolicy::Denied, permissions).await?;
+/// let mut session = self.session_pool.create_session(SessionPolicy::default(), permissions).await?;
 /// ```
 ///
 /// It's purely a stylistic thing,

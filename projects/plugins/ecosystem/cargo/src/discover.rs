@@ -75,7 +75,7 @@ fn same_declaration(a: &Occurrence, b: &Occurrence) -> bool {
 
 /// Returns the (sorted) directories, relative to `root`, that contain a `Cargo.toml`
 /// and the ones that contain a `Cargo.lock`.
-pub(crate) fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
+fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
   let walker = WalkBuilder::new(root)
     .hidden(false)
     .parents(false)
@@ -204,22 +204,23 @@ struct Lock {
   package: Vec<LockPackage>,
 }
 
+/// A package recorded in a `Cargo.lock`.
 #[derive(Deserialize)]
-struct LockPackage {
-  name: String,
-  version: String,
-  source: Option<String>,
+pub struct LockPackage {
+  pub name: String,
+  pub version: String,
+  pub source: Option<String>,
 }
 
 impl LockPackage {
-  fn is_crates_io(&self) -> bool {
+  pub fn is_crates_io(&self) -> bool {
     self
       .source
       .as_deref()
       .is_some_and(|s| s.contains("github.com/rust-lang/crates.io-index") || s.contains("index.crates.io"))
   }
 
-  fn is_alternate_registry(&self) -> bool {
+  pub fn is_alternate_registry(&self) -> bool {
     self
       .source
       .as_deref()
@@ -227,7 +228,8 @@ impl LockPackage {
   }
 }
 
-fn parse_lock(path: &Path) -> Result<Vec<LockPackage>, String> {
+/// Reads the packages recorded in the `Cargo.lock` at `path`.
+pub fn parse_lock(path: &Path) -> Result<Vec<LockPackage>, String> {
   let content = fs::read_to_string(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
   let lock: Lock = toml::from_str(&content).map_err(|err| format!("failed to parse {}: {err}", path.display()))?;
   Ok(lock.package)

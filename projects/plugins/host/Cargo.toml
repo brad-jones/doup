@@ -11,6 +11,11 @@ http = "1"
 http-body-util = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 serde_json = "1.0.154"
+tempfile = "3.27.0"
+testcontainers = { version = "0.28.0", default-features = false, features = ["aws-lc-rs"] }
 wasmtime = "51.0.0"
 wasmtime-wasi = "51.0.0"
 wasmtime-wasi-http = { version = "51.0.0", default-features = false, features = ["p3", "default-send-request"] }
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }

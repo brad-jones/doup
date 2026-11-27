@@ -5,13 +5,14 @@
 //! generates the component bindings for that world and exposes
 //! [`EcosystemPlugin`], a handle that runs calls against pooled plugin sessions.
 
-use crate::host::{HostState, HttpPolicy};
+use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy, SessionPolicy};
 use crate::session::PluginSessionPool;
 use crate::wasi;
 use crate::world::PluginWorld;
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};
+use testcontainers::core::AccessMode;
 use wasmtime::component::{Component, Linker, bindgen};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::FsPerms;
@@ -84,7 +85,7 @@ impl EcosystemPlugin {
   /// The guest gets a read-only view of the workspace.
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
     let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
-    let mut session = self.session_pool.create_session(HttpPolicy::Denied, permissions).await?;
+    let mut session = self.session_pool.create_session(SessionPolicy::default(), permissions).await?;
     let result = session.call_async(async |b, a| b.call_discover_deps(a).await).await?;
     result.map_err(anyhow::Error::msg)
   }
@@ -92,7 +93,7 @@ impl EcosystemPlugin {
   /// Looks up the versions available for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>> {
-    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
     let dependency = dependency.clone();
     let result = session.call_async(async |b, a| b.call_lookup_versions(a, dependency).await).await?;
     result.map_err(anyhow::Error::msg)
@@ -101,7 +102,7 @@ impl EcosystemPlugin {
   /// Downloads release notes for for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>> {
-    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, |b| Ok(b)).await?;
+    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
     let result = session.call_async(async |b, a| b.call_fetch_release_notes(a, dependency, to).await).await?;
@@ -109,10 +110,28 @@ impl EcosystemPlugin {
   }
 
   /// Updates every occurrence of `dependency` found in `workspace_dir` to version `to`.
-  /// The guest gets a read-write view of the workspace & is able to make HTTP calls.
+  ///
+  /// The guest gets a read-write view of the workspace, is able to make HTTP calls & may run containers.
+  /// It also gets an empty, read-write `/container-init` dir that is mounted into those containers,
+  /// keeping the guest's scripts, config, etc out of the workspace. It's deleted after the call.
   pub async fn apply_updates(&self, workspace_dir: &Path, dependency: &Dependency, to: &str) -> Result<()> {
-    let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadWrite)?));
-    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, permissions).await?;
+    let init_dir = tempfile::Builder::new().prefix("doup-container-init-").tempdir()?;
+    let permissions = wasi(|b| {
+      Ok(
+        b //
+          .preopened_dir(workspace_dir, "/workspace", FsPerms::ReadWrite)?
+          .preopened_dir(init_dir.path(), "/container-init", FsPerms::ReadWrite)?,
+      )
+    });
+    let policy = SessionPolicy {
+      http: HttpPolicy::Allowed,
+      container: ContainerPolicy::Allowed(ContainerMounts {
+        workspace: workspace_dir.to_path_buf(),
+        workspace_access: AccessMode::ReadWrite,
+        init: init_dir.path().to_path_buf(),
+      }),
+    };
+    let mut session = self.session_pool.create_session(policy, permissions).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
     let result = session.call_async(async |b, a| b.call_apply_updates(a, dependency, to).await).await?;
