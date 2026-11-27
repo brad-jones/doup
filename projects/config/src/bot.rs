@@ -373,6 +373,14 @@ repos:
   }
 
   #[test]
+  fn schema_rejects_unknown_keys() {
+    let repo = json!({ "origin": "https://github.com/a/b.git" });
+    assert!(DoupBotConfigFileSchema::validate(&json!({ "$schema": "./s.json", "repos": [repo] })).is_ok());
+    assert!(DoupBotConfigFileSchema::validate(&json!({ "log": "x", "repos": [repo] })).is_err());
+    assert!(DoupBotConfigFileSchema::validate(&json!({ "repos": [{ "origin": repo["origin"], "x": "y" }] })).is_err());
+  }
+
+  #[test]
   fn schema_rejects_mismatched_auth() {
     for repo in [
       json!({ "origin": "git@github.com:a/b.git", "auth": { "user": "u", "pass": "p" } }),
@@ -403,48 +411,61 @@ repos:
     assert!(!valid("-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----"));
   }
 
+  fn env(vars: &[(&str, &str)]) -> serde_json::Value {
+    vars_to_value(vars.iter().map(|(k, v)| (k.to_string(), v.to_string())), DoupBotConfigFile::ENV_PREFIX).unwrap()
+  }
+
   /// Writes a config file with one repo, then loads it with the given env vars applied.
-  fn load_with(vars: &[(&str, &str)]) -> (TempDir, Loaded<DoupBotConfigFile>) {
+  fn try_load_with(vars: &[(&str, &str)]) -> (TempDir, Result<Loaded<DoupBotConfigFile>, ConfigError>) {
     let dir = TempDir::new().unwrap();
     dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" }))).unwrap();
-    let env = vars_to_value(vars.iter().map(|(k, v)| (k.to_string(), v.to_string())), DoupBotConfigFile::ENV_PREFIX);
-    let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();
+    let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env(vars));
     (dir, loaded)
+  }
+
+  fn load_with(vars: &[(&str, &str)]) -> (TempDir, Loaded<DoupBotConfigFile>) {
+    let (dir, loaded) = try_load_with(vars);
+    (dir, loaded.unwrap())
   }
 
   #[test]
   fn env_overrides_file_values() {
-    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS__0__ORIGIN", "https://github.com/c/d.git")]);
     assert_eq!(loaded.merged.repos[0].origin, "https://github.com/c/d.git");
     assert_eq!(loaded.file.unwrap().repos[0].origin, "https://github.com/a/b.git");
   }
 
   #[test]
+  fn env_sets_a_top_level_key_with_underscores() {
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_GIT_BACKEND", "grit")]);
+    assert_eq!(loaded.merged.git_backend, GitBackendKind::Grit);
+  }
+
+  #[test]
   fn env_can_add_array_items() {
-    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_1_ORIGIN", "https://github.com/c/d.git")]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS__1__ORIGIN", "https://github.com/c/d.git")]);
     assert_eq!(loaded.merged.repos.len(), 2);
     assert_eq!(loaded.file.unwrap().repos.len(), 1);
   }
 
   #[test]
   fn env_can_supply_partial_overrides() {
-    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_AUTH_USER", "u"), ("DOUP_BOT_REPOS_0_AUTH_PASS", "p")]);
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_REPOS__0__AUTH__USER", "u"), ("DOUP_BOT_REPOS__0__AUTH__PASS", "p")]);
     assert_eq!(loaded.merged.repos[0].auth, Some(DoupBotRepoAuth::Https { user: "u".into(), pass: "p".into() }));
     assert_eq!(loaded.file.unwrap().repos[0].auth, None);
   }
 
   #[test]
-  fn env_can_supply_key_path_via_double_underscore() {
+  fn env_can_supply_a_nested_key_with_underscores() {
     let dir = TempDir::new().unwrap();
     let key_file = dir.child("id_ed25519");
     key_file.write_str(KEY).unwrap();
     dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "git@github.com:a/b.git" }))).unwrap();
-    let env = vars_to_value(
-      [("DOUP_BOT_REPOS__0__AUTH__KEY_PATH".to_string(), key_file.path().to_string_lossy().into_owned())],
-      DoupBotConfigFile::ENV_PREFIX,
-    );
+    let key_path = key_file.path().to_string_lossy();
 
-    let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();
+    let loaded =
+      load_with_env::<DoupBotConfigFile>(Some(dir.path()), env(&[("DOUP_BOT_REPOS__0__AUTH__KEY_PATH", &key_path)]))
+        .unwrap();
     assert_eq!(
       loaded.merged.repos[0].auth,
       Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: Some(key_file.path().to_path_buf()) })
@@ -454,17 +475,21 @@ repos:
 
   #[test]
   fn invalid_env_override_is_rejected() {
-    let dir = TempDir::new().unwrap();
-    dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" }))).unwrap();
-    let env =
-      vars_to_value([("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())], DoupBotConfigFile::ENV_PREFIX);
-    let err = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap_err();
-    assert!(matches!(err, ConfigError::Schema(_)), "{err:?}");
+    let (_dir, loaded) = try_load_with(&[("DOUP_BOT_REPOS__0__AUTH__KEY", "/k")]);
+    assert!(matches!(loaded, Err(ConfigError::Schema(_))), "{loaded:?}");
+  }
+
+  #[test]
+  fn unknown_env_keys_are_rejected() {
+    for name in ["DOUP_BOT_LOG", "DOUP_BOT_REPOS__0__ORIGN", "DOUP_BOT_REPOS_0_ORIGIN"] {
+      let (_dir, loaded) = try_load_with(&[(name, "x")]);
+      assert!(matches!(loaded, Err(ConfigError::Schema(_))), "{name}: {loaded:?}");
+    }
   }
 
   #[test]
   fn env_overrides_are_not_saved_to_the_file() {
-    let (dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
+    let (dir, loaded) = load_with(&[("DOUP_BOT_REPOS__0__ORIGIN", "https://github.com/c/d.git")]);
     assert!(matches!(loaded.merged.save(), Err(ConfigError::NoSource)));
 
     loaded.file.unwrap().save().unwrap();
@@ -476,10 +501,7 @@ repos:
   #[test]
   fn loads_from_env_alone_when_no_file_exists() {
     let dir = TempDir::new().unwrap();
-    let env = vars_to_value(
-      [("DOUP_BOT_REPOS_0_ORIGIN".to_string(), "https://github.com/c/d.git".to_string())],
-      DoupBotConfigFile::ENV_PREFIX,
-    );
+    let env = env(&[("DOUP_BOT_REPOS__0__ORIGIN", "https://github.com/c/d.git")]);
     let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap();
     assert!(loaded.file.is_none());
     assert_eq!(loaded.merged.repos[0].origin, "https://github.com/c/d.git");

@@ -46,7 +46,8 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// The name(s) of the config file(s) that locate_file will search for.
   const DEFAULT_NAMES: &'static [&'static str];
 
-  /// Env vars named `<ENV_PREFIX>_<PATH>` are read by `from_env` and `load`, eg: `DOUP_FOO_0_BAR=x`.
+  /// Env vars named `<ENV_PREFIX>_<PATH>` are read by `from_env` and `load`, with `__` between
+  /// `<PATH>`'s segments, eg: `DOUP_FOO_SOME_KEY__0__BAR=x`. See [`env`](super::env).
   /// Must be non-empty and unique among configs (`<ENV_PREFIX>_` must not prefix another's),
   /// except for scopes passed to `load`/`from_env`, which deliberately extend it (eg: `DOUP_REPO_0`).
   const ENV_PREFIX: &'static str;
@@ -100,7 +101,7 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// If no config file is found, the merged result is built from the env alone.
   ///
   /// `env_prefix` optionally names a further env prefix layered over `ENV_PREFIX`,
-  /// eg: `DOUP_REPO_0` so that `DOUP_REPO_0_PLATFORM_USE` beats `DOUP_REPO_PLATFORM_USE`.
+  /// eg: `DOUP_REPO_0` so that `DOUP_REPO_0_PLATFORM__USE` beats `DOUP_REPO_PLATFORM__USE`.
   ///
   /// The merged result must still satisfy the schema as a whole, so an override that produces an
   /// invalid combination (eg: adding a `pass` to a repo whose file entry uses a `key`) is an error.
@@ -108,7 +109,7 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// Most of the time if you are just reading config, you will want the `merged` instance.
   /// If you want to persist any changes to the config, use the returned `file` instance.
   fn load(start_dir: Option<&Path>, env_prefix: Option<&str>) -> Result<Loaded<Self>, ConfigError> {
-    load_with_env(start_dir, env::env_value(Self::ENV_PREFIX, env_prefix))
+    load_with_env(start_dir, env::env_value(Self::ENV_PREFIX, env_prefix)?)
   }
 
   /// Saves the config back to the file it was loaded from.
@@ -185,7 +186,7 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// Env values are always strings and keys are lowercased, see [`env::env_value`].
   /// `env_prefix` is layered over `ENV_PREFIX` as per `load`.
   fn from_env(env_prefix: Option<&str>) -> Result<Self, ConfigError> {
-    Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix), None)
+    Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix)?, None)
   }
 }
 

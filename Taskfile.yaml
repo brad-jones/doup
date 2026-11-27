@@ -165,14 +165,14 @@ tasks:
       - build:cli
       - build:plugins
     env:
-      DOUP_BOT__GIT_BACKEND: grit
-      DOUP_BOT_REPOS_0_ORIGIN: https://github.com/brad-jones/doup.git
-      DOUP_BOT_REPOS_0_AUTH_USER: x-access-token
-      DOUP_BOT_REPOS_0_AUTH_PASS:
+      DOUP_BOT_GIT_BACKEND: grit
+      DOUP_BOT_REPOS__0__ORIGIN: https://github.com/brad-jones/doup.git
+      DOUP_BOT_REPOS__0__AUTH__USER: x-access-token
+      DOUP_BOT_REPOS__0__AUTH__PASS:
         sh: gh auth token -u brad-jones
-      DOUP_REPO_0__PLATFORM__WITH__GITHUB_TOKEN:
+      DOUP_REPO_0_PLATFORM__WITH__GITHUB_TOKEN:
         sh: gh auth token -u brad-jones
-      DOUP_REPO_0__ECOSYSTEMS__1__WITH__GITHUB_TOKEN:
+      DOUP_REPO_0_ECOSYSTEMS__1__WITH__GITHUB_TOKEN:
         sh: gh auth token -u brad-jones
     cmds:
       - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update {{.CLI_ARGS}}

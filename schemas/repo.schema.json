@@ -5,6 +5,7 @@
   "description": "Configuration found at the root of a git repo that is to be updated by the doup dependency updater bot. (doup.{json,yaml})",
   "type": "object",
   "required": ["platform", "ecosystems"],
+  "additionalProperties": false,
   "$defs": {
     "plugin": {
       "description": "A plugin to run, with optional plugin specific configuration.",
@@ -28,6 +29,10 @@
     }
   },
   "properties": {
+    "$schema": {
+      "description": "The JSON schema this file conforms to, for editor support.",
+      "type": "string"
+    },
     "platform": {
       "description": "The platform that doup will operate against, submitting pull requests with it's dependency updates. Think github, gitlab, bitbucket, etc. ONE MUST BE GIVEN.",
       "$ref": "#/$defs/plugin"

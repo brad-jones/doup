@@ -134,24 +134,26 @@ Exactly one `platform` and at least one ecosystem must be given. Each plugin is 
 
 ## Environment variables
 
-Any value can be set or overridden with an env var named `<ENV_PREFIX>_<PATH>`, where `<PATH>` is the value's path in
-the config, upper-cased, with array indexes as numbers:
+Any value can be set or overridden with an env var named `<ENV_PREFIX>_<PATH>`. `<PATH>` is the value's path in the
+config, upper-cased, with `__` between its segments and array indexes as numbers, the same as .NET's configuration:
 
 ```sh
-DOUP_BOT_REPOS_0_ORIGIN=https://github.com/owner/repo.git  # repos[0].origin
-DOUP_BOT_REPOS_0_AUTH_USER=x-access-token                  # repos[0].auth.user
-DOUP_BOT_REPOS_0_AUTH_PASS=ghp_...                         # repos[0].auth.pass
-DOUP_REPO_PLATFORM_USE=doup:github@^1                      # platform.use
-DOUP_REPO_ECOSYSTEMS_0_WITH_FOO=bar                        # ecosystems[0].with.foo
+DOUP_BOT_GIT_BACKEND=grit                                    # git_backend
+DOUP_BOT_REPOS__0__ORIGIN=https://github.com/owner/repo.git  # repos[0].origin
+DOUP_BOT_REPOS__0__AUTH__PASS=ghp_...                        # repos[0].auth.pass
+DOUP_BOT_REPOS__0__AUTH__KEY_PATH=./id_ed25519               # repos[0].auth.key_path
+DOUP_REPO_PLATFORM__USE=doup:github@^1                       # platform.use
+DOUP_REPO_ECOSYSTEMS__0__WITH__GITHUB_TOKEN=ghp_...          # ecosystems[0].with.github_token
 ```
 
+- A single `_` is always part of a key, at any depth. Only `__` goes a level deeper.
 - Env values are merged over the file: objects by key and arrays by index, so a var can override one field of an
   existing item or add a new item.
-- Paths are split on `_`. For keys that themselves contain `_`, use `__` between every segment instead, eg:
-  `DOUP_BOT_REPOS__0__AUTH__KEY_PATH` or `DOUP_BOT__GIT_BACKEND`. The prefix itself is always written with single
-  underscores.
+- A segment that is empty, or starts or ends with `_`, fails with `ConfigError::InvalidEnvVar`, eg: `DOUP_BOT__X`,
+  `DOUP_BOT_X___Y` or `DOUP_BOT_X__`. The error names the var but never includes its value.
 - Values are always strings and keys are always lowercased, so keys with capitals can't be set from the env.
-- Unknown keys are ignored, so a var that merely shares the prefix (eg: `DOUP_BOT_LOG`) is harmless.
+- The schemas reject keys they don't know (other than in plugin `with` config), so a typo, or any other var that shares
+  the prefix (eg: `DOUP_BOT_LOG`), fails validation rather than being ignored.
 
 ### Per-repo overrides
 
@@ -160,12 +162,12 @@ DOUP_REPO_ECOSYSTEMS_0_WITH_FOO=bar                        # ecosystems[0].with.
 `repos[index]`, so one repo can be configured differently from the rest:
 
 ```sh
-DOUP_REPO_PLATFORM_USE=doup:gitlab@^2     # every repo
-DOUP_REPO_0_PLATFORM_USE=doup:github@^1   # just repos[0], wins over the above
+DOUP_REPO_PLATFORM__USE=doup:gitlab@^2     # every repo
+DOUP_REPO_0_PLATFORM__USE=doup:github@^1   # just repos[0], wins over the above
 ```
 
-Vars whose path starts with an index (`DOUP_REPO_<n>_...`) are only ever read as a scope, never as part of the
-`DOUP_REPO` layer.
+Like the prefix, the scope is followed by a single `_`. Vars that look like a scope (`DOUP_REPO_<n>_...`) are only ever
+read as one, never as part of the `DOUP_REPO` layer, as no top-level key is a number.
 
 ## Errors
 

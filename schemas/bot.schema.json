@@ -5,6 +5,7 @@
   "description": "Configuration to bootstrap the doup dependency updater bot. (doupbot.{json,yaml})",
   "type": "object",
   "required": ["repos"],
+  "additionalProperties": false,
   "$defs": {
     "authHttps": {
       "description": "Basic credentials for an HTTPS origin.",
@@ -50,6 +51,10 @@
     }
   },
   "properties": {
+    "$schema": {
+      "description": "The JSON schema this file conforms to, for editor support.",
+      "type": "string"
+    },
     "git_backend": {
       "description": "The git implementation used to clone every repo. Applies to all repos.",
       "enum": ["git_cli", "grit"],
@@ -62,6 +67,7 @@
       "items": {
         "type": "object",
         "required": ["origin"],
+        "additionalProperties": false,
         "properties": {
           "origin": {
             "description": "The git origin URL (https or ssh accepted). If no authentication details are given, doup assumes git is already configured correctly.",

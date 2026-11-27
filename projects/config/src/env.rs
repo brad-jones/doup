@@ -1,27 +1,31 @@
-//! Convert environment variables into a nested JSON value.
+//! Convert environment variables into a nested JSON value, the same way .NET's configuration reads
+//! them: the prefix and a single `_`, then a path whose segments are separated by `__`.
 //!
 //! Examples (prefix = "APP"):
-//!   APP_FOO_BAR=baz   -> {"foo":{"bar":"baz"}}
-//!   APP_LIST_0=a      -> {"list":["a"]}
-//!   APP_LIST_1_NAME=x -> {"list":[null,{"name":"x"}]}
-//!   APP_A__KEY_PATH=x -> {"a":{"key_path":"x"}}
+//!   APP_GIT_BACKEND=x       -> {"git_backend":"x"}
+//!   APP_FOO__BAR=baz        -> {"foo":{"bar":"baz"}}
+//!   APP_LIST__0=a           -> {"list":["a"]}
+//!   APP_LIST__1__KEY_PATH=x -> {"list":[null,{"key_path":"x"}]}
 //!
-//! Names are split on `_`, unless the name contains `__` (or `__` directly follows the prefix,
-//! eg: `APP__GIT_BACKEND`), then it is split on `__` only so that keys may themselves contain `_`.
+//! A single `_` is always part of a key, so keys may contain `_` at any depth.
 //!
 //! Limitations:
 //! - Values are always strings; this is fine while the schemas only use strings.
 //! - Names are lowercased, so fields containing capitals can't be targeted.
-//! - Any var sharing the prefix (eg: `DOUP_BOT_LOG`) becomes a key. Unknown keys are ignored as
-//!   neither the schemas nor serde reject them.
-//! - The prefix (and scope) are matched literally, so must be written with single underscores,
-//!   eg: `DOUP_REPO_0__ECOSYSTEMS__0__USE`, not `DOUP__REPO__0__ECOSYSTEMS__0__USE`.
+//! - Every var sharing the prefix becomes a key, and the schemas reject keys they don't know
+//!   (other than in plugin `with` config), so eg: `DOUP_BOT_LOG` fails validation.
+//! - A segment that is empty, or starts or ends with `_`, is an error rather than being guessed at,
+//!   eg: `APP__X` (the old form of `APP_X`), `APP_X___Y` or `APP_X__`.
 
+use super::ConfigError;
 use serde_json::{Map, Value};
 
 /// Numeric segments above this are treated as plain object keys, so a stray
 /// `FOO_999999999=x` can't make us allocate a gigantic array.
 const MAX_ARRAY_INDEX: usize = 65_535;
+
+/// The separator between path segments.
+const SEPARATOR: &str = "__";
 
 #[derive(Debug, Clone, PartialEq)]
 enum Seg {
@@ -31,7 +35,7 @@ enum Seg {
 
 /// Reads the process environment, see [`layered_vars_to_value`].
 /// Vars that are not valid unicode are skipped.
-pub fn env_value(prefix: &str, scope: Option<&str>) -> Value {
+pub fn env_value(prefix: &str, scope: Option<&str>) -> Result<Value, ConfigError> {
   layered_vars_to_value(
     std::env::vars_os().filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
     prefix,
@@ -42,30 +46,34 @@ pub fn env_value(prefix: &str, scope: Option<&str>) -> Value {
 /// Builds a value from vars starting with `<prefix>_`, then, if given, merges vars starting
 /// with `<scope>_` over the top, eg: prefix `DOUP_REPO` with scope `DOUP_REPO_0`.
 ///
-/// Vars whose path starts with an index (eg: `DOUP_REPO_0_X`) are left out of the prefix layer,
-/// as configs are objects; this frees `<prefix>_<n>` up for use as a scope.
-pub fn layered_vars_to_value<I>(vars: I, prefix: &str, scope: Option<&str>) -> Value
+/// Vars that look like a scope (`<prefix>_<n>_...`) are left out of the prefix layer, as no
+/// config's top-level key is a number; this frees `<prefix>_<n>` up for use as a scope.
+pub fn layered_vars_to_value<I>(vars: I, prefix: &str, scope: Option<&str>) -> Result<Value, ConfigError>
 where
   I: IntoIterator<Item = (String, String)>,
 {
   let vars: Vec<_> = vars.into_iter().collect();
   let needle = needle(prefix);
-  let base = vars.iter().filter(|(k, _)| {
-    !k.strip_prefix(&needle).is_some_and(|rest| matches!(parse_path(rest).first(), Some(Seg::Index(_))))
-  });
-  let mut value = vars_to_value(base.cloned(), prefix);
+  let base = vars.iter().filter(|(k, _)| !k.strip_prefix(&needle).is_some_and(is_scoped));
+  let mut value = vars_to_value(base.cloned(), prefix)?;
   if let Some(scope) = scope {
-    merge(&mut value, vars_to_value(vars, scope));
+    merge(&mut value, vars_to_value(vars, scope)?);
   }
-  value
+  Ok(value)
 }
 
 fn needle(prefix: &str) -> String {
   format!("{}_", prefix.trim_end_matches('_'))
 }
 
-/// Same as [`env_value`] but takes any iterator of (name, value) pairs.
-pub fn vars_to_value<I>(vars: I, prefix: &str) -> Value
+/// Whether `rest` (what follows `<prefix>_`) is `<n>` or starts `<n>_`, eg: `0_PLATFORM__USE`.
+fn is_scoped(rest: &str) -> bool {
+  let first = rest.split('_').next().unwrap_or_default();
+  !first.is_empty() && first.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Same as [`env_value`] but takes any iterator of (name, value) pairs, and has no scope.
+pub fn vars_to_value<I>(vars: I, prefix: &str) -> Result<Value, ConfigError>
 where
   I: IntoIterator<Item = (String, String)>,
 {
@@ -78,17 +86,16 @@ where
   let mut root = Value::Null;
 
   for (name, value) in matched {
-    let path = parse_path(&name[needle.len()..]);
-    if path.is_empty() {
-      continue;
-    }
+    let Some(path) = parse_path(&name[needle.len()..]) else {
+      return Err(ConfigError::InvalidEnvVar { name });
+    };
     insert(&mut root, &path, Value::String(value));
   }
 
   if root.is_null() {
     root = Value::Object(Map::new());
   }
-  root
+  Ok(root)
 }
 
 /// Overlays `over` onto `base`. Objects merge by key and arrays by index;
@@ -118,15 +125,17 @@ pub fn merge(base: &mut Value, over: Value) {
   }
 }
 
-fn parse_path(s: &str) -> Vec<Seg> {
-  // `s` is what follows `<prefix>_`, so `PREFIX__KEY` arrives as `_KEY`.
-  let sep = if s.contains("__") || s.starts_with('_') { "__" } else { "_" };
-  s.trim_start_matches('_')
-    .split(sep)
-    .filter(|p| !p.is_empty())
-    .map(|p| match p.parse::<usize>() {
-      Ok(i) if i <= MAX_ARRAY_INDEX && p.bytes().all(|b| b.is_ascii_digit()) => Seg::Index(i),
-      _ => Seg::Key(p.to_lowercase()),
+/// Splits `s` (what follows `<prefix>_`) into segments, or `None` if any is invalid.
+fn parse_path(s: &str) -> Option<Vec<Seg>> {
+  s.split(SEPARATOR)
+    .map(|p| {
+      if p.is_empty() || p.starts_with('_') || p.ends_with('_') {
+        return None;
+      }
+      Some(match p.parse::<usize>() {
+        Ok(i) if i <= MAX_ARRAY_INDEX && p.bytes().all(|b| b.is_ascii_digit()) => Seg::Index(i),
+        _ => Seg::Key(p.to_lowercase()),
+      })
     })
     .collect()
 }
@@ -167,26 +176,35 @@ mod tests {
   use super::*;
   use serde_json::json;
 
-  fn run(pairs: &[(&str, &str)], prefix: &str) -> Value {
-    let vars = pairs.iter().map(|(k, v)| (k.to_string(), v.to_string()));
-    vars_to_value(vars, prefix)
+  fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+    pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+  }
+
+  fn run(vars: &[(&str, &str)], prefix: &str) -> Value {
+    vars_to_value(pairs(vars), prefix).unwrap()
   }
 
   #[test]
   fn nested_objects() {
-    let v = run(&[("APP_FOO_BAR", "baz")], "APP");
+    let v = run(&[("APP_FOO__BAR", "baz")], "APP");
     assert_eq!(v, json!({"foo": {"bar": "baz"}}));
+  }
+
+  #[test]
+  fn single_underscores_are_part_of_the_key_at_any_depth() {
+    let v = run(&[("APP_GIT_BACKEND", "grit"), ("APP_REPOS__0__AUTH__KEY_PATH", "/k")], "APP");
+    assert_eq!(v, json!({"git_backend": "grit", "repos": [{"auth": {"key_path": "/k"}}]}));
   }
 
   #[test]
   fn arrays_and_deep_nesting() {
     let v = run(
       &[
-        ("APP_LIST_0", "a"),
-        ("APP_LIST_1", "b"),
-        ("APP_A_B_C_D_E", "deep"),
-        ("APP_USERS_0_NAME", "x"),
-        ("APP_USERS_0_TAGS_0", "t"),
+        ("APP_LIST__0", "a"),
+        ("APP_LIST__1", "b"),
+        ("APP_A__B__C__D__E", "deep"),
+        ("APP_USERS__0__NAME", "x"),
+        ("APP_USERS__0__TAGS__0", "t"),
       ],
       "APP",
     );
@@ -213,23 +231,11 @@ mod tests {
   }
 
   #[test]
-  fn double_underscore_keeps_single_underscores_in_keys() {
-    let v =
-      run(&[("APP_REPOS__0__AUTH__KEY_PATH", "/k"), ("APP__PLAIN__SOME_KEY", "v"), ("APP_OTHER_0_NAME", "x")], "APP");
-    assert_eq!(
-      v,
-      json!({
-          "repos": [{"auth": {"key_path": "/k"}}],
-          "plain": {"some_key": "v"},
-          "other": [{"name": "x"}]
-      })
-    );
-  }
-
-  #[test]
-  fn double_underscore_after_prefix_allows_a_top_level_key_with_underscores() {
-    let v = run(&[("APP__GIT_BACKEND", "grit"), ("APP_PLAIN", "x")], "APP");
-    assert_eq!(v, json!({"git_backend": "grit", "plain": "x"}));
+  fn invalid_segments_are_rejected() {
+    for name in ["APP__GIT_BACKEND", "APP_X___Y", "APP_X____Y", "APP_X__", "APP_X_", "APP_"] {
+      let err = vars_to_value(pairs(&[(name, "v")]), "APP").unwrap_err();
+      assert!(matches!(err, ConfigError::InvalidEnvVar { name: ref n } if n == name), "{name}: {err:?}");
+    }
   }
 
   #[test]
@@ -240,24 +246,24 @@ mod tests {
 
   #[test]
   fn indexes_above_the_max_are_keys() {
-    let v = run(&[("APP_HUGE_65536", "x"), ("APP_MAX_65535", "y")], "APP");
+    let v = run(&[("APP_HUGE__65536", "x"), ("APP_MAX__65535", "y")], "APP");
     assert_eq!(v["huge"], json!({"65536": "x"}));
     assert_eq!(v["max"].as_array().map(Vec::len), Some(MAX_ARRAY_INDEX + 1));
   }
 
   #[test]
   fn signed_numbers_are_keys() {
-    let v = run(&[("APP_LIST_+1", "x")], "APP");
+    let v = run(&[("APP_LIST__+1", "x")], "APP");
     assert_eq!(v, json!({"list": {"+1": "x"}}));
   }
 
   #[test]
   fn conflicting_paths_resolve_the_same_whatever_the_env_order() {
-    let pairs = [("APP_A", "x"), ("APP_A_B", "y"), ("APP_L_0", "z"), ("APP_L_K", "w")];
+    let vars = [("APP_A", "x"), ("APP_A__B", "y"), ("APP_L__0", "z"), ("APP_L__K", "w")];
     let expected = json!({"a": {"b": "y"}, "l": {"k": "w"}});
-    assert_eq!(run(&pairs, "APP"), expected);
+    assert_eq!(run(&vars, "APP"), expected);
 
-    let mut reversed = pairs;
+    let mut reversed = vars;
     reversed.reverse();
     assert_eq!(run(&reversed, "APP"), expected);
   }
@@ -267,39 +273,44 @@ mod tests {
     assert_eq!(run(&[("A", "1")], "NOPE"), json!({}));
   }
 
-  fn run_layered(pairs: &[(&str, &str)], prefix: &str, scope: Option<&str>) -> Value {
-    let vars = pairs.iter().map(|(k, v)| (k.to_string(), v.to_string()));
-    layered_vars_to_value(vars, prefix, scope)
+  fn run_layered(vars: &[(&str, &str)], prefix: &str, scope: Option<&str>) -> Result<Value, ConfigError> {
+    layered_vars_to_value(pairs(vars), prefix, scope)
   }
 
   #[test]
-  fn layered_without_scope_skips_indexed_vars() {
-    let v = run_layered(&[("APP_X", "1"), ("APP_0_X", "2"), ("APP__0__Y", "3")], "APP", None);
-    assert_eq!(v, json!({"x": "1"}));
+  fn layered_without_scope_skips_scoped_vars() {
+    let v = run_layered(&[("APP_X", "1"), ("APP_0_X", "2"), ("APP_0__Y", "3"), ("APP_0", "4")], "APP", None);
+    assert_eq!(v.unwrap(), json!({"x": "1"}));
   }
 
   #[test]
   fn layered_with_only_scoped_vars_is_an_object() {
     let v = run_layered(&[("APP_0_X", "1")], "APP", Some("APP_1"));
-    assert_eq!(v, json!({}));
+    assert_eq!(v.unwrap(), json!({}));
   }
 
   #[test]
   fn layered_scope_wins_over_prefix() {
     let v = run_layered(&[("APP_X", "1"), ("APP_Y", "y"), ("APP_0_X", "2")], "APP", Some("APP_0"));
-    assert_eq!(v, json!({"x": "2", "y": "y"}));
+    assert_eq!(v.unwrap(), json!({"x": "2", "y": "y"}));
   }
 
   #[test]
   fn layered_scope_ignores_other_scopes() {
     let v = run_layered(&[("APP_X", "1"), ("APP_10_X", "2")], "APP", Some("APP_1"));
-    assert_eq!(v, json!({"x": "1"}));
+    assert_eq!(v.unwrap(), json!({"x": "1"}));
   }
 
   #[test]
-  fn layered_scope_supports_double_underscore() {
-    let v = run_layered(&[("APP_0__LIST__0__SOME_KEY", "v")], "APP", Some("APP_0"));
-    assert_eq!(v, json!({"list": [{"some_key": "v"}]}));
+  fn layered_scope_supports_nesting() {
+    let v = run_layered(&[("APP_0_LIST__0__SOME_KEY", "v")], "APP", Some("APP_0"));
+    assert_eq!(v.unwrap(), json!({"list": [{"some_key": "v"}]}));
+  }
+
+  #[test]
+  fn layered_scope_rejects_the_old_double_underscore_form() {
+    let err = run_layered(&[("APP_0__LIST__0__USE", "v")], "APP", Some("APP_0")).unwrap_err();
+    assert!(matches!(err, ConfigError::InvalidEnvVar { ref name } if name == "APP_0__LIST__0__USE"), "{err:?}");
   }
 
   #[test]

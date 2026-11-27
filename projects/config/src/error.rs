@@ -48,6 +48,12 @@ pub enum ConfigError {
   #[error("failed to read key '{}'", path.display())]
   ReadSshKey { path: PathBuf, source: std::io::Error },
 
+  /// The var's value is left out, as it may be a secret.
+  #[error(
+    "env var '{name}' is not a valid config path: segments are separated by `__` and must not be empty, or start or end with `_`"
+  )]
+  InvalidEnvVar { name: String },
+
   /// `path` is the `key_path` as written; `searched` is every place it was looked for, in order.
   #[error("key file '{}' not found, looked for {}", path.display(), quoted_paths(searched))]
   SshKeyNotFound { path: PathBuf, searched: Vec<PathBuf> },

@@ -147,6 +147,13 @@ ecosystems:
   }
 
   #[test]
+  fn schema_rejects_unknown_keys_outside_with() {
+    let plugin = json!({ "use": "doup:github", "with": { "anything": "goes" } });
+    assert!(Schema::validate(&json!({ "$schema": "./s.json", "platform": plugin, "ecosystems": [plugin] })).is_ok());
+    assert!(Schema::validate(&json!({ "log": "x", "platform": plugin, "ecosystems": [plugin] })).is_err());
+  }
+
+  #[test]
   fn schema_accepts_wasm_paths() {
     for plugin in ["./a.wasm", "../b/c.wasm", "/abs/d.wasm", "target/e.wasm"] {
       let instance = json!({ "platform": { "use": plugin }, "ecosystems": [{ "use": plugin }] });
@@ -184,7 +191,8 @@ ecosystems:
       vars.iter().map(|(k, v)| (k.to_string(), v.to_string())),
       DoupRepoConfigFile::ENV_PREFIX,
       scope,
-    );
+    )
+    .unwrap();
     let loaded = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap();
     (dir, loaded)
   }
@@ -214,9 +222,9 @@ ecosystems:
     let scope = DoupRepoConfigFile::repo_env_prefix(0);
     let (_dir, loaded) = load_with(
       &[
-        ("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"),
-        ("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3"),
-        ("DOUP_REPO_0__ECOSYSTEMS__0__WITH__SOME_KEY", "baz"),
+        ("DOUP_REPO_PLATFORM__USE", "doup:gitlab@^2"),
+        ("DOUP_REPO_0_PLATFORM__USE", "doup:bitbucket@^3"),
+        ("DOUP_REPO_0_ECOSYSTEMS__0__WITH__SOME_KEY", "baz"),
       ],
       Some(&scope),
     );
@@ -228,7 +236,7 @@ ecosystems:
   fn other_repos_scoped_env_does_not_apply() {
     let scope = DoupRepoConfigFile::repo_env_prefix(1);
     let (_dir, loaded) = load_with(
-      &[("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"), ("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3")],
+      &[("DOUP_REPO_PLATFORM__USE", "doup:gitlab@^2"), ("DOUP_REPO_0_PLATFORM__USE", "doup:bitbucket@^3")],
       Some(&scope),
     );
     assert_eq!(loaded.merged.platform.plugin, "doup:gitlab@^2");
@@ -237,7 +245,7 @@ ecosystems:
   #[test]
   fn other_repos_scoped_env_alone_leaves_the_file_intact() {
     let scope = DoupRepoConfigFile::repo_env_prefix(1);
-    let (_dir, loaded) = load_with(&[("DOUP_REPO_0_PLATFORM_USE", "doup:bitbucket@^3")], Some(&scope));
+    let (_dir, loaded) = load_with(&[("DOUP_REPO_0_PLATFORM__USE", "doup:bitbucket@^3")], Some(&scope));
     let file = loaded.file.unwrap();
     assert_eq!(loaded.merged.platform, file.platform);
     assert_eq!(loaded.merged.ecosystems, file.ecosystems);
@@ -248,12 +256,13 @@ ecosystems:
     let dir = TempDir::new().unwrap();
     let env = layered_vars_to_value(
       [
-        ("DOUP_REPO_0_PLATFORM_USE".to_string(), "doup:github@^1".to_string()),
-        ("DOUP_REPO_0_ECOSYSTEMS_0_USE".to_string(), "doup:npm@1.2.3".to_string()),
+        ("DOUP_REPO_0_PLATFORM__USE".to_string(), "doup:github@^1".to_string()),
+        ("DOUP_REPO_0_ECOSYSTEMS__0__USE".to_string(), "doup:npm@1.2.3".to_string()),
       ],
       DoupRepoConfigFile::ENV_PREFIX,
       Some(&DoupRepoConfigFile::repo_env_prefix(0)),
-    );
+    )
+    .unwrap();
     let loaded = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap();
     assert!(loaded.file.is_none());
     assert_eq!(loaded.merged.platform.plugin, "doup:github@^1");
@@ -263,7 +272,7 @@ ecosystems:
   #[test]
   fn env_overrides_plugin_use() {
     let (_dir, loaded) = load_with(
-      &[("DOUP_REPO_PLATFORM_USE", "doup:gitlab@^2"), ("DOUP_REPO_ECOSYSTEMS_0_USE", "doup:npm@1.2.3")],
+      &[("DOUP_REPO_PLATFORM__USE", "doup:gitlab@^2"), ("DOUP_REPO_ECOSYSTEMS__0__USE", "doup:npm@1.2.3")],
       None,
     );
     assert_eq!(loaded.merged.platform.plugin, "doup:gitlab@^2");
@@ -274,7 +283,7 @@ ecosystems:
   #[test]
   fn env_supplies_plugin_with() {
     let (_dir, loaded) =
-      load_with(&[("DOUP_REPO_PLATFORM_WITH_FOO", "bar"), ("DOUP_REPO_ECOSYSTEMS__0__WITH__SOME_KEY", "baz")], None);
+      load_with(&[("DOUP_REPO_PLATFORM__WITH__FOO", "bar"), ("DOUP_REPO_ECOSYSTEMS__0__WITH__SOME_KEY", "baz")], None);
     assert_eq!(loaded.merged.platform.with, json!({"foo": "bar"}).as_object().cloned());
     assert_eq!(loaded.merged.ecosystems[0].with, json!({"some_key": "baz"}).as_object().cloned());
     assert_eq!(loaded.file.unwrap().platform.with, None);
@@ -285,11 +294,12 @@ ecosystems:
     let dir = TempDir::new().unwrap();
     let env = vars_to_value(
       [
-        ("DOUP_REPO_PLATFORM_USE".to_string(), "doup:github@^1".to_string()),
-        ("DOUP_REPO_ECOSYSTEMS_0_USE".to_string(), "doup:npm@1.2.3".to_string()),
+        ("DOUP_REPO_PLATFORM__USE".to_string(), "doup:github@^1".to_string()),
+        ("DOUP_REPO_ECOSYSTEMS__0__USE".to_string(), "doup:npm@1.2.3".to_string()),
       ],
       DoupRepoConfigFile::ENV_PREFIX,
-    );
+    )
+    .unwrap();
     let loaded = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap();
     assert!(loaded.file.is_none());
     assert_eq!(loaded.merged.platform.plugin, "doup:github@^1");
@@ -298,7 +308,7 @@ ecosystems:
   #[test]
   fn no_file_and_incomplete_env_is_rejected() {
     let dir = TempDir::new().unwrap();
-    let env = vars_to_value([], DoupRepoConfigFile::ENV_PREFIX);
+    let env = vars_to_value([], DoupRepoConfigFile::ENV_PREFIX).unwrap();
     let err = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap_err();
     assert!(matches!(err, crate::ConfigError::Schema(_)), "{err:?}");
   }
