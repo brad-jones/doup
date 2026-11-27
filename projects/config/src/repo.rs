@@ -139,6 +139,12 @@ ecosystems:
   }
 
   #[test]
+  fn schema_requires_at_least_one_ecosystem() {
+    let instance = json!({ "platform": { "use": "doup:github" }, "ecosystems": [] });
+    assert!(Schema::validate(&instance).is_err());
+  }
+
+  #[test]
   fn schema_accepts_wasm_paths() {
     for plugin in ["./a.wasm", "../b/c.wasm", "/abs/d.wasm", "target/e.wasm"] {
       let instance = json!({ "platform": { "use": plugin }, "ecosystems": [{ "use": plugin }] });

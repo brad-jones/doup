@@ -31,8 +31,10 @@ pub(super) fn load_with_env<T: ConfigFile>(start_dir: Option<&Path>, env: Value)
     None => Value::Object(Default::default()),
   };
   env::merge(&mut merged, env);
-  // `source` is `#[serde(skip)]` so the merged instance comes back without one.
-  let merged = T::validated(merged)?;
+  // `source` is `#[serde(skip)]` so the merged instance comes back without one, but relative
+  // paths in it (from the file or the env) still resolve against the file's dir.
+  let base_dir = file.as_ref().and_then(ConfigFile::source).and_then(Path::parent);
+  let merged = T::validated(merged, base_dir)?;
 
   Ok(Loaded { file, merged })
 }
@@ -58,7 +60,10 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
 
   /// Runs after every successful schema validation & deserialization,
   /// for work the schema can't express (eg: reading a referenced file into memory).
-  fn hydrate(&mut self) -> Result<(), ConfigError> {
+  ///
+  /// `base_dir` is the dir of the config file the values came from, if any, for resolving
+  /// relative paths against.
+  fn hydrate(&mut self, _base_dir: Option<&Path>) -> Result<(), ConfigError> {
     Ok(())
   }
 
@@ -111,13 +116,14 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// Parse, validation & hydration failures are wrapped in [`ConfigError::File`] to name the file.
   fn from_file(path: &Path) -> Result<Self, ConfigError> {
     let data = read_to_string(path).map_err(|source| ConfigError::Read { path: path.to_path_buf(), source })?;
-    let config = match path.extension().and_then(|e| e.to_str()) {
-      Some("json") => Self::from_json(&data),
-      Some("yaml" | "yml") => Self::from_yaml(&data),
+    let instance = match path.extension().and_then(|e| e.to_str()) {
+      Some("json") => parse_json(&data),
+      Some("yaml" | "yml") => parse_yaml(&data),
       _ => return Err(ConfigError::UnsupportedExtension { path: path.to_path_buf() }),
     };
-    let mut config =
-      config.map_err(|source| ConfigError::File { path: path.to_path_buf(), source: Box::new(source) })?;
+    let mut config = instance
+      .and_then(|instance| Self::validated(instance, path.parent()))
+      .map_err(|source| ConfigError::File { path: path.to_path_buf(), source: Box::new(source) })?;
     config.set_source(path.to_path_buf());
     Ok(config)
   }
@@ -135,16 +141,18 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
 
   /// Takes a parsed json value, validates it against the the json schema,
   /// returning the final type if valid or the json schema validation errors.
-  fn validated(instance: Value) -> Result<Self, ConfigError> {
+  /// `base_dir` is passed on to [`Self::hydrate`].
+  fn validated(instance: Value, base_dir: Option<&Path>) -> Result<Self, ConfigError> {
     (Self::VALIDATE)(&instance).map_err(|e| ConfigError::Schema(Box::new(e.to_owned())))?;
     let mut config: Self = serde_json::from_value(instance).map_err(ConfigError::Deserialize)?;
-    config.hydrate()?;
+    config.hydrate(base_dir)?;
     Ok(config)
   }
 
   /// Hydrates a new instance of the config file from a JSON string.
+  /// Relative paths in it resolve against the current dir.
   fn from_json(value: &str) -> Result<Self, ConfigError> {
-    Self::validated(serde_json::from_str::<serde_json::Value>(value).map_err(ConfigError::ParseJson)?)
+    Self::validated(parse_json(value)?, None)
   }
 
   /// Serializes the config file into it's JSON representation.
@@ -153,8 +161,9 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   }
 
   /// Hydrates a new instance of the config file from a YAML string.
+  /// Relative paths in it resolve against the current dir.
   fn from_yaml(value: &str) -> Result<Self, ConfigError> {
-    Self::validated(serde_saphyr::from_str::<serde_json::Value>(value).map_err(ConfigError::ParseYaml)?)
+    Self::validated(parse_yaml(value)?, None)
   }
 
   /// Serializes the config file into it's YAML representation.
@@ -166,6 +175,14 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// Env values are always strings and keys are lowercased, see [`env::env_value`].
   /// `env_prefix` is layered over `ENV_PREFIX` as per `load`.
   fn from_env(env_prefix: Option<&str>) -> Result<Self, ConfigError> {
-    Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix))
+    Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix), None)
   }
+}
+
+fn parse_json(value: &str) -> Result<Value, ConfigError> {
+  serde_json::from_str(value).map_err(ConfigError::ParseJson)
+}
+
+fn parse_yaml(value: &str) -> Result<Value, ConfigError> {
+  serde_saphyr::from_str(value).map_err(ConfigError::ParseYaml)
 }

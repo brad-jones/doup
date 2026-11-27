@@ -4,6 +4,7 @@ use jsonschema::ValidationError;
 use serde::{Deserialize, Serialize, Serializer, ser::Error as _};
 use serde_json::Value;
 use std::fs::read_to_string;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 /// Embed the Json Schema, we will use this for runtime validation.
@@ -47,19 +48,45 @@ impl ConfigFile for DoupBotConfigFile {
   }
 
   /// Reads any `key_path` into `key` and checks every SSH key is a usable OpenSSH key.
-  fn hydrate(&mut self) -> Result<(), ConfigError> {
+  fn hydrate(&mut self, base_dir: Option<&Path>) -> Result<(), ConfigError> {
     for repo in &mut self.repos {
       let Some(DoupBotRepoAuth::Ssh { key, key_path }) = &mut repo.auth else {
         continue;
       };
-      if let Some(path) = key_path {
-        let text = read_to_string(&path).map_err(|source| ConfigError::ReadSshKey { path: path.clone(), source })?;
-        *key = Some(text);
-      }
-      validate_openssh_key(key.as_deref().unwrap_or_default(), key_path.as_deref())?;
+      let resolved = match key_path {
+        Some(key_path) => {
+          let (resolved, text) = read_key(key_path, base_dir)?;
+          *key = Some(text);
+          Some(resolved)
+        }
+        None => None,
+      };
+      validate_openssh_key(key.as_deref().unwrap_or_default(), resolved.as_deref())?;
     }
     Ok(())
   }
+}
+
+/// Reads the key file at `key_path`, returning the path it was found at and its contents.
+///
+/// A relative `key_path` is looked for in `base_dir` (the config file's dir) first, then in the
+/// current dir. Only a missing file moves on to the next place; any other error is returned.
+fn read_key(key_path: &Path, base_dir: Option<&Path>) -> Result<(PathBuf, String), ConfigError> {
+  let mut searched = Vec::with_capacity(2);
+  if let Some(base_dir) = base_dir.filter(|_| key_path.is_relative()) {
+    searched.push(base_dir.join(key_path));
+  }
+  searched.push(key_path.to_path_buf());
+  searched.dedup();
+
+  for path in &searched {
+    match read_to_string(path) {
+      Ok(text) => return Ok((path.clone(), text)),
+      Err(err) if err.kind() == ErrorKind::NotFound => continue,
+      Err(source) => return Err(ConfigError::ReadSshKey { path: path.clone(), source }),
+    }
+  }
+  Err(ConfigError::SshKeyNotFound { path: key_path.to_path_buf(), searched })
 }
 
 /// Which git implementation to use.
@@ -242,7 +269,50 @@ y5yYJ2PSeOZakF6g==
   fn missing_ssh_key_file_is_rejected() {
     let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": "/does/not/exist" } }));
     let err = DoupBotConfigFile::from_json(&json).unwrap_err();
-    assert!(matches!(err, ConfigError::ReadSshKey { ref path, .. } if path == Path::new("/does/not/exist")), "{err:?}");
+    let ConfigError::SshKeyNotFound { path, searched } = &err else { panic!("{err:?}") };
+    assert_eq!(path, Path::new("/does/not/exist"));
+    assert_eq!(searched, &[PathBuf::from("/does/not/exist")]);
+  }
+
+  /// Writes `doupbot.json` into `dir`, with one repo using `key_path`.
+  fn write_key_path_config(dir: &TempDir, key_path: &str) {
+    let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": key_path } }));
+    dir.child("doupbot.json").write_str(&json).unwrap();
+  }
+
+  // Tests run in the crate's dir, so a relative `Cargo.toml` exists in the current dir but is not a key.
+
+  #[test]
+  fn relative_key_path_resolves_against_the_config_file_dir_first() {
+    let dir = TempDir::new().unwrap();
+    dir.child("Cargo.toml").write_str(KEY).unwrap();
+    write_key_path_config(&dir, "Cargo.toml");
+
+    let loaded = load_with_env::<DoupBotConfigFile>(Some(dir.path()), json!({})).unwrap();
+    let expected = Some(DoupBotRepoAuth::Ssh { key: Some(KEY.into()), key_path: Some("Cargo.toml".into()) });
+    assert_eq!(loaded.merged.repos[0].auth, expected);
+    assert_eq!(loaded.file.unwrap().repos[0].auth, expected);
+  }
+
+  #[test]
+  fn relative_key_path_falls_back_to_the_current_dir() {
+    let dir = TempDir::new().unwrap();
+    write_key_path_config(&dir, "Cargo.toml");
+
+    let err = DoupBotConfigFile::from_file(dir.child("doupbot.json").path()).unwrap_err();
+    let ConfigError::File { source, .. } = &err else { panic!("{err:?}") };
+    assert!(matches!(**source, ConfigError::InvalidSshKey { path: Some(ref p), .. } if p == Path::new("Cargo.toml")));
+  }
+
+  #[test]
+  fn relative_key_path_found_in_neither_dir_lists_both() {
+    let dir = TempDir::new().unwrap();
+    write_key_path_config(&dir, "missing_key");
+
+    let err = DoupBotConfigFile::from_file(dir.child("doupbot.json").path()).unwrap_err();
+    let ConfigError::File { source, .. } = &err else { panic!("{err:?}") };
+    let ConfigError::SshKeyNotFound { searched, .. } = &**source else { panic!("{err:?}") };
+    assert_eq!(searched, &[dir.path().join("missing_key"), PathBuf::from("missing_key")]);
   }
 
   #[test]

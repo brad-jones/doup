@@ -48,6 +48,10 @@ pub enum ConfigError {
   #[error("failed to read key '{}'", path.display())]
   ReadSshKey { path: PathBuf, source: std::io::Error },
 
+  /// `path` is the `key_path` as written; `searched` is every place it was looked for, in order.
+  #[error("key file '{}' not found, looked for {}", path.display(), quoted_paths(searched))]
+  SshKeyNotFound { path: PathBuf, searched: Vec<PathBuf> },
+
   #[error("{} is not a valid OpenSSH private key", key_label(path))]
   InvalidSshKey { path: Option<PathBuf>, source: ssh_key::Error },
 
@@ -60,4 +64,8 @@ fn key_label(path: &Option<PathBuf>) -> String {
     Some(path) => format!("key file '{}'", path.display()),
     None => "key".to_string(),
   }
+}
+
+fn quoted_paths(paths: &[PathBuf]) -> String {
+  paths.iter().map(|path| format!("'{}'", path.display())).collect::<Vec<_>>().join(" and ")
 }

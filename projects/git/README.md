@@ -1,4 +1,4 @@
-# git
+# doup-git
 
 The Git operations doup needs, behind one interface. The rest of the workspace depends on this crate and never on Git
 itself.
