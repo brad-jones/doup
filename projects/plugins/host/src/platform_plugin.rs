@@ -99,6 +99,16 @@ impl PlatformPlugin {
     result.map_err(anyhow::Error::msg)
   }
 
+  /// Closes the pull request `number` without merging it, first posting `comment` to it when given.
+  /// The guest is able to make HTTP calls but no other I/O is granted.
+  pub async fn close_pr(&self, number: i64, comment: Option<&str>) -> Result<PullRequest> {
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut session = self.session_pool.create_session(policy).await?;
+    let comment = comment.map(str::to_string);
+    let result = session.call_async(async |b, a| b.call_close_pr(a, number, comment).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
+
   pub async fn list_open_prs(&self, head_branch_prefix: &str) -> Result<Vec<PullRequest>> {
     let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let mut session = self.session_pool.create_session(policy).await?;

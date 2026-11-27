@@ -222,15 +222,21 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
         action_failed = true;
       }
     }
-    if action_failed {
-      failed += 1;
-    }
 
     // Then close any old prs
     for action in &actions {
       if let DoupAction::ClosePR(prnumber, _reason) = action {
-        eprintln!("TODO: Close PR #{}", prnumber)
+        match platform.close_pr(*prnumber.as_ref(), None).await {
+          Ok(pr) => eprintln!("Closed PR {}", pr.url),
+          Err(err) => {
+            eprintln!("Failed to apply action `{}`: {err:#}", action.summary());
+            action_failed = true;
+          }
+        }
       }
+    }
+    if action_failed {
+      failed += 1;
     }
 
     // Finally delete any branches

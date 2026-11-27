@@ -1,4 +1,4 @@
-//! Builds the REST requests for creating & updating pull requests and parses their responses.
+//! Builds the REST requests for creating, updating & closing pull requests and parses their responses.
 //!
 //! Like [`crate::graphql`], this module only uses plain `std` / `serde` types (plus the WIT records)
 //! so that it can be unit tested natively, without a wasm runtime.
@@ -34,6 +34,22 @@ pub fn update_pr_request(content: &PullRequestContent) -> Result<Value, String> 
     return Err("title must not be empty".to_string());
   }
   Ok(json!({ "title": content.title, "body": pr_body(content)?, "base": content.base_branch }))
+}
+
+/// The JSON body that closes a pull request.
+/// See <https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request>.
+pub fn close_pr_request() -> Value {
+  json!({ "state": "closed" })
+}
+
+/// The JSON body that comments on a pull request with `body`, truncated to fit GitHub's limit.
+/// Returns `None` when `body` is blank, as there is nothing worth posting.
+/// See <https://docs.github.com/en/rest/issues/comments#create-an-issue-comment>.
+pub fn comment_request(body: &str) -> Option<Value> {
+  if body.trim().is_empty() {
+    return None;
+  }
+  Some(json!({ "body": truncate(body.to_string()) }))
 }
 
 /// The pull request body: the version marker followed by `content.body`, truncated to fit GitHub's limit.
@@ -235,6 +251,22 @@ mod tests {
   #[test]
   fn a_garbage_response_is_an_error() {
     assert!(parse_pr(json!({ "number": 1 })).is_err());
+  }
+
+  #[test]
+  fn blank_comments_are_not_posted() {
+    for body in ["", " ", "\n\t"] {
+      assert_eq!(comment_request(body), None, "{body:?}");
+    }
+    assert_eq!(comment_request("Superseded."), Some(json!({ "body": "Superseded." })));
+  }
+
+  #[test]
+  fn a_long_comment_is_truncated() {
+    let request = comment_request(&"é".repeat(MAX_BODY_CHARS + 1)).unwrap();
+    let body = request["body"].as_str().unwrap();
+    assert_eq!(body.chars().count(), MAX_BODY_CHARS);
+    assert!(body.ends_with(TRUNCATED_NOTICE));
   }
 
   #[test]

@@ -40,6 +40,20 @@ impl Guest for DoupPlatformPluginGithub {
     rest::parse_pr(response)
   }
 
+  async fn close_pr(number: i64, comment: Option<String>) -> Result<PullRequest, String> {
+    if number <= 0 {
+      return Err(format!("invalid pull request number {number}"));
+    }
+    let (owner, name) = config::get()?.owner_and_name();
+    // Pull requests are issues as far as comments go, there is no pulls endpoint for a plain comment.
+    if let Some(request) = comment.as_deref().and_then(rest::comment_request) {
+      http::rest(http::Method::Post, &format!("/repos/{owner}/{name}/issues/{number}/comments"), &request).await?;
+    }
+    let request = rest::close_pr_request();
+    let response = http::rest(http::Method::Patch, &format!("/repos/{owner}/{name}/pulls/{number}"), &request).await?;
+    rest::parse_pr(response)
+  }
+
   async fn list_open_prs(head_branch_prefix: String) -> Result<Vec<PullRequest>, String> {
     let (owner, name) = config::get()?.owner_and_name();
     let mut pull_requests = Vec::new();

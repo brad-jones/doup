@@ -112,6 +112,13 @@ world platform {
   /// The head branch of a pull request can not be changed, push to it instead.
   export update-pr: async func(number: s64, content: pull-request-content) -> result<pull-request, string>;
 
+  /// Closes the pull request `number` without merging it, returning it as it is once closed.
+  /// Closing a pull request that is already closed is not an error.
+  ///
+  /// When `comment` is given (& is not blank) it is first posted to the pull request, as markdown,
+  /// to explain why it is being closed. If posting it fails the pull request is left open.
+  export close-pr: async func(number: s64, comment: option<string>) -> result<pull-request, string>;
+
   /// List all open pull requests where their head branch name starts with `head-branch-prefix`.
   export list-open-prs: async func(head-branch-prefix: string) -> result<list<pull-request>, string>;
 
