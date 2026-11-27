@@ -12,7 +12,7 @@ use doup_plugin_host::{
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
 
-use crate::reconciliation::{DoupAction, PullRequest, PullRequestState, ToVersion, reconcile};
+use crate::reconciliation::{DoupAction, HeadStatus, PullRequest, PullRequestState, ToVersion, reconcile};
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -115,6 +115,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
 
     eprint!("Listing existing branches... ");
     let mut existing_branches: Vec<String> = Vec::new();
+    let mut head_statuses: HashMap<String, HeadStatus> = HashMap::new();
     for branch in repo.list_remote_branches().await? {
       // Ignore any branch that doup does not manage
       if !branch.starts_with(DOUP_BRANCH_PREFIX) {
@@ -123,9 +124,20 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
 
       // A branch with no authors has no commits, so it is safe to delete.
       // Otherwise, any author other than doup means the branch must be left
-      // alone so it is never scheduled for deletion.
+      // alone so it is never rebuilt nor scheduled for deletion.
       let authors = repo.branch_authors(&branch).await?;
       let only_doup = authors.iter().all(|a| a == repo.identity().email());
+
+      // A doup only branch behind the default branch has its PR rebuilt on top of it.
+      let head_status = if !only_doup {
+        HeadStatus::ForeignCommits
+      } else if repo.branch_is_behind(&branch).await? {
+        HeadStatus::Behind
+      } else {
+        HeadStatus::UpToDate
+      };
+      head_statuses.insert(branch.clone(), head_status);
+
       if only_doup {
         existing_branches.push(branch);
       }
@@ -141,6 +153,8 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     existing_prs.extend(open_prs.into_iter().map(|pr| PullRequest {
       number: pr.number,
       version: pr.version,
+      // A branch we know nothing about is assumed up to date, so it is never needlessly rebuilt.
+      head_status: head_statuses.get(&pr.head_branch).copied().unwrap_or(HeadStatus::UpToDate),
       head_branch: pr.head_branch,
       state: PullRequestState::Open,
     }));
@@ -161,6 +175,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
       version: pr.version,
       head_branch: pr.head_branch,
       state: PullRequestState::Closed,
+      head_status: HeadStatus::UpToDate,
     }));
 
     // Now work out what actions we need to take.

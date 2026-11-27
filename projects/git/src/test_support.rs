@@ -337,6 +337,48 @@ macro_rules! backend_contract_tests {
       }
 
       #[tokio::test]
+      async fn a_branch_on_the_default_branchs_tip_is_not_behind() {
+        let fixture = Fixture::new();
+        fixture.add_branch("same");
+        fixture.commit("feature", "amy@example.com", "more");
+        let repo = shallow_clone(&fixture).await;
+        for branch in ["main", "same", "feature"] {
+          assert!(!repo.branch_is_behind(branch).await.unwrap(), "{branch}");
+        }
+      }
+
+      #[tokio::test]
+      async fn a_branch_is_behind_once_the_default_branch_moves_on() {
+        let fixture = Fixture::new();
+        fixture.add_branch("merged");
+        fixture.commit("main", "late@example.com", "late");
+        let repo = shallow_clone(&fixture).await;
+        assert!(repo.branch_is_behind("feature").await.unwrap());
+        // Behind, with no commits of its own.
+        assert!(repo.branch_is_behind("merged").await.unwrap());
+      }
+
+      #[tokio::test]
+      async fn a_branch_with_the_default_branch_merged_in_is_not_behind() {
+        let fixture = Fixture::new();
+        fixture.commit("main", "late@example.com", "late");
+        fixture.merge_main_into("feature", "merger@example.com");
+        fixture.commit("feature", "amy@example.com", "after");
+        let repo = shallow_clone(&fixture).await;
+        assert!(!repo.branch_is_behind("feature").await.unwrap());
+        fixture.commit("main", "later@example.com", "later");
+        assert!(repo.branch_is_behind("feature").await.unwrap());
+      }
+
+      #[tokio::test]
+      async fn an_unknown_branch_can_not_be_behind() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let err = repo.branch_is_behind("nope").await.unwrap_err();
+        assert!(matches!(&err, GitError::BranchNotFound { branch } if branch == "nope"), "{err:?}");
+      }
+
+      #[tokio::test]
       async fn reports_unknown_and_blank_branches() {
         let fixture = Fixture::new();
         let repo = shallow_clone(&fixture).await;

@@ -148,7 +148,7 @@ impl ClonedRepo {
   ///
   /// As for [`Self::branch_fetch`], or a [`GitError`] when the fetched commits cannot be read.
   pub async fn branch_commits(&self, branch: &str) -> Result<Vec<GitCommit>, GitError> {
-    if !self.fetch_unique(branch).await? {
+    if self.fetch_unique(branch).await?.is_none() {
       return Ok(Vec::new());
     }
     let git = &self.git;
@@ -169,9 +169,37 @@ impl ClonedRepo {
     Ok(authors)
   }
 
-  /// Fetches `branch`'s own commits, returning `false` when it has none to fetch because its tip
-  /// is the default branch's tip.
-  async fn fetch_unique(&self, branch: &str) -> Result<bool, GitError> {
+  /// Whether `origin`'s `branch` is behind its default branch, ie: does not contain the default
+  /// branch's tip, so a pull request from it is not tested against the latest default branch.
+  ///
+  /// A branch is *not* behind when its tip is the default branch's tip, or when one of its own
+  /// commits (see [`Self::branch_commits`]) has the default branch's tip as a parent. That is
+  /// either a branch built directly on top of the default branch, or one the default branch was
+  /// later merged into. Every other branch is behind, including one with no commits of its own.
+  ///
+  /// # Errors
+  ///
+  /// - [`GitError::EmptyBranch`] when `branch` is blank.
+  /// - [`GitError::BranchNotFound`] when `origin` has no such branch.
+  /// - Another [`GitError`] when the remote cannot be reached or the fetched commits cannot be
+  ///   read.
+  pub async fn branch_is_behind(&self, branch: &str) -> Result<bool, GitError> {
+    let default_tip = match self.fetch_unique(branch).await {
+      Ok(Some(default_tip)) => default_tip,
+      Ok(None) => return Ok(false),
+      Err(GitError::NoUniqueCommits { .. }) => return Ok(true),
+      Err(err) => return Err(err),
+    };
+    // The fetch stops where `branch` leaves the default branch, but raw commits keep their parent
+    // ids, so a commit built on (or merging in) the current default tip still names it.
+    let git = &self.git;
+    let commits = crate::delegate_git!(git.branch_commits(self, branch).await)?;
+    Ok(!commits.iter().any(|commit| commit.parents().contains(&default_tip)))
+  }
+
+  /// Fetches `branch`'s own commits, returning the default branch's tip they were fetched
+  /// against, or `None` when there is nothing to fetch because `branch`'s tip is that tip.
+  async fn fetch_unique(&self, branch: &str) -> Result<Option<String>, GitError> {
     if branch.trim().is_empty() {
       return Err(GitError::EmptyBranch);
     }
@@ -179,10 +207,10 @@ impl ClonedRepo {
     let tips = crate::delegate_git!(git.remote_tips(self, Some(branch)).await)?;
     let tip = tips.branch_tip.ok_or_else(|| GitError::BranchNotFound { branch: branch.to_owned() })?;
     if tip == tips.default_tip {
-      return Ok(false);
+      return Ok(None);
     }
     crate::delegate_git!(git.fetch_branch(self, branch, &tips.default_branch).await)?;
-    Ok(true)
+    Ok(Some(tips.default_tip))
   }
 }
 

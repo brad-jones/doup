@@ -23,6 +23,7 @@ let branches = repo.list_remote_branches().await?; // like `git ls-remote --head
 let default = repo.default_branch().await?; // the branch origin's HEAD points at, e.g. "main"
 let commits = repo.branch_commits("doup/foo").await?; // like `git log origin/HEAD..origin/doup/foo`
 let authors = repo.branch_authors("doup/foo").await?; // their `%ae`, sorted and deduplicated
+let behind = repo.branch_is_behind("doup/foo").await?; // true when it lacks the default branch's tip
 
 let worktree = repo.worktree_add("doup/foo").await?; // like `git worktree add -B doup/foo <tmp> HEAD`
 std::fs::write(worktree.path().join("Cargo.lock"), lockfile)?;
@@ -38,15 +39,16 @@ Every operation is async (built on `tokio`) and fails with a typed `GitError`.
 
 ### A branch's own commits
 
-`branch_fetch`, `branch_commits` and `branch_authors` deal with the commits a branch has on top of `origin`'s default
-branch, and work whatever state the clone is in (shallow, single-branch, branch created or force-pushed since cloning):
+`branch_fetch`, `branch_commits`, `branch_authors` and `branch_is_behind` deal with the commits a branch has on top of
+`origin`'s default branch, and work whatever state the clone is in (shallow, single-branch, branch created or
+force-pushed since cloning):
 
 - `branch_fetch` fetches only those commits, without file contents: `git fetch --filter=blob:none
   --shallow-exclude=refs/heads/<default> origin +refs/heads/<branch>:refs/remotes/origin/<branch>`. This makes the clone
   a partial clone (`remote.origin.promisor`).
-- `branch_commits` lists them newest first as `GitCommit`s (`id`, author name and email, `message`, `is_merge`), read
-  from the raw commit objects. `git log` would hide the parents of a commit on a shallow boundary, getting `is_merge`
-  wrong.
+- `branch_commits` lists them newest first as `GitCommit`s (`id`, author name and email, `message`, `parents`,
+  `is_merge`), read from the raw commit objects. `git log` would hide the parents of a commit on a shallow boundary,
+  getting `parents` and `is_merge` wrong.
 - A branch whose tip is the default branch's tip (including the default branch itself) has no commits: nothing is
   fetched and `branch_commits` is empty.
 - A branch strictly behind the default branch (e.g. merged) fails with `GitError::NoUniqueCommits`: the server refuses a
@@ -55,6 +57,9 @@ branch, and work whatever state the clone is in (shallow, single-branch, branch 
 - **Merges stop the walk.** Shallow boundaries are per commit, so a merge of the default branch into the branch is a
   boundary and the commits behind it are not fetched or listed. The merge itself is listed with `is_merge()` set, so a
   caller can treat any merge as "the list may be incomplete".
+- `branch_is_behind` is `false` when the branch's tip is the default branch's tip, or when one of its own commits has
+  the default branch's tip as a parent (built on top of it, or merged it in). Otherwise it is `true`, including for a
+  branch strictly behind the default branch, rather than failing with `GitError::NoUniqueCommits`.
 
 ### Worktrees
 

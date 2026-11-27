@@ -10,7 +10,7 @@ pub struct GitCommit {
   author_name: String,
   author_email: String,
   message: String,
-  is_merge: bool,
+  parents: Vec<String>,
 }
 
 impl GitCommit {
@@ -23,12 +23,12 @@ impl GitCommit {
       None => (raw, &[][..]),
     };
 
-    let mut parents = 0;
+    let mut parents = Vec::new();
     let mut author = None;
     // Continuation lines of multi-line headers (e.g. `gpgsig`) start with a space, so never match.
     for line in headers.split(|&byte| byte == b'\n') {
-      if line.starts_with(b"parent ") {
-        parents += 1;
+      if let Some(parent) = line.strip_prefix(b"parent ") {
+        parents.push(String::from_utf8_lossy(parent).trim().to_owned());
       } else if let Some(ident) = line.strip_prefix(b"author ") {
         author.get_or_insert(ident);
       }
@@ -37,13 +37,7 @@ impl GitCommit {
     let Some((author_name, author_email)) = author.and_then(split_ident) else {
       return Err(GitError::InvalidCommit { id });
     };
-    Ok(Self {
-      id,
-      author_name,
-      author_email,
-      message: String::from_utf8_lossy(message).into_owned(),
-      is_merge: parents > 1,
-    })
+    Ok(Self { id, author_name, author_email, message: String::from_utf8_lossy(message).into_owned(), parents })
   }
 
   /// The commit's full hex object id.
@@ -66,9 +60,16 @@ impl GitCommit {
     &self.message
   }
 
+  /// The full hex ids of the commit's parents, in order, like `git show -s --format=%P`.
+  ///
+  /// Read from the commit object itself, so they are listed even when they were never fetched.
+  pub fn parents(&self) -> &[String] {
+    &self.parents
+  }
+
   /// Whether the commit has more than one parent.
   pub fn is_merge(&self) -> bool {
-    self.is_merge
+    self.parents.len() > 1
   }
 }
 
@@ -100,6 +101,7 @@ mod tests {
     assert_eq!(commit.author_name(), "Jane Doe");
     assert_eq!(commit.author_email(), "jane@example.com");
     assert_eq!(commit.message(), "subject\n\nbody\n");
+    assert_eq!(commit.parents(), ["p"]);
     assert!(!commit.is_merge());
   }
 
@@ -110,6 +112,7 @@ mod tests {
     )
     .unwrap();
     assert!(commit.is_merge());
+    assert_eq!(commit.parents(), ["a", "b"]);
     assert_eq!(commit.author_email(), "a@x");
   }
 
@@ -117,6 +120,7 @@ mod tests {
   fn a_root_commit_without_a_message_is_not_a_merge() {
     let commit = parse("tree t\nauthor <> 1 +0000\ncommitter C <c@x> 1 +0000").unwrap();
     assert!(!commit.is_merge());
+    assert!(commit.parents().is_empty());
     assert_eq!((commit.author_name(), commit.author_email(), commit.message()), ("", "", ""));
   }
 

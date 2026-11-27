@@ -87,12 +87,32 @@ pub struct PullRequest {
   ///
   /// When fetching closed PRs only include PRs whose `head_branch` matches one of our `candidates`.
   pub state: PullRequestState,
+
+  /// Who has committed to the PR's head branch & how it relates to the default branch.
+  /// Only consulted for [`PullRequestState::Open`] PRs, use [`HeadStatus::UpToDate`] for closed PRs.
+  pub head_status: HeadStatus,
 }
 
 #[derive(PartialEq)]
 pub enum PullRequestState {
   Open,
   Closed,
+}
+
+/// The state of a pull request's head branch, which decides whether doup may rebuild it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeadStatus {
+  /// Only doup has committed to the head branch & it contains the tip of the default branch,
+  /// or its status is unknown.
+  UpToDate,
+
+  /// Only doup has committed to the head branch & it is behind the default branch,
+  /// so it should be rebuilt on top of the default branch.
+  Behind,
+
+  /// Someone other than doup has committed to the head branch, so it is never rebuilt
+  /// (whether behind the default branch or not) as that would throw their work away.
+  ForeignCommits,
 }
 
 /// This function is pure & should remain pure.
@@ -105,6 +125,8 @@ pub enum PullRequestState {
 ///   All Open PRs with the prefix `doup/` should be included.
 ///   All Closed PRs that match one of the candidates branch names should be included.
 ///   Use [`UpdateBranch`] to build a branch name for a given dependency.
+///   An open PR at the version we want is still updated when its [`HeadStatus`] is [`HeadStatus::Behind`],
+///   while one with [`HeadStatus::ForeignCommits`] is never updated.
 ///
 /// - `existing_branches`: A list of existing branch names.
 ///   **WARNING:** Any branch given in this list that starts with `doup/` may be scheduled for deletion.
@@ -221,7 +243,19 @@ fn reconcile_candidate(
     let claimed = (pr.state == PullRequestState::Open).then_some(pr.number);
     match pr.state {
       PullRequestState::Open => {
-        if pr.version != to_version.version {
+        if pr.head_status == HeadStatus::ForeignCommits {
+          actions.push(DoupAction::SkipUpdate(
+            dependency.clone(),
+            to_version,
+            Reason::new(
+              "
+              There is an existing open pr for our dependency but someone other
+              than doup has committed to it, so we leave it alone rather than
+              throw their work away.
+              ",
+            ),
+          ));
+        } else if pr.version != to_version.version {
           actions.push(DoupAction::UpdatePR(
             PRNumber::new(pr.number),
             ecosystem_ref.clone(),
@@ -235,6 +269,22 @@ fn reconcile_candidate(
               ",
             ),
           ));
+        } else if pr.head_status == HeadStatus::Behind {
+          actions.push(DoupAction::UpdatePR(
+            PRNumber::new(pr.number),
+            ecosystem_ref.clone(),
+            dependency.clone(),
+            to_version,
+            notes.clone(),
+            Reason::new(
+              "
+              There is an existing open pr for our dependency that is at the
+              version we want to update to but it is behind the default branch
+              so we will update it in order to keep it on top of default &
+              re-trigger it's CI checks.
+              ",
+            ),
+          ));
         } else {
           actions.push(DoupAction::SkipUpdate(
             dependency.clone(),
@@ -242,7 +292,8 @@ fn reconcile_candidate(
             Reason::new(
               "
               There is an existing open pr for our dependency that is at the
-              same version as we want to update to so there is nothing to do.
+              same version as we want to update to & is up to date with the
+              default branch so there is nothing to do.
               ",
             ),
           ));
@@ -293,5 +344,73 @@ fn reconcile_candidate(
       ),
     ));
     None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn plugin() -> DoupRepoPlugin {
+    DoupRepoPlugin { plugin: "./cargo.wasm".to_string(), with: None }
+  }
+
+  fn dependency() -> Dependency {
+    Dependency {
+      name: "serde".to_string(),
+      registry: None,
+      occurrences: Vec::new(),
+      current_version: "1.0.0".to_string(),
+    }
+  }
+
+  /// Reconciles a single `serde` 1.0.0 -> 1.1.0 candidate against one open PR for it.
+  fn reconcile_open_pr(version: &str, head_status: HeadStatus) -> Vec<DoupAction> {
+    let (plugin, dependency) = (plugin(), dependency());
+    let versions = Versions { next: "1.1.0".to_string(), latest: None };
+    let pr = PullRequest {
+      number: 7,
+      version: version.to_string(),
+      head_branch: UpdateBranch::new(&plugin, &dependency, false).to_string(),
+      state: PullRequestState::Open,
+      head_status,
+    };
+    reconcile(vec![(&plugin, &dependency, &versions, Vec::new())], vec![pr], Vec::new()).unwrap()
+  }
+
+  fn summaries(actions: &[DoupAction]) -> Vec<String> {
+    actions.iter().map(DoupAction::summary).collect()
+  }
+
+  #[test]
+  fn an_up_to_date_pr_at_the_same_version_is_skipped() {
+    let actions = reconcile_open_pr("1.1.0", HeadStatus::UpToDate);
+    assert!(matches!(actions[..], [DoupAction::SkipUpdate(..)]), "{:?}", summaries(&actions));
+  }
+
+  #[test]
+  fn a_behind_pr_at_the_same_version_is_updated() {
+    let actions = reconcile_open_pr("1.1.0", HeadStatus::Behind);
+    assert!(
+      matches!(actions[..], [DoupAction::UpdatePR(ref pr, ..)] if *pr.as_ref() == 7),
+      "{:?}",
+      summaries(&actions)
+    );
+  }
+
+  #[test]
+  fn a_pr_with_foreign_commits_is_skipped_and_kept_open_at_any_version() {
+    for version in ["1.1.0", "1.0.5"] {
+      let actions = reconcile_open_pr(version, HeadStatus::ForeignCommits);
+      assert!(matches!(actions[..], [DoupAction::SkipUpdate(..)]), "{version}: {:?}", summaries(&actions));
+    }
+  }
+
+  #[test]
+  fn a_doup_only_pr_at_another_version_is_updated() {
+    for head_status in [HeadStatus::UpToDate, HeadStatus::Behind] {
+      let actions = reconcile_open_pr("1.0.5", head_status);
+      assert!(matches!(actions[..], [DoupAction::UpdatePR(..)]), "{head_status:?}: {:?}", summaries(&actions));
+    }
   }
 }
