@@ -47,7 +47,7 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   const DEFAULT_NAMES: &'static [&'static str];
 
   /// Env vars named `<ENV_PREFIX>_<PATH>` are read by `from_env` and `load`, with `__` between
-  /// `<PATH>`'s segments, eg: `DOUP_FOO_SOME_KEY__0__BAR=x`. See [`env`](super::env).
+  /// `<PATH>`'s segments, eg: `DOUP_FOO_SOME_KEY__0__BAR=x`. See [`env`](mod@env).
   /// Must be non-empty and unique among configs (`<ENV_PREFIX>_` must not prefix another's),
   /// except for scopes passed to `load`/`from_env`, which deliberately extend it (eg: `DOUP_REPO_0`).
   const ENV_PREFIX: &'static str;

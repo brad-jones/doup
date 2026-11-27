@@ -112,6 +112,7 @@ tasks:
       - cog check --ignore-merge-commits {{.COG_RANGE}}
       - dprint check
       - cargo clippy
+      - cargo doc --no-deps
 
   test:
     desc: Test our code base to ensure it works as we intend.

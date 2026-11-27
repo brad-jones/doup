@@ -64,7 +64,7 @@ fn to_label(to: &ToVersion) -> String {
 
 pub struct PullRequest {
   /// The pull request number.
-  /// eg: https://github.com/<owner>/<repo>/pull/<number>
+  /// eg: `https://github.com/<owner>/<repo>/pull/<number>`
   pub number: i64,
 
   /// The version number that this pull request is updating to.

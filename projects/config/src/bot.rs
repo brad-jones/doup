@@ -15,7 +15,7 @@ struct DoupBotConfigFileSchema;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DoupBotConfigFile {
   /// Ensure `$schema` round trips if the user has added it to their config.
-  /// see: https://json-schema.org/understanding-json-schema/reference/schema
+  /// see: <https://json-schema.org/understanding-json-schema/reference/schema>
   #[serde(rename = "$schema", default, skip_serializing_if = "Option::is_none")]
   schema_uri: Option<String>,
 

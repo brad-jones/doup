@@ -47,7 +47,7 @@ impl CloneOptions {
     self
   }
 
-  /// Attribute commits made in the clone's worktrees to `identity` instead of doup[bot].
+  /// Attribute commits made in the clone's worktrees to `identity` instead of doup\[bot\].
   #[must_use]
   pub fn with_identity(mut self, identity: Identity) -> Self {
     self.identity = identity;
