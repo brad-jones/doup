@@ -1,5 +1,5 @@
+use super::ConfigError;
 use super::file::ConfigFile;
-use anyhow::{Context, Result};
 use jsonschema::ValidationError;
 use serde::{Deserialize, Serialize, Serializer, ser::Error as _};
 use serde_json::Value;
@@ -47,20 +47,16 @@ impl ConfigFile for DoupBotConfigFile {
   }
 
   /// Reads any `key_path` into `key` and checks every SSH key is a usable OpenSSH key.
-  fn hydrate(&mut self) -> Result<()> {
+  fn hydrate(&mut self) -> Result<(), ConfigError> {
     for repo in &mut self.repos {
       let Some(DoupBotRepoAuth::Ssh { key, key_path }) = &mut repo.auth else {
         continue;
       };
       if let Some(path) = key_path {
-        let text = read_to_string(&path).with_context(|| format!("failed to read key {}", path.display()))?;
+        let text = read_to_string(&path).map_err(|source| ConfigError::ReadSshKey { path: path.clone(), source })?;
         *key = Some(text);
       }
-      let text = key.as_deref().unwrap_or_default();
-      validate_openssh_key(text).with_context(|| match key_path {
-        Some(path) => format!("invalid key file {}", path.display()),
-        None => "invalid key".to_string(),
-      })?;
+      validate_openssh_key(key.as_deref().unwrap_or_default(), key_path.as_deref())?;
     }
     Ok(())
   }
@@ -143,9 +139,14 @@ impl Serialize for DoupBotRepoAuth {
   }
 }
 
-fn validate_openssh_key(text: &str) -> Result<()> {
-  let key = ssh_key::PrivateKey::from_openssh(text)?;
-  anyhow::ensure!(!key.is_encrypted(), "key must not be protected by a passphrase");
+/// `path` is where the key was read from, if anywhere, and is only used to describe any error.
+fn validate_openssh_key(text: &str, path: Option<&Path>) -> Result<(), ConfigError> {
+  let path = || path.map(Path::to_path_buf);
+  let key =
+    ssh_key::PrivateKey::from_openssh(text).map_err(|source| ConfigError::InvalidSshKey { path: path(), source })?;
+  if key.is_encrypted() {
+    return Err(ConfigError::EncryptedSshKey { path: path() });
+  }
   Ok(())
 }
 
@@ -233,19 +234,22 @@ y5yYJ2PSeOZakF6g==
     file.write_str("not a key").unwrap();
 
     let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": file.path() } }));
-    assert!(DoupBotConfigFile::from_json(&json).is_err());
+    let err = DoupBotConfigFile::from_json(&json).unwrap_err();
+    assert!(matches!(err, ConfigError::InvalidSshKey { path: Some(ref p), .. } if p == file.path()), "{err:?}");
   }
 
   #[test]
   fn missing_ssh_key_file_is_rejected() {
     let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key_path": "/does/not/exist" } }));
-    assert!(DoupBotConfigFile::from_json(&json).is_err());
+    let err = DoupBotConfigFile::from_json(&json).unwrap_err();
+    assert!(matches!(err, ConfigError::ReadSshKey { ref path, .. } if path == Path::new("/does/not/exist")), "{err:?}");
   }
 
   #[test]
   fn encrypted_ssh_key_is_rejected() {
     let json = config_json(json!({ "origin": "git@github.com:a/b.git", "auth": { "key": ENCRYPTED_KEY } }));
-    assert!(DoupBotConfigFile::from_json(&json).is_err());
+    let err = DoupBotConfigFile::from_json(&json).unwrap_err();
+    assert!(matches!(err, ConfigError::EncryptedSshKey { path: None }), "{err:?}");
   }
 
   #[test]
@@ -384,13 +388,14 @@ repos:
     dir.child("doupbot.json").write_str(&config_json(json!({ "origin": "https://github.com/a/b.git" }))).unwrap();
     let env =
       vars_to_value([("DOUP_BOT_REPOS_0_AUTH_KEY".to_string(), "/k".to_string())], DoupBotConfigFile::ENV_PREFIX);
-    assert!(load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).is_err());
+    let err = load_with_env::<DoupBotConfigFile>(Some(dir.path()), env).unwrap_err();
+    assert!(matches!(err, ConfigError::Schema(_)), "{err:?}");
   }
 
   #[test]
   fn env_overrides_are_not_saved_to_the_file() {
     let (dir, loaded) = load_with(&[("DOUP_BOT_REPOS_0_ORIGIN", "https://github.com/c/d.git")]);
-    assert!(loaded.merged.save().is_err());
+    assert!(matches!(loaded.merged.save(), Err(ConfigError::NoSource)));
 
     loaded.file.unwrap().save().unwrap();
     let saved = std::fs::read_to_string(dir.child("doupbot.json").path()).unwrap();

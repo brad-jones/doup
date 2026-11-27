@@ -1,5 +1,4 @@
-use super::env;
-use anyhow::Result;
+use super::{ConfigError, env};
 use jsonschema::ValidationError;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -21,14 +20,14 @@ pub struct Loaded<T> {
 /// [`ConfigFile::load`] with the env supplied by the caller rather than read from the process.
 /// The env is merged over the file before validating, so it may be a partial override.
 /// A free function (not a trait method) so it stays out of the trait's public API; tests use it.
-pub(super) fn load_with_env<T: ConfigFile>(start_dir: Option<&Path>, env: Value) -> Result<Loaded<T>> {
+pub(super) fn load_with_env<T: ConfigFile>(start_dir: Option<&Path>, env: Value) -> Result<Loaded<T>, ConfigError> {
   let file = match T::locate_file(start_dir)? {
     Some(path) => Some(T::from_file(&path)?),
     None => None,
   };
 
   let mut merged = match &file {
-    Some(file) => serde_json::to_value(file)?,
+    Some(file) => serde_json::to_value(file).map_err(ConfigError::SerializeJson)?,
     None => Value::Object(Default::default()),
   };
   env::merge(&mut merged, env);
@@ -59,16 +58,16 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
 
   /// Runs after every successful schema validation & deserialization,
   /// for work the schema can't express (eg: reading a referenced file into memory).
-  fn hydrate(&mut self) -> Result<()> {
+  fn hydrate(&mut self) -> Result<(), ConfigError> {
     Ok(())
   }
 
   /// Recurses up from the given start_dir (defaulting to the current working directory)
   /// looking for the standard doup config file names, returning the first match otherwise None.
-  fn locate_file(start_dir: Option<&Path>) -> Result<Option<PathBuf>> {
+  fn locate_file(start_dir: Option<&Path>) -> Result<Option<PathBuf>, ConfigError> {
     let dir = match start_dir {
       Some(d) => d.to_path_buf(),
-      None => current_dir()?,
+      None => current_dir().map_err(ConfigError::CurrentDir)?,
     };
 
     Ok(
@@ -93,76 +92,80 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   ///
   /// Most of the time if you are just reading config, you will want the `merged` instance.
   /// If you want to persist any changes to the config, use the returned `file` instance.
-  fn load(start_dir: Option<&Path>, env_prefix: Option<&str>) -> Result<Loaded<Self>> {
+  fn load(start_dir: Option<&Path>, env_prefix: Option<&str>) -> Result<Loaded<Self>, ConfigError> {
     load_with_env(start_dir, env::env_value(Self::ENV_PREFIX, env_prefix))
   }
 
   /// Saves the config back to the file it was loaded from.
-  fn save(&self) -> Result<()> {
+  ///
+  /// Fails with [`ConfigError::NoSource`] if the config was not loaded from a file.
+  fn save(&self) -> Result<(), ConfigError> {
     let Some(path) = self.source() else {
-      anyhow::bail!("config has no source path; use to_file instead");
+      return Err(ConfigError::NoSource);
     };
     self.to_file(path)
   }
 
   /// Hydrates a new instance of the config file from a given file path, either JSON or YAML.
-  fn from_file(path: &Path) -> Result<Self> {
-    let data = read_to_string(path)?;
-    let mut config = match path.extension().and_then(|e| e.to_str()) {
-      Some("json") => Self::from_json(&data)?,
-      Some("yaml" | "yml") => Self::from_yaml(&data)?,
-      _ => anyhow::bail!("unsupported config file extension: {}", path.display()),
+  ///
+  /// Parse, validation & hydration failures are wrapped in [`ConfigError::File`] to name the file.
+  fn from_file(path: &Path) -> Result<Self, ConfigError> {
+    let data = read_to_string(path).map_err(|source| ConfigError::Read { path: path.to_path_buf(), source })?;
+    let config = match path.extension().and_then(|e| e.to_str()) {
+      Some("json") => Self::from_json(&data),
+      Some("yaml" | "yml") => Self::from_yaml(&data),
+      _ => return Err(ConfigError::UnsupportedExtension { path: path.to_path_buf() }),
     };
+    let mut config =
+      config.map_err(|source| ConfigError::File { path: path.to_path_buf(), source: Box::new(source) })?;
     config.set_source(path.to_path_buf());
     Ok(config)
   }
 
   /// Saves the current instance of the config file to the given file path.
   /// Selecting the final representation (JSON or YAML) based on the file extension.
-  fn to_file(&self, path: &Path) -> Result<()> {
-    Ok(write(
-      path,
-      match path.extension().and_then(|e| e.to_str()) {
-        Some("json") => self.to_json()?,
-        Some("yaml" | "yml") => self.to_yaml()?,
-        _ => anyhow::bail!("unsupported config file extension: {}", path.display()),
-      },
-    )?)
+  fn to_file(&self, path: &Path) -> Result<(), ConfigError> {
+    let data = match path.extension().and_then(|e| e.to_str()) {
+      Some("json") => self.to_json()?,
+      Some("yaml" | "yml") => self.to_yaml()?,
+      _ => return Err(ConfigError::UnsupportedExtension { path: path.to_path_buf() }),
+    };
+    write(path, data).map_err(|source| ConfigError::Write { path: path.to_path_buf(), source })
   }
 
   /// Takes a parsed json value, validates it against the the json schema,
   /// returning the final type if valid or the json schema validation errors.
-  fn validated(instance: Value) -> Result<Self> {
-    (Self::VALIDATE)(&instance).map_err(|e| e.to_owned())?;
-    let mut config: Self = serde_json::from_value(instance)?;
+  fn validated(instance: Value) -> Result<Self, ConfigError> {
+    (Self::VALIDATE)(&instance).map_err(|e| ConfigError::Schema(Box::new(e.to_owned())))?;
+    let mut config: Self = serde_json::from_value(instance).map_err(ConfigError::Deserialize)?;
     config.hydrate()?;
     Ok(config)
   }
 
   /// Hydrates a new instance of the config file from a JSON string.
-  fn from_json(value: &str) -> Result<Self> {
-    Self::validated(serde_json::from_str::<serde_json::Value>(value)?)
+  fn from_json(value: &str) -> Result<Self, ConfigError> {
+    Self::validated(serde_json::from_str::<serde_json::Value>(value).map_err(ConfigError::ParseJson)?)
   }
 
   /// Serializes the config file into it's JSON representation.
-  fn to_json(&self) -> Result<String> {
-    Ok(serde_json::to_string_pretty(self)?)
+  fn to_json(&self) -> Result<String, ConfigError> {
+    serde_json::to_string_pretty(self).map_err(ConfigError::SerializeJson)
   }
 
   /// Hydrates a new instance of the config file from a YAML string.
-  fn from_yaml(value: &str) -> Result<Self> {
-    Self::validated(serde_saphyr::from_str::<serde_json::Value>(value)?)
+  fn from_yaml(value: &str) -> Result<Self, ConfigError> {
+    Self::validated(serde_saphyr::from_str::<serde_json::Value>(value).map_err(ConfigError::ParseYaml)?)
   }
 
   /// Serializes the config file into it's YAML representation.
-  fn to_yaml(&self) -> Result<String> {
-    Ok(serde_saphyr::to_string(self)?)
+  fn to_yaml(&self) -> Result<String, ConfigError> {
+    serde_saphyr::to_string(self).map_err(ConfigError::SerializeYaml)
   }
 
   /// Hydrates a new instance of the config file from the process environment alone.
   /// Env values are always strings and keys are lowercased, see [`env::env_value`].
   /// `env_prefix` is layered over `ENV_PREFIX` as per `load`.
-  fn from_env(env_prefix: Option<&str>) -> Result<Self> {
+  fn from_env(env_prefix: Option<&str>) -> Result<Self, ConfigError> {
     Self::validated(env::env_value(Self::ENV_PREFIX, env_prefix))
   }
 }

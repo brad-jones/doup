@@ -1,5 +1,4 @@
 use super::file::ConfigFile;
-use anyhow::Result;
 use jsonschema::ValidationError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -277,6 +276,35 @@ ecosystems:
   fn no_file_and_incomplete_env_is_rejected() {
     let dir = TempDir::new().unwrap();
     let env = vars_to_value([], DoupRepoConfigFile::ENV_PREFIX);
-    assert!(load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).is_err());
+    let err = load_with_env::<DoupRepoConfigFile>(Some(dir.path()), env).unwrap_err();
+    assert!(matches!(err, crate::ConfigError::Schema(_)), "{err:?}");
+  }
+
+  #[test]
+  fn invalid_file_errors_name_the_file() {
+    let dir = TempDir::new().unwrap();
+    for (name, contents) in [("doup.yaml", "platform: [unclosed"), ("doup.json", r#"{ "platform": {} }"#)] {
+      let file = dir.child(name);
+      file.write_str(contents).unwrap();
+      let err = DoupRepoConfigFile::from_file(file.path()).unwrap_err();
+      let crate::ConfigError::File { path, source } = &err else { panic!("{err:?}") };
+      assert_eq!(path, file.path());
+      assert!(
+        matches!(
+          (name, &**source),
+          ("doup.yaml", crate::ConfigError::ParseYaml(_)) | ("doup.json", crate::ConfigError::Schema(_))
+        ),
+        "{err:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn unsupported_extension_is_rejected() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup.toml");
+    file.write_str("").unwrap();
+    let err = DoupRepoConfigFile::from_file(file.path()).unwrap_err();
+    assert!(matches!(err, crate::ConfigError::UnsupportedExtension { ref path } if path == file.path()), "{err:?}");
   }
 }
