@@ -1,3 +1,4 @@
+use crate::reconciliation::{DoupAction, HeadStatus, PullRequest, PullRequestState, ToVersion, reconcile};
 use anyhow::{Result, bail};
 use clap::Args;
 use doup_config::{
@@ -11,8 +12,6 @@ use doup_plugin_host::{
 };
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
-
-use crate::reconciliation::{DoupAction, HeadStatus, PullRequest, PullRequestState, ToVersion, reconcile};
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -113,6 +112,8 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
       candidates.push((ecosystem_ref, dependency, versions, notes));
     }
 
+    // In order for our pure reconciler to make decisions about what actions to
+    // take we need a list of all existing doup branches and their current state.
     eprint!("Listing existing branches... ");
     let mut existing_branches: Vec<String> = Vec::new();
     let mut head_statuses: HashMap<String, HeadStatus> = HashMap::new();
@@ -144,7 +145,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     }
     eprintln!("found {}", existing_branches.len());
 
-    // List existing PRs.
+    // Similarly we also need a list of existing PRs.
     // We need to fetch all open PRs with a head branch starting with `doup/`.
     let mut existing_prs: Vec<PullRequest> = Vec::new();
     eprint!("Listing existing open prs... ");
@@ -181,7 +182,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     // Now work out what actions we need to take.
     // This won't actually do anything, it just takes the data we have collected
     // thus far and returns a list of actions to take, whether or not we perform
-    // the actions depends on if this a dry run or not.
+    // the actions depends on if this is a dry run or not.
     let actions = reconcile(candidates, existing_prs, existing_branches)?;
     eprintln!("Planned actions: {}", actions.len());
     for action in &actions {
@@ -191,7 +192,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
       return Ok(());
     }
 
-    // Create and update all pull requests first
+    // Create or update all pull requests first
     let base_branch = repo.default_branch().await?;
     let mut action_failed = false;
     for action in &actions {
