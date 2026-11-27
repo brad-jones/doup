@@ -78,6 +78,27 @@ impl PlatformPlugin {
     Ok(instance)
   }
 
+  /// Opens a new pull request from `head_branch`, which must already have been pushed.
+  /// The guest is able to make HTTP calls but no other I/O is granted.
+  pub async fn create_pr(&self, head_branch: &str, content: &PullRequestContent) -> Result<PullRequest> {
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut session = self.session_pool.create_session(policy).await?;
+    let head_branch = head_branch.to_string();
+    let content = content.clone();
+    let result = session.call_async(async |b, a| b.call_create_pr(a, head_branch, content).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
+
+  /// Replaces the base branch, title, body & version of the open pull request `number`.
+  /// The guest is able to make HTTP calls but no other I/O is granted.
+  pub async fn update_pr(&self, number: i64, content: &PullRequestContent) -> Result<PullRequest> {
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut session = self.session_pool.create_session(policy).await?;
+    let content = content.clone();
+    let result = session.call_async(async |b, a| b.call_update_pr(a, number, content).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
+
   pub async fn list_open_prs(&self, head_branch_prefix: &str) -> Result<Vec<PullRequest>> {
     let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let mut session = self.session_pool.create_session(policy).await?;

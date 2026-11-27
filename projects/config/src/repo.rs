@@ -45,6 +45,20 @@ pub struct DoupRepoPlugin {
   pub with: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+impl DoupRepoPlugin {
+  /// A short, version independent name for the plugin, derived from [`Self::plugin`]:
+  ///
+  /// - A wasm module path gives its file name minus the extension, eg: `./a/b.wasm` → `b`.
+  /// - A wkg package reference drops the version, eg: `namespace:package@1.2.3` → `namespace:package`.
+  pub fn name(&self) -> &str {
+    match self.plugin.strip_suffix(".wasm") {
+      // Split on both separators so Windows style paths work regardless of the host OS.
+      Some(path) => path.rsplit(['/', '\\']).next().unwrap_or(path),
+      None => self.plugin.split_once('@').map_or(self.plugin.as_str(), |(package, _version)| package),
+    }
+  }
+}
+
 impl DoupRepoConfigFile {
   /// The env prefix scoping overrides to the bot's repo at `index`, eg: `DOUP_REPO_0`.
   pub fn repo_env_prefix(index: usize) -> String {
@@ -130,6 +144,19 @@ ecosystems:
     for plugin in ["./a.wasm", "../b/c.wasm", "/abs/d.wasm", "target/e.wasm"] {
       let instance = json!({ "platform": { "use": plugin }, "ecosystems": [{ "use": plugin }] });
       assert!(Schema::validate(&instance).is_ok(), "{instance}");
+    }
+  }
+
+  #[test]
+  fn name_is_the_wasm_file_stem_or_the_unversioned_package() {
+    for (plugin_ref, name) in [
+      ("./target/wasm32-wasip3/release/doup_ecosystem_plugin_cargo.wasm", "doup_ecosystem_plugin_cargo"),
+      ("C:\\plugins\\npm.wasm", "npm"),
+      ("cargo.wasm", "cargo"),
+      ("doup:cargo@^1.2.3", "doup:cargo"),
+      ("doup:cargo", "doup:cargo"),
+    ] {
+      assert_eq!(plugin(plugin_ref, None).name(), name, "{plugin_ref}");
     }
   }
 

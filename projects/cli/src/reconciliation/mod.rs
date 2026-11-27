@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
+use doup_git::{DOUP_BRANCH_PREFIX, UpdateBranch};
 use doup_plugin_host::ecosystem_plugin::{Dependency, ReleaseNote, Versions};
 use nutype::nutype;
 
@@ -73,10 +74,10 @@ pub struct PullRequest {
   /// But it up to the platform plugin as to how this value is actually encoded into the PR. eg: PR Title.
   pub version: String,
 
-  /// The head branch of the PR - eg: `doup/{{ecosystem}}/{{name}}`
-  /// [`reconcile`] only expects branches starting with the `doup/` prefix.
+  /// The head branch of the PR - eg: `doup/{{plugin}}/next/{{name}}-{{hash}}`
+  /// [`reconcile`] only expects branches starting with the [`DOUP_BRANCH_PREFIX`].
   /// Do not include any arbitrary pull request in the list.
-  /// For more details on the format see: [`doup_branch`]
+  /// For more details on the format see: [`UpdateBranch`]
   pub head_branch: String,
 
   /// The state of the PR, we only care about Open & Closed PRs.
@@ -94,22 +95,6 @@ pub enum PullRequestState {
   Closed,
 }
 
-// TODO: We need to use some sort of slugify func over these strings to make
-// them safe for use in a branch name, possibly also include a small hash of
-// all the relevant data if we can not reliably keep full fidelity.
-pub fn doup_branch(plugin: &DoupRepoPlugin, dependency: &Dependency, latest: bool) -> String {
-  if let Some(ref reg) = dependency.registry {
-    if latest {
-      return format!("doup/{}/{}/{}_latest", plugin.plugin, reg, dependency.name);
-    }
-    return format!("doup/{}/{}/{}", plugin.plugin, reg, dependency.name);
-  }
-  if latest {
-    return format!("doup/{}/{}_latest", plugin.plugin, dependency.name);
-  }
-  format!("doup/{}/{}", plugin.plugin, dependency.name)
-}
-
 /// This function is pure & should remain pure.
 /// Based on a set of inputs, it will decide what actions doup should take.
 ///
@@ -119,7 +104,7 @@ pub fn doup_branch(plugin: &DoupRepoPlugin, dependency: &Dependency, latest: boo
 /// - `existing_prs`: A list of existing pull request metadata.
 ///   All Open PRs with the prefix `doup/` should be included.
 ///   All Closed PRs that match one of the candidates branch names should be included.
-///   Use [`doup_branch`] to build a branch name for a given dependency.
+///   Use [`UpdateBranch`] to build a branch name for a given dependency.
 ///
 /// - `existing_branches`: A list of existing branch names.
 ///   **WARNING:** Any branch given in this list that starts with `doup/` may be scheduled for deletion.
@@ -133,33 +118,33 @@ pub fn reconcile(
 
   // Loop through every candidate update and decide how to proceed.
   // This will result in either a CreatePR, UpdatePR or SkipUpdate.
+  let mut claimed_prs: HashSet<i64> = HashSet::new();
   for (ecosystem_ref, dependency, versions, ref notes) in candidates {
-    reconcile_candidate(
-      &mut actions,
-      (ToVersion { version: versions.next.clone(), latest: false }, ecosystem_ref, dependency, notes),
-      &existing_prs,
-    );
+    // When only a breaking release is newer, `next` is just the version already installed.
+    if versions.next != dependency.current_version {
+      claimed_prs.extend(reconcile_candidate(
+        &mut actions,
+        (ToVersion { version: versions.next.clone(), latest: false }, ecosystem_ref, dependency, notes),
+        &existing_prs,
+      ));
+    }
 
     // Every candidate effectively has the option for a BREAKING CHANGE candidate with-in it.
-    if let Some(ref latest) = versions.latest {
-      reconcile_candidate(
+    if let Some(latest) = versions.latest.as_ref().filter(|latest| **latest != dependency.current_version) {
+      claimed_prs.extend(reconcile_candidate(
         &mut actions,
         (ToVersion { version: latest.clone(), latest: true }, ecosystem_ref, dependency, notes),
         &existing_prs,
-      );
+      ));
     }
   }
 
   // Now find any old PRs that we can close
   let unmatched_open_prs: Vec<&PullRequest> = existing_prs
     .iter()
-    .filter(|pr| pr.head_branch.starts_with("doup/"))
+    .filter(|pr| pr.head_branch.starts_with(DOUP_BRANCH_PREFIX))
     .filter(|pr| pr.state == PullRequestState::Open)
-    .filter(|pr| {
-      !actions
-        .iter()
-        .any(|action| matches!(action, DoupAction::UpdatePR(updated, ..) if *updated.as_ref() == pr.number))
-    })
+    .filter(|pr| !claimed_prs.contains(&pr.number))
     .collect();
 
   for pr in unmatched_open_prs {
@@ -193,7 +178,7 @@ pub fn reconcile(
     .chain(actions.iter().filter_map(|action| match action {
       DoupAction::CreatePR(plugin, dependency, to_version, ..)
       | DoupAction::UpdatePR(_, plugin, dependency, to_version, ..) => {
-        Some(doup_branch(plugin, dependency, to_version.latest))
+        Some(UpdateBranch::new(plugin, dependency, to_version.latest).to_string())
       }
       _ => None,
     }))
@@ -201,7 +186,7 @@ pub fn reconcile(
 
   let orphaned_branches: Vec<String> = existing_branches
     .into_iter()
-    .filter(|branch| branch.starts_with("doup/"))
+    .filter(|branch| branch.starts_with(DOUP_BRANCH_PREFIX))
     .filter(|branch| !in_use_branches.contains(branch))
     .collect();
 
@@ -225,27 +210,43 @@ fn reconcile_candidate(
   actions: &mut Vec<DoupAction>,
   candidate: (ToVersion, &DoupRepoPlugin, &Dependency, &Vec<ReleaseNote>),
   existing_prs: &[PullRequest],
-) {
+) -> Option<i64> {
   let (to_version, ecosystem_ref, dependency, notes) = candidate;
 
-  if let Some(pr) =
-    existing_prs.iter().find(|pr| pr.head_branch == doup_branch(ecosystem_ref, dependency, to_version.latest))
+  if let Some(pr) = existing_prs
+    .iter()
+    .find(|pr| pr.head_branch == UpdateBranch::new(ecosystem_ref, dependency, to_version.latest).to_string())
   {
+    // An open PR matched by a candidate (updated or skipped) must not be closed as unmatched.
+    let claimed = (pr.state == PullRequestState::Open).then_some(pr.number);
     match pr.state {
       PullRequestState::Open => {
-        actions.push(DoupAction::UpdatePR(
-          PRNumber::new(pr.number),
-          ecosystem_ref.clone(),
-          dependency.clone(),
-          to_version,
-          notes.clone(),
-          Reason::new(
-            "
-            There is an existing open pr for our dependency so we update it
-            regardless of what version the current PR is updating to.
-            ",
-          ),
-        ));
+        if pr.version != to_version.version {
+          actions.push(DoupAction::UpdatePR(
+            PRNumber::new(pr.number),
+            ecosystem_ref.clone(),
+            dependency.clone(),
+            to_version,
+            notes.clone(),
+            Reason::new(
+              "
+              There is an existing open pr for our dependency that is not
+              already at the version we are updating to.
+              ",
+            ),
+          ));
+        } else {
+          actions.push(DoupAction::SkipUpdate(
+            dependency.clone(),
+            to_version,
+            Reason::new(
+              "
+              There is an existing open pr for our dependency that is at the
+              same version as we want to update to so there is nothing to do.
+              ",
+            ),
+          ));
+        }
       }
 
       PullRequestState::Closed => {
@@ -278,6 +279,7 @@ fn reconcile_candidate(
         }
       }
     }
+    claimed
   } else {
     actions.push(DoupAction::CreatePR(
       ecosystem_ref.clone(),
@@ -290,5 +292,6 @@ fn reconcile_candidate(
         ",
       ),
     ));
+    None
   }
 }

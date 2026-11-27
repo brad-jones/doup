@@ -1,3 +1,5 @@
+// Generated code, the canonical ABI flattens `create-pr(head-branch, content)` into more than 7 core wasm params.
+#[allow(clippy::too_many_arguments)]
 mod bindings {
   wit_bindgen::generate!({
     world: "platform",
@@ -11,6 +13,7 @@ use bindings::*;
 mod config;
 mod graphql;
 mod http;
+mod rest;
 mod version;
 
 struct DoupPlatformPluginGithub;
@@ -18,6 +21,23 @@ struct DoupPlatformPluginGithub;
 impl Guest for DoupPlatformPluginGithub {
   fn configure(config: String) -> Result<(), String> {
     config::init(&config)
+  }
+
+  async fn create_pr(head_branch: String, content: PullRequestContent) -> Result<PullRequest, String> {
+    let (owner, name) = config::get()?.owner_and_name();
+    let request = rest::create_pr_request(&head_branch, &content)?;
+    let response = http::rest(http::Method::Post, &format!("/repos/{owner}/{name}/pulls"), &request).await?;
+    rest::parse_pr(response)
+  }
+
+  async fn update_pr(number: i64, content: PullRequestContent) -> Result<PullRequest, String> {
+    if number <= 0 {
+      return Err(format!("invalid pull request number {number}"));
+    }
+    let (owner, name) = config::get()?.owner_and_name();
+    let request = rest::update_pr_request(&content)?;
+    let response = http::rest(http::Method::Patch, &format!("/repos/{owner}/{name}/pulls/{number}"), &request).await?;
+    rest::parse_pr(response)
   }
 
   async fn list_open_prs(head_branch_prefix: String) -> Result<Vec<PullRequest>, String> {

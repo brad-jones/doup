@@ -5,12 +5,14 @@ use doup_config::{
   file::ConfigFile,
   repo::DoupRepoConfigFile,
 };
-use doup_git::{Auth, CloneOptions, Git, GitCli, Grit};
-use doup_plugin_host::{EcosystemPlugin, PlatformPlugin};
+use doup_git::{Auth, CloneOptions, ClonedRepo, DOUP_BRANCH_PREFIX, Git, GitCli, Grit, UpdateBranch};
+use doup_plugin_host::{
+  EcosystemPlugin, PlatformPlugin, ecosystem_plugin::Dependency, platform_plugin::PullRequestContent,
+};
 use std::{collections::HashMap, num::NonZero};
 use tempfile::TempDir;
 
-use crate::reconciliation::{DoupAction, PullRequest, PullRequestState, doup_branch, reconcile};
+use crate::reconciliation::{DoupAction, PullRequest, PullRequestState, ToVersion, reconcile};
 
 /// Runs the doup update process
 #[derive(Args)]
@@ -115,7 +117,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     let mut existing_branches: Vec<String> = Vec::new();
     for branch in repo.list_remote_branches().await? {
       // Ignore any branch that doup does not manage
-      if !branch.starts_with("doup/") {
+      if !branch.starts_with(DOUP_BRANCH_PREFIX) {
         continue;
       }
 
@@ -134,7 +136,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     // We need to fetch all open PRs with a head branch starting with `doup/`.
     let mut existing_prs: Vec<PullRequest> = Vec::new();
     eprint!("Listing existing open prs... ");
-    let open_prs = platform.list_open_prs("doup/").await?;
+    let open_prs = platform.list_open_prs(DOUP_BRANCH_PREFIX).await?;
     eprintln!("found {}", open_prs.len());
     existing_prs.extend(open_prs.into_iter().map(|pr| PullRequest {
       number: pr.number,
@@ -146,7 +148,10 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     // And only closed PRs whose `head_branch` matches one of our `candidates`.
     let mut candidate_branches = Vec::new();
     for &(ecosystem_ref, dependency, versions, ref _notes) in &candidates {
-      candidate_branches.push(doup_branch(ecosystem_ref, dependency, versions.latest.is_some()));
+      candidate_branches.push(UpdateBranch::new(ecosystem_ref, dependency, false).to_string());
+      if versions.latest.is_some() {
+        candidate_branches.push(UpdateBranch::new(ecosystem_ref, dependency, true).to_string());
+      }
     }
     eprint!("Listing existing closed prs... ");
     let closed_prs = platform.list_closed_prs(&candidate_branches).await?;
@@ -172,59 +177,38 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
     }
 
     // Create and update all pull requests first
+    let base_branch = repo.default_branch().await?;
+    let mut action_failed = false;
     for action in &actions {
-      match action {
-        DoupAction::CreatePR(doup_repo_plugin, dependency, to_version, release_notes, reason) => {
-          let ecosystem_plugin = &ecosystems[doup_repo_plugin];
-          let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
-          let worktree = repo.worktree_add(&branch).await?;
-          ecosystem_plugin.apply_updates(worktree.path(), dependency, &to_version.version).await?;
-          worktree
-            .commit(format!(
-              "chore(doup): update {} from {} to {}",
-              dependency.name, dependency.current_version, to_version.version
-            ))
-            .await?;
-          worktree.push().await?;
-          worktree.remove().await?;
-          let pr = platform
-            .upcert_pr(PrRequest {
-              number: None,
-              base_branch: repo.default_branch()?,
-              head_branch: branch,
-              title: format!("todo"),
-              body: format!("todo"),
-            })
-            .await?;
-          eprintln!("Created PR {}", pr.url);
+      let result: Result<()> = async {
+        match action {
+          DoupAction::CreatePR(doup_repo_plugin, dependency, to_version, _release_notes, _reason) => {
+            let branch = UpdateBranch::new(doup_repo_plugin, dependency, to_version.latest).to_string();
+            let title = commit_message(dependency, to_version);
+            push_update_branch(&repo, &ecosystems[doup_repo_plugin], &branch, dependency, to_version, &title).await?;
+            let pr = platform.create_pr(&branch, &pr_content(&base_branch, title, dependency, to_version)).await?;
+            eprintln!("Created PR {}", pr.url);
+          }
+          DoupAction::UpdatePR(prnumber, doup_repo_plugin, dependency, to_version, _release_notes, _reason) => {
+            let branch = UpdateBranch::new(doup_repo_plugin, dependency, to_version.latest).to_string();
+            let title = commit_message(dependency, to_version);
+            push_update_branch(&repo, &ecosystems[doup_repo_plugin], &branch, dependency, to_version, &title).await?;
+            let content = pr_content(&base_branch, title, dependency, to_version);
+            let pr = platform.update_pr(*prnumber.as_ref(), &content).await?;
+            eprintln!("Updated PR {}", pr.url);
+          }
+          _ => {}
         }
-        DoupAction::UpdatePR(prnumber, doup_repo_plugin, dependency, to_version, release_notes, reason) => {
-          // The update case is basically identical to create, except we force push our changes
-          let ecosystem_plugin = &ecosystems[doup_repo_plugin];
-          let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
-          let worktree = repo.worktree_add(&branch).await?;
-          ecosystem_plugin.apply_updates(worktree.path(), dependency, &to_version.version).await?;
-          worktree
-            .commit(format!(
-              "chore(doup): update {} from {} to {}",
-              dependency.name, dependency.current_version, to_version.version
-            ))
-            .await?;
-          worktree.push_force().await?;
-          worktree.remove().await?;
-          let pr = platform
-            .upcert_pr(PrRequest {
-              number: prnumber.as_ref(),
-              base_branch: repo.default_branch()?,
-              head_branch: branch,
-              title: format!("todo"),
-              body: format!("todo"),
-            })
-            .await?;
-          eprintln!("Updated PR {}", pr.url);
-        }
-        _ => {}
+        Ok(())
       }
+      .await;
+      if let Err(err) = result {
+        eprintln!("Failed to apply action `{}`: {err:#}", action.summary());
+        action_failed = true;
+      }
+    }
+    if action_failed {
+      failed += 1;
     }
 
     // Then close any old prs
@@ -245,5 +229,52 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
   if failed > 0 {
     bail!("{failed} repo(s) failed to update");
   }
+  Ok(())
+}
+
+fn commit_message(dependency: &Dependency, to_version: &ToVersion) -> String {
+  format!("chore(doup): update {} from {} to {}", dependency.name, dependency.current_version, to_version.version)
+}
+
+// TODO: Build a real PR body, eg: from the release notes.
+fn pr_content(base_branch: &str, title: String, dependency: &Dependency, to_version: &ToVersion) -> PullRequestContent {
+  PullRequestContent {
+    base_branch: base_branch.to_string(),
+    title,
+    body: format!("Updates `{}` from `{}` to `{}`.", dependency.name, dependency.current_version, to_version.version),
+    version: to_version.version.clone(),
+  }
+}
+
+/// Applies the update of `dependency` to `to_version` on `branch`, starting from the default branch,
+/// commits it with `message` & pushes it to `origin`.
+async fn push_update_branch(
+  repo: &ClonedRepo,
+  ecosystem_plugin: &EcosystemPlugin,
+  branch: &str,
+  dependency: &Dependency,
+  to_version: &ToVersion,
+  message: &str,
+) -> Result<()> {
+  let worktree = repo.worktree_add(branch).await?;
+
+  eprintln!("Created new worktree {} for {}, now applying changes...", worktree.path().display(), branch);
+  ecosystem_plugin.apply_updates(worktree.path(), dependency, &to_version.version).await?;
+
+  eprint!("Changed Applied, pushing... ");
+  worktree.commit(message).await?;
+
+  // The branch is always rebuilt from the default branch, so it is force pushed, even for a CreatePR.
+  // When updating a PR this replaces our previous commit. When creating one, the branch may already
+  // exist on `origin` (eg: the branch of a closed PR that was never deleted, or a previous run that
+  // pushed but failed to open the PR), in which case a fast-forward only push would be rejected.
+  // The lease (origin's tip when the worktree was added) still stops us clobbering concurrent pushes.
+  worktree.push_force().await?;
+  eprintln!("DONE");
+
+  eprint!("Removing worktree {}... ", worktree.path().display());
+  worktree.remove().await?;
+  eprintln!("DONE");
+
   Ok(())
 }

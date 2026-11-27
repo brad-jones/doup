@@ -8,7 +8,6 @@ const SUFFIX: &str = "-->";
 const KEY: &str = "doup:version=";
 
 /// The marker to embed in a pull request body for `version`.
-#[allow(dead_code)] // Used once creating pull requests is implemented.
 pub fn marker(version: &str) -> String {
   format!("{PREFIX} {KEY}{version} {SUFFIX}")
 }

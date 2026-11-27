@@ -13,6 +13,7 @@
 
 mod auth;
 mod backend;
+mod branch;
 mod cli;
 mod cloned_repo;
 mod commit;
@@ -29,6 +30,7 @@ mod test_support;
 
 pub use auth::Auth;
 pub use backend::{GitBackend, RemoteTips};
+pub use branch::{DOUP_BRANCH_PREFIX, UpdateBranch};
 pub use cli::GitCli;
 pub use cloned_repo::ClonedRepo;
 pub use commit::GitCommit;

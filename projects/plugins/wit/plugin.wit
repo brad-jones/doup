@@ -65,9 +65,16 @@ world platform {
     /// eg: `https://github.com/<owner>/<repo>/pull/<number>`
     number: s64,
 
+    /// The URL where a human can view the pull request.
+    /// eg: `https://github.com/<owner>/<repo>/pull/<number>`
+    url: string,
+
     /// The head branch of the PR.
     /// eg: `doup/{{ecosystem}}/{{name}}`
     head-branch: string,
+
+    /// The branch the PR will be merged into, eg: `main`.
+    base-branch: string,
 
     /// The version number that this pull request is updating to.
     /// This should be a plain version number without any semver constraints. eg: "1.2.3".
@@ -78,8 +85,32 @@ world platform {
     version: string,
   }
 
+  /// The parts of a pull request that doup controls, used to both create & update a PR.
+  record pull-request-content {
+    /// The branch the PR will be merged into, eg: `main`.
+    base-branch: string,
+
+    /// The title of the PR.
+    title: string,
+
+    /// The body (description) of the PR, as markdown.
+    /// The platform may truncate it to fit within its own limits.
+    body: string,
+
+    /// The version number that this pull request is updating to, see `pull-request.version`.
+    /// The platform must encode it so that it is returned as `pull-request.version` by every export.
+    version: string,
+  }
+
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
   export configure: func(config: string) -> result<_, string>;
+
+  /// Opens a new pull request from `head-branch`, which has already been pushed, using `content`.
+  export create-pr: async func(head-branch: string, content: pull-request-content) -> result<pull-request, string>;
+
+  /// Replaces the base branch, title, body & version of the open pull request `number` with `content`.
+  /// The head branch of a pull request can not be changed, push to it instead.
+  export update-pr: async func(number: s64, content: pull-request-content) -> result<pull-request, string>;
 
   /// List all open pull requests where their head branch name starts with `head-branch-prefix`.
   export list-open-prs: async func(head-branch-prefix: string) -> result<list<pull-request>, string>;

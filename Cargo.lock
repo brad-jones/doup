@@ -1198,8 +1198,12 @@ name = "doup-git"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "doup-config",
+ "doup-plugin-host",
+ "gix-validate",
  "grit-lib",
  "rsa",
+ "sha2 0.10.9",
  "shlex",
  "spire_enum",
  "ssh-agent-lib",
@@ -1706,6 +1710,22 @@ dependencies = [
  "hashbrown 0.16.1",
  "indexmap 2.14.2",
  "stable_deref_trait",
+]
+
+[[package]]
+name = "gix-error"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50ad6c42fa50280f382026ff838a8afa7ab2ad83e92349cab4392972baae69cd"
+
+[[package]]
+name = "gix-validate"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d6f293fd8abd9bd9bc1e0a23541f73607e932b5a2bde2246320da38edde5726"
+dependencies = [
+ "bstr",
+ "gix-error",
 ]
 
 [[package]]

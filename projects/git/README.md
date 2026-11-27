@@ -77,6 +77,21 @@ Commits are made as the clone's `Identity` (`CloneOptions::with_identity`, defau
 <doup[bot]@users.noreply.github.com>`) for both author and committer, are never signed, and no hooks run at any step:
 `core.hooksPath` points at an empty dir, so neither the user's (e.g. a global hooks path) nor the clone's run.
 
+### Update branch names
+
+`UpdateBranch::new(plugin, dependency, latest)` names the branch a dependency update is pushed to, always a valid branch
+name of the form `doup/<plugin>/<next|latest>/<dependency>-<hash>` (all starting with `DOUP_BRANCH_PREFIX`):
+
+- `<hash>` is a short SHA-256 of the dependency's identity: `DoupRepoPlugin::name()` (a wasm module's file stem, or a
+  wkg package without its version), the dependency's name and its registry. It alone keeps distinct dependencies on
+  distinct branches.
+- `<plugin>` and `<dependency>` are just for humans, sanitised with Git's own rules (`gix-validate`) and with `/`
+  replaced, so every branch sits at the same depth and one can never be the "directory" of another, which Git refuses.
+
+```rust
+let branch = UpdateBranch::new(&plugin, &dependency, false).to_string(); // eg: "doup/cargo/next/serde-4ef397e7"
+```
+
 ## Backends
 
 | Backend  | How it works                                                                      | Needs on `PATH`        |

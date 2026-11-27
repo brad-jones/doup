@@ -174,4 +174,4 @@ tasks:
       DOUP_REPO_0__ECOSYSTEMS__1__WITH__GITHUB_TOKEN:
         sh: gh auth token -u brad-jones
     cmds:
-      - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update
+      - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update {{.CLI_ARGS}}

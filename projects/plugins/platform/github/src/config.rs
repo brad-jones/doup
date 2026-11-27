@@ -44,11 +44,20 @@ impl Config {
   /// github.com serves GraphQL at `https://api.github.com/graphql` whereas
   /// GitHub Enterprise Server serves REST at `/api/v3` and GraphQL at `/api/graphql`.
   pub fn graphql_url(&self) -> String {
-    let api_url = self.api_url.as_deref().unwrap_or(DEFAULT_API_URL).trim_end_matches('/');
+    let api_url = self.rest_base_url();
     match api_url.strip_suffix("/v3") {
       Some(base) => format!("{base}/graphql"),
       None => format!("{api_url}/graphql"),
     }
+  }
+
+  /// The REST endpoint for `path` (eg: `/repos/acme/foo/pulls`) under [`Self::api_url`].
+  pub fn rest_url(&self, path: &str) -> String {
+    format!("{}/{}", self.rest_base_url(), path.trim_start_matches('/'))
+  }
+
+  fn rest_base_url(&self) -> &str {
+    self.api_url.as_deref().unwrap_or(DEFAULT_API_URL).trim_end_matches('/')
   }
 }
 
@@ -114,5 +123,20 @@ mod tests {
     assert_eq!(with_api_url(Some("https://api.github.com/")), "https://api.github.com/graphql");
     assert_eq!(with_api_url(Some("https://ghe.example.com/api/v3")), "https://ghe.example.com/api/graphql");
     assert_eq!(with_api_url(Some("https://ghe.example.com/api/v3/")), "https://ghe.example.com/api/graphql");
+  }
+
+  #[test]
+  fn rest_urls_are_joined_to_the_api_url() {
+    let with_api_url = |api_url: Option<&str>, path: &str| {
+      let mut config = Config::parse(VALID).unwrap();
+      config.api_url = api_url.map(str::to_string);
+      config.rest_url(path)
+    };
+    assert_eq!(with_api_url(None, "/repos/acme/foo/pulls"), "https://api.github.com/repos/acme/foo/pulls");
+    assert_eq!(with_api_url(None, "repos/acme/foo/pulls"), "https://api.github.com/repos/acme/foo/pulls");
+    assert_eq!(
+      with_api_url(Some("https://ghe.example.com/api/v3/"), "/repos/acme/foo/pulls/1"),
+      "https://ghe.example.com/api/v3/repos/acme/foo/pulls/1"
+    );
   }
 }

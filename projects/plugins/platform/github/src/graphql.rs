@@ -14,7 +14,7 @@ const PAGE_SIZE: usize = 100;
 /// How many branches are looked up per closed PR query, keeping each query well within GitHub's limits.
 pub const BRANCHES_PER_QUERY: usize = 25;
 
-const PR_FIELDS: &str = "number headRefName body isCrossRepository";
+const PR_FIELDS: &str = "number url headRefName baseRefName body isCrossRepository";
 
 /// A query for one page of the open pull requests in `owner/name`, newest first.
 pub fn open_prs_query(owner: &str, name: &str, cursor: Option<&str>) -> Value {
@@ -61,14 +61,22 @@ pub fn closed_prs_query(owner: &str, name: &str, branches: &[String]) -> Value {
 #[serde(rename_all = "camelCase")]
 struct PrNode {
   number: i64,
+  url: String,
   head_ref_name: String,
+  base_ref_name: String,
   body: Option<String>,
   is_cross_repository: bool,
 }
 
 impl PrNode {
   fn into_pull_request(self) -> PullRequest {
-    PullRequest { number: self.number, version: version::parse(self.body.as_deref()), head_branch: self.head_ref_name }
+    PullRequest {
+      number: self.number,
+      url: self.url,
+      head_branch: self.head_ref_name,
+      base_branch: self.base_ref_name,
+      version: version::parse(self.body.as_deref()),
+    }
   }
 }
 
@@ -149,7 +157,14 @@ mod tests {
   use super::*;
 
   fn node(number: i64, branch: &str, body: Option<&str>, fork: bool) -> Value {
-    json!({ "number": number, "headRefName": branch, "body": body, "isCrossRepository": fork })
+    json!({
+      "number": number,
+      "url": format!("https://github.com/acme/foo/pull/{number}"),
+      "headRefName": branch,
+      "baseRefName": "main",
+      "body": body,
+      "isCrossRepository": fork,
+    })
   }
 
   fn summary(prs: &[PullRequest]) -> Vec<(i64, &str, &str)> {
@@ -191,6 +206,8 @@ mod tests {
     }}});
     let page = parse_open_prs(data, "doup/").unwrap();
     assert_eq!(summary(&page.pull_requests), [(1, "doup/cargo/serde", "1.2.3"), (4, "doup/cargo/tokio", "")]);
+    assert_eq!(page.pull_requests[0].url, "https://github.com/acme/foo/pull/1");
+    assert_eq!(page.pull_requests[0].base_branch, "main");
     assert_eq!(page.next_cursor.as_deref(), Some("next"));
   }
 
