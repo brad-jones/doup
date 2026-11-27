@@ -371,6 +371,28 @@ macro_rules! backend_contract_tests {
       }
 
       #[tokio::test]
+      async fn reports_a_branchs_status_with_one_fetch() {
+        let fixture = Fixture::new();
+        fixture.add_branch("merged");
+        fixture.commit("feature", "amy@example.com", "more");
+        fixture.commit("main", "late@example.com", "late");
+        let repo = shallow_clone(&fixture).await;
+
+        let status = repo.branch_status("feature").await.unwrap();
+        assert_eq!(status.authors(), ["amy@example.com", "doup@example.com"]);
+        assert!(status.is_behind());
+
+        // Unlike `branch_authors`, a branch with no commits of its own is not an error.
+        let status = repo.branch_status("merged").await.unwrap();
+        assert!(status.authors().is_empty());
+        assert!(status.is_behind());
+
+        let status = repo.branch_status("main").await.unwrap();
+        assert!(status.authors().is_empty());
+        assert!(!status.is_behind());
+      }
+
+      #[tokio::test]
       async fn an_unknown_branch_can_not_be_behind() {
         let fixture = Fixture::new();
         let repo = shallow_clone(&fixture).await;

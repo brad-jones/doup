@@ -24,6 +24,7 @@ let default = repo.default_branch().await?; // the branch origin's HEAD points a
 let commits = repo.branch_commits("doup/foo").await?; // like `git log origin/HEAD..origin/doup/foo`
 let authors = repo.branch_authors("doup/foo").await?; // their `%ae`, sorted and deduplicated
 let behind = repo.branch_is_behind("doup/foo").await?; // true when it lacks the default branch's tip
+let status = repo.branch_status("doup/foo").await?; // authors & behind together, fetching only once
 repo.delete_remote_branch("doup/old").await?; // like `git push --force-with-lease origin :doup/old`
 
 let worktree = repo.worktree_add("doup/foo").await?; // like `git worktree add -B doup/foo <tmp> HEAD`
@@ -40,9 +41,9 @@ Every operation is async (built on `tokio`) and fails with a typed `GitError`.
 
 ### A branch's own commits
 
-`branch_fetch`, `branch_commits`, `branch_authors` and `branch_is_behind` deal with the commits a branch has on top of
-`origin`'s default branch, and work whatever state the clone is in (shallow, single-branch, branch created or
-force-pushed since cloning):
+`branch_fetch`, `branch_commits`, `branch_authors`, `branch_is_behind` and `branch_status` deal with the commits a
+branch has on top of `origin`'s default branch, and work whatever state the clone is in (shallow, single-branch, branch
+created or force-pushed since cloning):
 
 - `branch_fetch` fetches only those commits, without file contents: `git fetch --filter=blob:none
   --shallow-exclude=refs/heads/<default> origin +refs/heads/<branch>:refs/remotes/origin/<branch>`. This makes the clone
@@ -61,6 +62,8 @@ force-pushed since cloning):
 - `branch_is_behind` is `false` when the branch's tip is the default branch's tip, or when one of its own commits has
   the default branch's tip as a parent (built on top of it, or merged it in). Otherwise it is `true`, including for a
   branch strictly behind the default branch, rather than failing with `GitError::NoUniqueCommits`.
+- `branch_status` returns a `BranchStatus` with both `authors()` and `is_behind()`, from a single fetch. Like
+  `branch_is_behind` it never fails with `GitError::NoUniqueCommits`: such a branch has no authors and is behind.
 
 ### Worktrees
 

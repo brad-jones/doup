@@ -1,0 +1,19 @@
+[package]
+name = "doup-core"
+version = "0.1.0"
+edition = "2024"
+description = "Updates the dependencies of every repo doup is configured for, opening, updating & closing pull requests."
+
+[dependencies]
+doup-config = { path = "../config" }
+doup-git = { path = "../git" }
+doup-plugin-host = { path = "../plugins/host" }
+futures = "0.3.34"
+semver = "1.0.28"
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["sync", "rt", "macros"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "test-util"] }

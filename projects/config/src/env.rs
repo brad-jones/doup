@@ -10,7 +10,7 @@
 //! A single `_` is always part of a key, so keys may contain `_` at any depth.
 //!
 //! Limitations:
-//! - Values are always strings; this is fine while the schemas only use strings.
+//! - Values are always strings; schemas accept numeric strings wherever they take a number.
 //! - Names are lowercased, so fields containing capitals can't be targeted.
 //! - Every var sharing the prefix becomes a key, and the schemas reject keys they don't know
 //!   (other than in plugin `with` config), so eg: `DOUP_BOT_LOG` fails validation.

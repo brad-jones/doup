@@ -32,7 +32,7 @@ pub use auth::Auth;
 pub use backend::{GitBackend, RemoteTips};
 pub use branch::{DOUP_BRANCH_PREFIX, UpdateBranch};
 pub use cli::GitCli;
-pub use cloned_repo::ClonedRepo;
+pub use cloned_repo::{BranchStatus, ClonedRepo};
 pub use commit::GitCommit;
 pub use error::GitError;
 pub use grit::Grit;
@@ -40,6 +40,7 @@ pub use identity::Identity;
 pub use options::CloneOptions;
 pub use worktree::Worktree;
 
+pub use remote_url::redact as redact_url;
 use remote_url::{RemoteUrl, redact};
 use spire_enum::prelude::delegated_enum;
 use std::io::ErrorKind;

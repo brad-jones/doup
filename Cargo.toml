@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "projects/cli",
   "projects/config",
+  "projects/core",
   "projects/git",
   "projects/plugins/ecosystem/cargo",
   "projects/plugins/ecosystem/doup",

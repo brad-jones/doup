@@ -53,7 +53,7 @@ fn is_scp_like(url: &str) -> bool {
 }
 
 /// Strips any password from `url` so it is safe to display.
-pub(crate) fn redact(url: &str) -> String {
+pub fn redact(url: &str) -> String {
   match Url::parse(url) {
     Ok(mut parsed) if parsed.password().is_some() => {
       let _ = parsed.set_password(None);

@@ -48,6 +48,13 @@
           "minLength": 1
         }
       }
+    },
+    "positiveInteger": {
+      "description": "A whole number of 1 or more. Also accepted as a string of digits, as env vars are always strings.",
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      ]
     }
   },
   "properties": {
@@ -59,6 +66,28 @@
       "description": "The git implementation used to clone every repo. Applies to all repos.",
       "enum": ["git_cli", "grit"],
       "default": "git_cli"
+    },
+    "concurrency": {
+      "description": "Limits how much work doup does at once. Every limit is optional and has a sensible default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repos": {
+          "description": "The maximum number of repos updated at once.",
+          "$ref": "#/$defs/positiveInteger",
+          "default": 4
+        },
+        "plugin_calls": {
+          "description": "The maximum number of plugin calls (eg: version lookups, release notes, pull request changes) in flight at once, per repo.",
+          "$ref": "#/$defs/positiveInteger",
+          "default": 8
+        },
+        "apply_updates": {
+          "description": "The maximum number of dependency updates applied at once, across every repo. Applying an update may run containers, so this is kept low.",
+          "$ref": "#/$defs/positiveInteger",
+          "default": 2
+        }
+      }
     },
     "repos": {
       "description": "A list of git repositories to update.",

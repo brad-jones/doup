@@ -1,5 +1,5 @@
 mod commands;
-mod reconciliation;
+mod logging;
 
 use clap::Parser;
 use commands::Commands;
@@ -10,11 +10,16 @@ use commands::Commands;
 struct Cli {
   #[command(subcommand)]
   command: Commands,
+
+  #[command(flatten)]
+  log: logging::LogArgs,
 }
 
 #[tokio::main]
 async fn main() {
-  if let Err(err) = match Cli::parse().command {
+  let cli = Cli::parse();
+  logging::init(&cli.log);
+  if let Err(err) = match cli.command {
     Commands::Init(args) => commands::init(args).await,
     Commands::Add(args) => commands::add(args).await,
     Commands::Remove(args) => commands::remove(args).await,

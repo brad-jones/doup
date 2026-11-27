@@ -8,8 +8,8 @@ parses the files itself.
 | `DoupBotConfigFile`  | `bot`  | `doupbot.json`, `doupbot.yaml`, `doupbot.yml` | `DOUP_BOT`  | [`bot.schema.json`](../../schemas/bot.schema.json)   |
 | `DoupRepoConfigFile` | `repo` | `doup.json`, `doup.yaml`, `doup.yml`          | `DOUP_REPO` | [`repo.schema.json`](../../schemas/repo.schema.json) |
 
-- The **bot config** sets up the bot itself: which repos to update, how to authenticate to each, and which Git backend
-  to use.
+- The **bot config** sets up the bot itself: which repos to update, how to authenticate to each, which Git backend to
+  use and how much work to do at once.
 - The **repo config** sits at the root of each repo being updated: which platform plugin to open pull requests with, and
   which ecosystem plugins to update dependencies with.
 
@@ -79,6 +79,10 @@ Every way of building a config goes through `ConfigFile::validated`:
 ```yaml
 $schema: https://raw.githubusercontent.com/brad-jones/doup/refs/heads/master/schemas/bot.schema.json
 git_backend: git_cli # or grit; optional, defaults to git_cli
+concurrency: # optional, as is every limit in it
+  repos: 4 # repos updated at once
+  plugin_calls: 8 # plugin calls (version lookups, release notes, pull request changes) in flight at once, per repo
+  apply_updates: 2 # dependency updates applied at once across every repo, these may run containers
 repos:
   # No auth: uses the existing Git and SSH setup.
   - origin: https://github.com/owner/repo.git
@@ -109,6 +113,8 @@ repos:
   fails with `ConfigError::SshKeyNotFound`, listing where it looked.
 - After loading, the `key` of a `DoupBotRepoAuth::Ssh` is always `Some`, with `key_path` also set, exactly as written,
   if that is where it came from.
+- Every `concurrency` limit must be 1 or more. As env values are strings, a string of digits is also accepted, eg:
+  `DOUP_BOT_CONCURRENCY__REPOS=1`.
 
 ## The repo config
 
@@ -151,7 +157,8 @@ DOUP_REPO_ECOSYSTEMS__0__WITH__GITHUB_TOKEN=ghp_...          # ecosystems[0].wit
   existing item or add a new item.
 - A segment that is empty, or starts or ends with `_`, fails with `ConfigError::InvalidEnvVar`, eg: `DOUP_BOT__X`,
   `DOUP_BOT_X___Y` or `DOUP_BOT_X__`. The error names the var but never includes its value.
-- Values are always strings and keys are always lowercased, so keys with capitals can't be set from the env.
+- Values are always strings and keys are always lowercased, so keys with capitals can't be set from the env. Numeric
+  settings (eg: `concurrency.repos`) accept a string of digits for this reason.
 - The schemas reject keys they don't know (other than in plugin `with` config), so a typo, or any other var that shares
   the prefix (eg: `DOUP_BOT_LOG`), fails validation rather than being ignored.
 

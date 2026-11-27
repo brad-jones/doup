@@ -1,10 +1,11 @@
 use super::ConfigError;
 use super::file::ConfigFile;
 use jsonschema::ValidationError;
-use serde::{Deserialize, Serialize, Serializer, ser::Error as _};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::Error as _};
 use serde_json::Value;
 use std::fs::read_to_string;
 use std::io::ErrorKind;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 /// Embed the Json Schema, we will use this for runtime validation.
@@ -22,6 +23,10 @@ pub struct DoupBotConfigFile {
   /// The git implementation used to clone every repo. Applies globally.
   #[serde(default, skip_serializing_if = "is_default")]
   pub git_backend: GitBackendKind,
+
+  /// Limits how much work doup does at once.
+  #[serde(default, skip_serializing_if = "is_default")]
+  pub concurrency: Concurrency,
 
   /// The git repositories that the bot will update.
   #[serde(default)]
@@ -103,6 +108,48 @@ pub enum GitBackendKind {
 
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
   *value == T::default()
+}
+
+/// Limits how much work doup does at once, see the schema for what each limit covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Concurrency {
+  /// The maximum number of repos updated at once.
+  #[serde(deserialize_with = "positive_integer")]
+  pub repos: NonZeroUsize,
+
+  /// The maximum number of plugin calls in flight at once, per repo.
+  #[serde(deserialize_with = "positive_integer")]
+  pub plugin_calls: NonZeroUsize,
+
+  /// The maximum number of dependency updates applied at once, across every repo.
+  #[serde(deserialize_with = "positive_integer")]
+  pub apply_updates: NonZeroUsize,
+}
+
+impl Default for Concurrency {
+  fn default() -> Self {
+    Self {
+      repos: NonZeroUsize::new(4).unwrap(),
+      plugin_calls: NonZeroUsize::new(8).unwrap(),
+      apply_updates: NonZeroUsize::new(2).unwrap(),
+    }
+  }
+}
+
+/// Accepts a number or, as env vars are always strings, a string of digits.
+fn positive_integer<'de, D: Deserializer<'de>>(deserializer: D) -> Result<NonZeroUsize, D::Error> {
+  #[derive(Deserialize)]
+  #[serde(untagged)]
+  enum In {
+    Number(NonZeroUsize),
+    Text(String),
+  }
+
+  match In::deserialize(deserializer)? {
+    In::Number(value) => Ok(value),
+    In::Text(text) => text.parse().map_err(|_| D::Error::custom(format!("'{text}' is not a positive integer"))),
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -358,6 +405,43 @@ repos:
     let config = DoupBotConfigFile::from_json(&json.to_string()).unwrap();
     assert_eq!(config.git_backend, GitBackendKind::Grit);
     assert_eq!(DoupBotConfigFile::from_json(&config.to_json().unwrap()).unwrap(), config);
+  }
+
+  #[test]
+  fn concurrency_defaults_and_round_trips() {
+    let json = config_json(json!({ "origin": "https://github.com/a/b.git" }));
+    let config = DoupBotConfigFile::from_json(&json).unwrap();
+    assert_eq!(config.concurrency, Concurrency::default());
+    assert!(!config.to_json().unwrap().contains("concurrency"));
+
+    let repo = json!({ "origin": "https://github.com/a/b.git" });
+    let json = json!({ "concurrency": { "repos": 1, "apply_updates": 3 }, "repos": [repo] });
+    let config = DoupBotConfigFile::from_json(&json.to_string()).unwrap();
+    let expected = Concurrency {
+      repos: NonZeroUsize::new(1).unwrap(),
+      apply_updates: NonZeroUsize::new(3).unwrap(),
+      ..Concurrency::default()
+    };
+    assert_eq!(config.concurrency, expected);
+    assert_eq!(DoupBotConfigFile::from_yaml(&config.to_yaml().unwrap()).unwrap(), config);
+  }
+
+  #[test]
+  fn concurrency_can_be_set_from_the_env() {
+    let (_dir, loaded) = load_with(&[("DOUP_BOT_CONCURRENCY__PLUGIN_CALLS", "16")]);
+    assert_eq!(loaded.merged.concurrency.plugin_calls.get(), 16);
+    assert_eq!(loaded.merged.concurrency.repos, Concurrency::default().repos);
+  }
+
+  #[test]
+  fn schema_rejects_invalid_concurrency() {
+    let repo = json!({ "origin": "https://github.com/a/b.git" });
+    for value in [json!(0), json!(-1), json!(1.5), json!("0"), json!("x"), json!(" 1")] {
+      let config = json!({ "concurrency": { "repos": value.clone() }, "repos": [repo.clone()] });
+      assert!(DoupBotConfigFileSchema::validate(&config).is_err(), "{value}");
+    }
+    let config = json!({ "concurrency": { "threads": 2 }, "repos": [repo] });
+    assert!(DoupBotConfigFileSchema::validate(&config).is_err());
   }
 
   #[test]

@@ -3,6 +3,27 @@ use crate::{Auth, CloneOptions, Git, GitBackend, GitCommit, GitError, Identity, 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+/// Who has committed to one of `origin`'s branches & how it relates to the default branch, from
+/// [`ClonedRepo::branch_status`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchStatus {
+  authors: Vec<String>,
+  behind: bool,
+}
+
+impl BranchStatus {
+  /// As for [`ClonedRepo::branch_authors`]: sorted and free of duplicates, empty when the branch
+  /// has no commits of its own.
+  pub fn authors(&self) -> &[String] {
+    &self.authors
+  }
+
+  /// As for [`ClonedRepo::branch_is_behind`].
+  pub fn is_behind(&self) -> bool {
+    self.behind
+  }
+}
+
 /// A repository that [`Git::clone_repo`] just cloned, with operations that act on it.
 ///
 /// The clone's [`Auth`] is kept in memory, as it is never written into the clone itself, so that
@@ -220,17 +241,33 @@ impl ClonedRepo {
   /// - Another [`GitError`] when the remote cannot be reached or the fetched commits cannot be
   ///   read.
   pub async fn branch_is_behind(&self, branch: &str) -> Result<bool, GitError> {
+    Ok(self.branch_status(branch).await?.is_behind())
+  }
+
+  /// Both [`Self::branch_authors`] and [`Self::branch_is_behind`] for `branch`, fetching it only once.
+  ///
+  /// Unlike [`Self::branch_authors`], a branch strictly behind the default branch (e.g. merged) is
+  /// not an error: it has no authors and is behind.
+  ///
+  /// # Errors
+  ///
+  /// As for [`Self::branch_is_behind`].
+  pub async fn branch_status(&self, branch: &str) -> Result<BranchStatus, GitError> {
     let default_tip = match self.fetch_unique(branch).await {
       Ok(Some(default_tip)) => default_tip,
-      Ok(None) => return Ok(false),
-      Err(GitError::NoUniqueCommits { .. }) => return Ok(true),
+      Ok(None) => return Ok(BranchStatus { authors: Vec::new(), behind: false }),
+      Err(GitError::NoUniqueCommits { .. }) => return Ok(BranchStatus { authors: Vec::new(), behind: true }),
       Err(err) => return Err(err),
     };
-    // The fetch stops where `branch` leaves the default branch, but raw commits keep their parent
-    // ids, so a commit built on (or merging in) the current default tip still names it.
     let git = &self.git;
     let commits = crate::delegate_git!(git.branch_commits(self, branch).await)?;
-    Ok(!commits.iter().any(|commit| commit.parents().contains(&default_tip)))
+    // The fetch stops where `branch` leaves the default branch, but raw commits keep their parent
+    // ids, so a commit built on (or merging in) the current default tip still names it.
+    let behind = !commits.iter().any(|commit| commit.parents().contains(&default_tip));
+    let mut authors: Vec<String> = commits.iter().map(|commit| commit.author_email().to_owned()).collect();
+    authors.sort_unstable();
+    authors.dedup();
+    Ok(BranchStatus { authors, behind })
   }
 
   /// Fetches `branch`'s own commits, returning the default branch's tip they were fetched
