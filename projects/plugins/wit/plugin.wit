@@ -32,13 +32,18 @@ interface host-api {
   /// rather than re-implementing it in WASM. Only some exports are permitted to call it, see the
   /// docs of each export, every other call gets an error.
   ///
-  /// Two directories are mounted into the container:
+  /// Three directories are mounted into the container:
   ///
   /// - `/workspace`: the guest's own `/workspace`, with the same permissions.
   ///
   /// - `/container-init`: the guest's own `/container-init`, read-only. Write scripts, config, etc
   ///   there first so they don't end up in the workspace (& accidentally committed). WASI can't set
   ///   the executable bit so run scripts through an interpreter, eg: `sh /container-init/run.sh`.
+  ///
+  /// - `/container-cache`: read-write & shared by every container run through the same plugin, it
+  ///   outlives a single call. Point a tool's cache at it (eg: `CARGO_HOME`) to avoid re-downloading
+  ///   things on each run. The guest can't read or write it directly. Treat it purely as an
+  ///   optimisation, it may be empty at any time & concurrent containers may use it at once.
   ///
   /// The command runs as the owner of the workspace, so `HOME` may not be writable.
   ///

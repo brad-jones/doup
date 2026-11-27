@@ -21,14 +21,16 @@ const CONTAINER_WORKSPACE: &str = "/workspace";
 ///
 /// - The image's own toolchain is used, a `rust-toolchain.toml` in the workspace would otherwise
 ///   make rustup download the toolchain it names, cargo's resolver doesn't depend on it.
-/// - The container runs as the workspace's owner, who can't write to the image's `CARGO_HOME`.
+/// - `CARGO_HOME` lives in the container's `/container-cache`, which outlives a run, so the registry index
+///   & crates are only downloaded once. The image's own `CARGO_HOME` can't be written to by the workspace's
+///   owner the container runs as. Cargo locks the dir itself, so concurrent runs are safe.
 const CARGO_SH: &str = r#"#!/bin/sh
 set -eu
 if command -v rustup >/dev/null 2>&1; then
   RUSTUP_TOOLCHAIN="$(rustup default | cut -d ' ' -f 1)"
   export RUSTUP_TOOLCHAIN
 fi
-export CARGO_HOME=/tmp/cargo-home
+export CARGO_HOME=/container-cache/cargo-home
 exec cargo "$@"
 "#;
 

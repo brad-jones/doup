@@ -11,6 +11,8 @@ use crate::world::PluginWorld;
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
+use tempfile::TempDir;
 use testcontainers::core::AccessMode;
 use wasmtime::component::{Component, Linker, bindgen};
 use wasmtime::{Engine, Store};
@@ -55,6 +57,10 @@ impl PluginWorld for EcosystemWorld {
 /// export, and returns the session to the pool.
 pub struct EcosystemPlugin {
   session_pool: PluginSessionPool<EcosystemWorld>,
+
+  /// Backs the `/container-cache` dir of every container run by this plugin, created on first use.
+  /// It's deleted along with the plugin.
+  container_cache: Mutex<Option<TempDir>>,
 }
 
 impl EcosystemPlugin {
@@ -62,7 +68,20 @@ impl EcosystemPlugin {
   pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
     Self {
       session_pool: PluginSessionPool::new(None, plugin, module_search_dirs), //
+      container_cache: Mutex::new(None),
     }
+  }
+
+  /// The host path of the `/container-cache` dir, created if it doesn't exist yet.
+  fn container_cache_dir(&self) -> Result<PathBuf> {
+    let mut cache = self.container_cache.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(dir) = cache.as_ref() {
+      return Ok(dir.path().to_path_buf());
+    }
+    let dir = tempfile::Builder::new().prefix("doup-container-cache-").tempdir()?;
+    let path = dir.path().to_path_buf();
+    *cache = Some(dir);
+    Ok(path)
   }
 
   /// Like [`Self::new`], but eagerly checks a session out and straight back in.
@@ -117,8 +136,13 @@ impl EcosystemPlugin {
   /// The guest gets a read-write view of the workspace, is able to make HTTP calls & may run containers.
   /// It also gets an empty, read-write `/container-init` dir that is mounted into those containers,
   /// keeping the guest's scripts, config, etc out of the workspace. It's deleted after the call.
+  ///
+  /// Containers also get a read-write `/container-cache` dir that the guest can't see. It lives as long as
+  /// this [`EcosystemPlugin`], so is shared by every call, letting the tooling in the containers keep its
+  /// caches (eg: downloaded packages) between runs. The host doesn't know or care what is stored in it.
   pub async fn apply_updates(&self, workspace_dir: &Path, dependency: &Dependency, to: &str) -> Result<()> {
     let workspace_dir = workspace_dir.to_path_buf();
+    let cache_dir = self.container_cache_dir()?;
 
     // Must be bound to a variable, not chained inline: the dir is deleted when the `TempDir` is dropped,
     // so it has to outlive the session. The policy closure only gets a copy of the path.
@@ -132,6 +156,7 @@ impl EcosystemPlugin {
         workspace_access: AccessMode::ReadWrite,
         init: init_dir.clone(),
         init_access: AccessMode::ReadOnly,
+        cache: cache_dir,
       }))
       .wasi(move |b| {
         Ok(

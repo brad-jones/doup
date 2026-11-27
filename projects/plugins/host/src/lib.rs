@@ -44,7 +44,9 @@
 //!   `HttpPolicy::Allowed`. Pooled sessions never have network access.
 //!
 //! - **Containers**: the `run` function of `doup:plugin/host-api` lets a guest run a short lived container
-//!   of any image, with its `/workspace` & a scratch `/container-init` dir mounted in. This lets a
+//!   of any image, with its `/workspace`, a scratch `/container-init` dir & a shared `/container-cache` dir
+//!   mounted in. The cache lives as long as the plugin handle & lets a plugin keep an ecosystem's tooling
+//!   caches between runs without the host knowing anything about them. This lets a
 //!   plugin lean on an ecosystem's own tooling (eg: `cargo update`) rather than re-implementing it.
 //!   Runs are denied unless a session is created with `ContainerPolicy::Allowed`, currently only
 //!   `apply-updates` is. Containers are run with Docker (or anything compatible), configured by the

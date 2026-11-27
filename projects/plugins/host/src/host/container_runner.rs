@@ -19,6 +19,9 @@ const WORKSPACE_DIR: &str = "/workspace";
 /// Where the guest's `/container-init` dir is mounted inside the container.
 const INIT_DIR: &str = "/container-init";
 
+/// Where the cache dir is mounted inside the container.
+const CACHE_DIR: &str = "/container-cache";
+
 /// The longest a container may take, including pulling its image, before it is killed.
 const RUN_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
@@ -50,6 +53,11 @@ pub struct ContainerMounts {
 
   /// How containers may access `/container-init`, usually read-only as it only holds what the guest hands to them.
   pub init_access: AccessMode,
+
+  /// Mounted read-write at `/container-cache`. Unlike the other dirs the guest has no view of it, it's
+  /// only seen by containers, so whatever one writes (eg: downloads) is there for the next.
+  /// The host attaches no meaning to the contents, how long this dir lives is up to whoever creates it.
+  pub cache: PathBuf,
 }
 
 /// Runs `request` to completion, as permitted by `policy`.
@@ -88,6 +96,7 @@ async fn start(
     .with_working_dir(request.working_dir.as_deref().unwrap_or(WORKSPACE_DIR))
     .with_mount(Mount::bind_mount(path_str(&mounts.workspace), WORKSPACE_DIR).with_access_mode(mounts.workspace_access))
     .with_mount(Mount::bind_mount(path_str(&mounts.init), INIT_DIR).with_access_mode(mounts.init_access))
+    .with_mount(Mount::bind_mount(path_str(&mounts.cache), CACHE_DIR))
     .with_label("dev.doup.managed", "true")
     .with_startup_timeout(RUN_TIMEOUT)
     .with_log_consumer(move |frame: &LogFrame| stream_log(&prefix, frame));
@@ -227,13 +236,15 @@ mod tests {
     if !docker_available().await {
       return;
     }
-    let (workspace, init) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (workspace, init, cache) =
+      (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     std::fs::write(init.path().join("run.sh"), "echo \"$GREETING from $(pwd)\" | tee out.txt\n").unwrap();
     let policy = ContainerPolicy::Allowed(ContainerMounts {
       workspace: workspace.path().to_path_buf(),
       workspace_access: AccessMode::ReadWrite,
       init: init.path().to_path_buf(),
       init_access: AccessMode::ReadOnly,
+      cache: cache.path().to_path_buf(),
     });
 
     let output = run(&policy, request(&["sh", "/container-init/run.sh"])).await.unwrap();
@@ -250,6 +261,11 @@ mod tests {
     let err = run(&policy, request(&["touch", "/container-init/new"])).await.unwrap_err();
     assert!(err.contains("exited with code 1"), "{err}");
     assert!(!init.path().join("new").exists());
+
+    // The cache is writable & persists between runs.
+    run(&policy, request(&["sh", "-c", "echo cached > /container-cache/hit"])).await.unwrap();
+    let output = run(&policy, request(&["cat", "/container-cache/hit"])).await.unwrap();
+    assert_eq!(output.stdout, "cached\n");
   }
 
   #[tokio::test]
@@ -257,12 +273,14 @@ mod tests {
     if !docker_available().await {
       return;
     }
-    let (workspace, init) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (workspace, init, cache) =
+      (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let policy = ContainerPolicy::Allowed(ContainerMounts {
       workspace: workspace.path().to_path_buf(),
       workspace_access: AccessMode::ReadOnly,
       init: init.path().to_path_buf(),
       init_access: AccessMode::ReadOnly,
+      cache: cache.path().to_path_buf(),
     });
 
     let err = run(&policy, request(&["sh", "-c", "echo oops >&2; exit 3"])).await.unwrap_err();
