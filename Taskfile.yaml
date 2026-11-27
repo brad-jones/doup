@@ -108,7 +108,8 @@ tasks:
     env:
       CARGO_BUILD_WARNINGS: deny
     cmds:
-      - cog check
+      # COG_RANGE (eg: base..head) is set in CI to only check the PR's commits.
+      - cog check --ignore-merge-commits {{.COG_RANGE}}
       - dprint check
       - cargo clippy
 
