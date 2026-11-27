@@ -52,7 +52,7 @@
 //!
 //! - **Host API**: the `doup:plugin/host-api` imports, which are provided to every plugin.
 //!
-//! Every capability beyond WASI is described by the `SessionPolicy` a session is created with.
+//! Every capability beyond WASI, and the WASI context itself, is described by the `SessionPolicy` a session is created with.
 //!
 //! Stdout and stderr are inherited so plugin output is visible to the user.
 //!
@@ -68,9 +68,6 @@
 //!
 //! [wasmtime]: https://docs.wasmtime.dev
 
-use anyhow::Result;
-use wasmtime_wasi::WasiCtxBuilder;
-
 mod host;
 mod session;
 mod wkg;
@@ -81,28 +78,3 @@ pub use ecosystem_plugin::EcosystemPlugin;
 
 pub mod platform_plugin;
 pub use platform_plugin::PlatformPlugin;
-
-/// Just a simple wrapper to make it easy to put a WasiCtxBuilder closure into a variable.
-///
-/// Before:
-///
-/// ```ignore
-/// let mut session = self
-///   .session_pool
-///   .create_session(SessionPolicy::default(), |b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?))
-///   .await?;
-/// ```
-///
-/// After:
-///
-/// ```ignore
-/// let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
-/// let mut session = self.session_pool.create_session(SessionPolicy::default(), permissions).await?;
-/// ```
-///
-/// It's purely a stylistic thing,
-fn wasi(
-  b: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
-) -> impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder> {
-  b
-}

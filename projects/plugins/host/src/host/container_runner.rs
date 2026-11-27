@@ -45,8 +45,11 @@ pub struct ContainerMounts {
   /// Should match the permissions the guest has to `/workspace`.
   pub workspace_access: AccessMode,
 
-  /// Mounted read-only at `/container-init`, this should be the same dir the guest sees as `/container-init`.
+  /// Mounted at `/container-init`, this should be the same dir the guest sees as `/container-init`.
   pub init: PathBuf,
+
+  /// How containers may access `/container-init`, usually read-only as it only holds what the guest hands to them.
+  pub init_access: AccessMode,
 }
 
 /// Runs `request` to completion, as permitted by `policy`.
@@ -84,7 +87,7 @@ async fn start(
     .with_cmd(&request.command)
     .with_working_dir(request.working_dir.as_deref().unwrap_or(WORKSPACE_DIR))
     .with_mount(Mount::bind_mount(path_str(&mounts.workspace), WORKSPACE_DIR).with_access_mode(mounts.workspace_access))
-    .with_mount(Mount::bind_mount(path_str(&mounts.init), INIT_DIR).with_access_mode(AccessMode::ReadOnly))
+    .with_mount(Mount::bind_mount(path_str(&mounts.init), INIT_DIR).with_access_mode(mounts.init_access))
     .with_label("dev.doup.managed", "true")
     .with_startup_timeout(RUN_TIMEOUT)
     .with_log_consumer(move |frame: &LogFrame| stream_log(&prefix, frame));
@@ -230,6 +233,7 @@ mod tests {
       workspace: workspace.path().to_path_buf(),
       workspace_access: AccessMode::ReadWrite,
       init: init.path().to_path_buf(),
+      init_access: AccessMode::ReadOnly,
     });
 
     let output = run(&policy, request(&["sh", "/container-init/run.sh"])).await.unwrap();
@@ -258,6 +262,7 @@ mod tests {
       workspace: workspace.path().to_path_buf(),
       workspace_access: AccessMode::ReadOnly,
       init: init.path().to_path_buf(),
+      init_access: AccessMode::ReadOnly,
     });
 
     let err = run(&policy, request(&["sh", "-c", "echo oops >&2; exit 3"])).await.unwrap_err();

@@ -7,7 +7,6 @@
 
 use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy, SessionPolicy};
 use crate::session::PluginSessionPool;
-use crate::wasi;
 use crate::world::PluginWorld;
 use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
@@ -84,8 +83,10 @@ impl EcosystemPlugin {
   /// Lists the dependencies found in `workspace_dir`.
   /// The guest gets a read-only view of the workspace.
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
-    let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadOnly)?));
-    let mut session = self.session_pool.create_session(SessionPolicy::default(), permissions).await?;
+    let workspace = workspace_dir.to_path_buf();
+    let policy =
+      SessionPolicy::new().wasi(move |b| Ok(b.preopened_dir(&workspace, "/workspace", FsPerms::ReadOnly)?));
+    let mut session = self.session_pool.create_session(policy).await?;
     let result = session.call_async(async |b, a| b.call_discover_deps(a).await).await?;
     result.map_err(anyhow::Error::msg)
   }
@@ -93,7 +94,8 @@ impl EcosystemPlugin {
   /// Looks up the versions available for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>> {
-    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
     let result = session.call_async(async |b, a| b.call_lookup_versions(a, dependency).await).await?;
     result.map_err(anyhow::Error::msg)
@@ -102,7 +104,8 @@ impl EcosystemPlugin {
   /// Downloads release notes for for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>> {
-    let mut session = self.session_pool.create_session(SessionPolicy::http(), |b| Ok(b)).await?;
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
     let result = session.call_async(async |b, a| b.call_fetch_release_notes(a, dependency, to).await).await?;
@@ -115,23 +118,30 @@ impl EcosystemPlugin {
   /// It also gets an empty, read-write `/container-init` dir that is mounted into those containers,
   /// keeping the guest's scripts, config, etc out of the workspace. It's deleted after the call.
   pub async fn apply_updates(&self, workspace_dir: &Path, dependency: &Dependency, to: &str) -> Result<()> {
-    let init_dir = tempfile::Builder::new().prefix("doup-container-init-").tempdir()?;
-    let permissions = wasi(|b| {
-      Ok(
-        b //
-          .preopened_dir(workspace_dir, "/workspace", FsPerms::ReadWrite)?
-          .preopened_dir(init_dir.path(), "/container-init", FsPerms::ReadWrite)?,
-      )
-    });
-    let policy = SessionPolicy {
-      http: HttpPolicy::Allowed,
-      container: ContainerPolicy::Allowed(ContainerMounts {
-        workspace: workspace_dir.to_path_buf(),
+    let workspace_dir = workspace_dir.to_path_buf();
+
+    // Must be bound to a variable, not chained inline: the dir is deleted when the `TempDir` is dropped,
+    // so it has to outlive the session. The policy closure only gets a copy of the path.
+    let init_tmp = tempfile::Builder::new().prefix("doup-container-init-").tempdir()?;
+    let init_dir = init_tmp.path().to_path_buf();
+
+    let policy = SessionPolicy::new()
+      .http(HttpPolicy::Allowed)
+      .containers(ContainerPolicy::Allowed(ContainerMounts {
+        workspace: workspace_dir.clone(),
         workspace_access: AccessMode::ReadWrite,
-        init: init_dir.path().to_path_buf(),
-      }),
-    };
-    let mut session = self.session_pool.create_session(policy, permissions).await?;
+        init: init_dir.clone(),
+        init_access: AccessMode::ReadOnly,
+      }))
+      .wasi(move |b| {
+        Ok(
+          b //
+            .preopened_dir(&workspace_dir, "/workspace", FsPerms::ReadWrite)?
+            .preopened_dir(&init_dir, "/container-init", FsPerms::ReadWrite)?,
+        )
+      });
+
+    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
     let result = session.call_async(async |b, a| b.call_apply_updates(a, dependency, to).await).await?;

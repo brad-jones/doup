@@ -25,19 +25,24 @@ pub struct HostState {
 impl HostState {
   /// Creates a new host state.
   ///
-  /// `configure` receives the [`WasiCtxBuilder`] so callers can customise the
-  /// WASI context (e.g. inherit stdio, preopen directories, set env vars)
-  /// before it is built. `policy` decides which capabilities beyond WASI the guest is granted.
+  /// `policy` decides which capabilities beyond WASI the guest is granted. Its `wasi` closure
+  /// receives the [`WasiCtxBuilder`] (already prepared by `base`) so callers can customise the
+  /// WASI context (e.g. inherit stdio, preopen directories, set env vars) before it is built.
   ///
   /// # Errors
   ///
-  /// Returns an error if `configure` fails, e.g. a preopened directory cannot be opened.
+  /// Returns an error if a closure fails, e.g. a preopened directory cannot be opened.
   pub fn new(
     policy: SessionPolicy,
-    configure: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
+    base: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
   ) -> Result<Self> {
+    let mut builder = WasiCtxBuilder::new();
+    base(&mut builder)?;
+    if let Some(configure) = policy.wasi {
+      configure(&mut builder)?;
+    }
     Ok(Self {
-      wasi: configure(&mut WasiCtxBuilder::new())?.build(),
+      wasi: builder.build(),
       http: WasiHttpCtx::new(),
       http_hooks: HttpHooks { http_policy: policy.http },
       container_policy: policy.container,

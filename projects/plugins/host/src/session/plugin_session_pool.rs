@@ -13,7 +13,6 @@ use std::{
 use wasmtime::Config;
 use wasmtime::component::Linker;
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::WasiCtxBuilder;
 
 /// Fallback engine for pools that were not given one. Engines are expensive and meant to be shared.
 static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -150,14 +149,10 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// custom WASI context overrides need to be given. Do not attempt to check
   /// the resulting session into the pool, just drop it.
   ///
-  /// `policy` decides which capabilities beyond WASI (eg: outbound `wasi:http` requests) the guest
-  /// is granted, pooled sessions are never granted any, see [`Self::checkout_session`].
-  pub async fn create_session(
-    &self,
-    policy: SessionPolicy,
-    wasi: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
-  ) -> Result<PluginSession<W>> {
-    let mut store = Store::new(self.engine()?, HostState::new(policy, |b| wasi(W::wasi(b)?))?);
+  /// `policy` decides the guest's WASI context and which capabilities beyond WASI (eg: outbound
+  /// `wasi:http` requests) it is granted, pooled sessions are never granted any, see [`Self::checkout_session`].
+  pub async fn create_session(&self, policy: SessionPolicy) -> Result<PluginSession<W>> {
+    let mut store = Store::new(self.engine()?, HostState::new(policy, W::wasi)?);
     let bindings = W::instantiate(self.component_pre()?, &mut store).await?;
 
     let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())?;
@@ -177,7 +172,7 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     let session = self.session_pool.lock().unwrap_or_else(PoisonError::into_inner).pop();
     match session {
       Some(session) => Ok(session),
-      None => self.create_session(SessionPolicy::default(), |b| Ok(b)).await,
+      None => self.create_session(SessionPolicy::new()).await,
     }
   }
 
