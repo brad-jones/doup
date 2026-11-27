@@ -10,11 +10,11 @@
 //! The trait also provides the default linker (WASI p3, `wasi:http` and the host API) and the
 //! default WASI permissions, both of which a world may override.
 
+use crate::host::types::GuestError;
 use crate::host::{HostState, host_api};
-use anyhow::Result;
 use std::path::Path;
 use wasmtime::component::{HasSelf, Linker};
-use wasmtime::{Engine, Store};
+use wasmtime::{Engine, Result, Store};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p3::add_to_linker;
 use wasmtime_wasi_http::p3::add_to_linker as add_http_to_linker;
@@ -58,7 +58,7 @@ pub trait PluginWorld: 'static {
   ///   bindings: &Self::Bindings,
   ///   store: &mut Store<HostState>,
   ///   config: &str,
-  /// ) -> wasmtime::Result<Result<(), String>> {
+  /// ) -> wasmtime::Result<Result<(), GuestError>> {
   ///   bindings.call_configure(store, config).await
   /// }
   /// ```
@@ -66,7 +66,7 @@ pub trait PluginWorld: 'static {
     bindings: &Self::Bindings,
     store: &mut Store<HostState>,
     config: &str,
-  ) -> impl Future<Output = wasmtime::Result<Result<(), String>>> + Send;
+  ) -> impl Future<Output = Result<std::result::Result<(), GuestError>>> + Send;
 
   /// The default linker that will be used, worlds are free to override.
   /// The result from this method is cached by [`crate::session::PluginSessionPool`].

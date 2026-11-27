@@ -3,6 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
+use crate::error::GithubError;
 use crate::{PullRequest, version};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -113,10 +114,10 @@ pub struct OpenPrsPage {
 }
 
 /// Parses the `data` of an [`open_prs_query`], keeping PRs whose head branch starts with `head_branch_prefix`.
-pub fn parse_open_prs(data: Value, head_branch_prefix: &str) -> Result<OpenPrsPage, String> {
-  let data: Data<OpenRepository> =
-    serde_json::from_value(data).map_err(|err| format!("invalid GitHub open pull requests response: {err}"))?;
-  let connection = data.repository.ok_or_else(repository_not_found)?.pull_requests;
+pub fn parse_open_prs(data: Value, head_branch_prefix: &str) -> Result<OpenPrsPage, GithubError> {
+  let data: Data<OpenRepository> = serde_json::from_value(data)
+    .map_err(|source| GithubError::InvalidResponse { what: "open pull requests", source })?;
+  let connection = data.repository.ok_or(GithubError::RepositoryNotFound)?.pull_requests;
 
   let next_cursor = connection.page_info.filter(|p| p.has_next_page).and_then(|p| p.end_cursor);
   let pull_requests = connection
@@ -129,10 +130,10 @@ pub fn parse_open_prs(data: Value, head_branch_prefix: &str) -> Result<OpenPrsPa
 }
 
 /// Parses the `data` of a [`closed_prs_query`].
-pub fn parse_closed_prs(data: Value) -> Result<Vec<PullRequest>, String> {
-  let data: Data<BTreeMap<String, Connection>> =
-    serde_json::from_value(data).map_err(|err| format!("invalid GitHub closed pull requests response: {err}"))?;
-  let connections = data.repository.ok_or_else(repository_not_found)?;
+pub fn parse_closed_prs(data: Value) -> Result<Vec<PullRequest>, GithubError> {
+  let data: Data<BTreeMap<String, Connection>> = serde_json::from_value(data)
+    .map_err(|source| GithubError::InvalidResponse { what: "closed pull requests", source })?;
+  let connections = data.repository.ok_or(GithubError::RepositoryNotFound)?;
 
   // Order by alias index so results follow the order the branches were asked for.
   let mut connections: Vec<_> = connections.into_iter().collect();
@@ -146,10 +147,6 @@ pub fn parse_closed_prs(data: Value) -> Result<Vec<PullRequest>, String> {
       .map(PrNode::into_pull_request)
       .collect(),
   )
-}
-
-fn repository_not_found() -> String {
-  "repository not found, or the github_token can not access it".to_string()
 }
 
 #[cfg(test)]
@@ -236,7 +233,7 @@ mod tests {
   #[test]
   fn a_missing_repository_is_an_error() {
     let err = parse_open_prs(json!({ "repository": null }), "doup/").err().unwrap();
-    assert!(err.contains("repository not found"), "{err}");
+    assert!(matches!(err, GithubError::RepositoryNotFound), "{err}");
     assert!(parse_closed_prs(json!({ "repository": null })).is_err());
     assert!(parse_closed_prs(json!("nope")).is_err());
   }

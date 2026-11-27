@@ -1,14 +1,14 @@
 use super::container_runner::{self as runner, ContainerPolicy};
 use super::http::HttpHooks;
 use super::policy::SessionPolicy;
-use anyhow::Result;
+use wasmtime::Result;
 use wasmtime::component::{Accessor, HasSelf, ResourceTable, bindgen};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
 
-// Generated bindings for the `host_api` interface imported by plugins.
+// Generated bindings for the `host_api` & `types` interfaces imported by plugins.
 bindgen!({ path: "../wit", world: "shared" });
-pub use doup::plugin::host_api;
+pub use doup::plugin::{host_api, types};
 
 /// Per-instance state stored in a Wasmtime `Store`.
 ///
@@ -76,10 +76,13 @@ impl host_api::Host for HostState {
 
 /// Implements the `host_api` functions that need access to the store.
 impl<T> host_api::HostWithStore<T> for HasSelf<HostState> {
-  /// Runs a container, as permitted by the session's [`ContainerPolicy`].
-  async fn run(accessor: &Accessor<T, Self>, request: host_api::RunRequest) -> Result<host_api::RunOutput, String> {
+  /// Runs a container, as permitted by the session's `ContainerPolicy`.
+  async fn run(
+    accessor: &Accessor<T, Self>,
+    request: host_api::RunRequest,
+  ) -> std::result::Result<host_api::RunOutput, host_api::RunError> {
     // The store can't be held across an await, so take what's needed from it up front.
     let policy = accessor.with(|mut access| access.get().container_policy.clone());
-    runner::run(&policy, request).await
+    Ok(runner::run(&policy, request).await?)
   }
 }

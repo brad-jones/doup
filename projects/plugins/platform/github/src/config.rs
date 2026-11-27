@@ -1,5 +1,6 @@
 //! The plugin's config, validated as soon as it is given to `configure`.
 
+use crate::error::GithubError;
 use garde::Validate;
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -27,9 +28,9 @@ pub struct Config {
 }
 
 impl Config {
-  fn parse(json: &str) -> Result<Self, String> {
-    let config: Self = serde_json::from_str(json).map_err(|err| format!("invalid config: {err}"))?;
-    config.validate().map_err(|err| format!("invalid config: {err}"))?;
+  fn parse(json: &str) -> Result<Self, GithubError> {
+    let config: Self = serde_json::from_str(json).map_err(GithubError::ParseConfig)?;
+    config.validate().map_err(GithubError::ValidateConfig)?;
     Ok(config)
   }
 
@@ -62,18 +63,19 @@ impl Config {
 }
 
 /// Parses and validates `json`, then keeps it for [`get`]. May only be called once.
-pub fn init(json: &str) -> Result<(), String> {
-  CONFIG.set(Config::parse(json)?).map_err(|_| "already configured".to_string())
+pub fn init(json: &str) -> Result<(), GithubError> {
+  CONFIG.set(Config::parse(json)?).map_err(|_| GithubError::AlreadyConfigured)
 }
 
 /// The config given to [`init`].
-pub fn get() -> Result<&'static Config, String> {
-  CONFIG.get().ok_or_else(|| "not configured".to_string())
+pub fn get() -> Result<&'static Config, GithubError> {
+  CONFIG.get().ok_or(GithubError::NotConfigured)
 }
 
 #[cfg(test)]
 mod tests {
   use super::Config;
+  use crate::error::GithubError;
 
   const VALID: &str = r#"{"repository":"acme/foo","github_token":"abc"}"#;
 
@@ -95,7 +97,8 @@ mod tests {
   #[test]
   fn unknown_keys_are_rejected() {
     let err = Config::parse(r#"{"repository":"acme/foo","github_token":"abc","foo":"bar"}"#).err().unwrap();
-    assert!(err.contains("foo"), "{err}");
+    let GithubError::ParseConfig(source) = err else { panic!("unexpected error: {err}") };
+    assert!(source.to_string().contains("foo"), "{source}");
   }
 
   #[test]

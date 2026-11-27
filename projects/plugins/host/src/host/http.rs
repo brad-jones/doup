@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::sync::Once;
 use wasmtime_wasi_http::{Error as HttpError, RequestOptions, WasiBody, WasiHttpHooks, default_send_request};
 

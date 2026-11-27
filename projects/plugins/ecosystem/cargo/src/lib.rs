@@ -13,6 +13,7 @@ use bindings::*;
 mod apply;
 mod config;
 mod discover;
+mod error;
 mod fetch;
 mod http;
 mod lookup;
@@ -26,26 +27,26 @@ use std::path::Path;
 struct DoupEcosystemPluginCargo;
 
 impl Guest for DoupEcosystemPluginCargo {
-  fn configure(config: String) -> Result<(), String> {
-    config::init(&config)
+  fn configure(config: String) -> Result<(), GuestError> {
+    Ok(config::init(&config)?)
   }
 
-  async fn discover_deps() -> Result<Vec<Dependency>, String> {
-    discover::discover(Path::new("/workspace"))
+  async fn discover_deps() -> Result<Vec<Dependency>, GuestError> {
+    Ok(discover::discover(Path::new("/workspace"))?)
   }
 
-  async fn lookup_versions(dependency: Dependency) -> Result<Option<Versions>, String> {
+  async fn lookup_versions(dependency: Dependency) -> Result<Option<Versions>, GuestError> {
     let url = registry::index_url(dependency.registry.as_deref(), &dependency.name);
     let index = http::get(&url, &[]).await?.into_success(&url)?;
-    lookup::select(&dependency, &index)
+    Ok(lookup::select(&dependency, &index)?)
   }
 
-  async fn fetch_release_notes(dependency: Dependency, to: String) -> Result<Vec<ReleaseNote>, String> {
-    fetch::release_notes(&dependency, &to).await
+  async fn fetch_release_notes(dependency: Dependency, to: String) -> Result<Vec<ReleaseNote>, GuestError> {
+    Ok(fetch::release_notes(&dependency, &to).await?)
   }
 
-  async fn apply_updates(dependency: Dependency, to: String) -> Result<(), String> {
-    apply::apply(Path::new("/workspace"), Path::new("/container-init"), &dependency, &to).await
+  async fn apply_updates(dependency: Dependency, to: String) -> Result<(), GuestError> {
+    Ok(apply::apply(Path::new("/workspace"), Path::new("/container-init"), &dependency, &to).await?)
   }
 }
 

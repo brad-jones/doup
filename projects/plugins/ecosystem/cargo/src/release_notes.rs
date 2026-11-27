@@ -4,7 +4,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, ReleaseNote, lookup};
+use crate::{Dependency, ReleaseNote, error::CargoError, lookup};
 use semver::Version;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -19,8 +19,12 @@ pub struct GithubRepo {
 /// Returns the versions that a release note is wanted for, newest first.
 ///
 /// That is every version the index offers after the lowest installed version, up to and including `to`.
-pub fn versions_between(dependency: &Dependency, index: &str, to: &str) -> Result<Vec<Version>, String> {
-  let to = Version::parse(to).map_err(|err| format!("invalid version `{to}`: {err}"))?;
+pub fn versions_between(dependency: &Dependency, index: &str, to: &str) -> Result<Vec<Version>, CargoError> {
+  let to = Version::parse(to).map_err(|source| CargoError::InvalidVersion {
+    name: dependency.name.clone(),
+    version: to.to_string(),
+    source,
+  })?;
   let lookup::Analysis { installed, candidates, .. } = lookup::analyse(dependency, index)?;
   let Some(installed) = installed else {
     return Ok(Vec::new());
@@ -44,9 +48,9 @@ struct CrateInfo {
 }
 
 /// Reads the repository URL out of a crates.io API response for a crate.
-pub fn repository_url(crate_json: &str) -> Result<Option<String>, String> {
+pub fn repository_url(crate_json: &str) -> Result<Option<String>, CargoError> {
   let response: CrateResponse =
-    serde_json::from_str(crate_json).map_err(|err| format!("invalid crates.io response: {err}"))?;
+    serde_json::from_str(crate_json).map_err(|source| CargoError::InvalidResponse { what: "crates.io", source })?;
   Ok(response.krate.repository)
 }
 
@@ -81,8 +85,8 @@ pub struct GithubRelease {
 }
 
 /// Parses the JSON array returned by GitHub's list releases endpoint.
-pub fn parse_releases(json: &str) -> Result<Vec<GithubRelease>, String> {
-  serde_json::from_str(json).map_err(|err| format!("invalid GitHub releases response: {err}"))
+pub fn parse_releases(json: &str) -> Result<Vec<GithubRelease>, CargoError> {
+  serde_json::from_str(json).map_err(|source| CargoError::InvalidResponse { what: "GitHub releases", source })
 }
 
 /// Maps `releases` to a release note for each of the `wanted` versions that has one.

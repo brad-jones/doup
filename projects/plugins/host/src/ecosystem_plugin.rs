@@ -5,10 +5,10 @@
 //! generates the component bindings for that world and exposes
 //! [`EcosystemPlugin`], a handle that runs calls against pooled plugin sessions.
 
+use crate::error::PluginError;
 use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy, SessionPolicy};
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
-use anyhow::Result;
 use doup_config::repo::DoupRepoPlugin;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
@@ -22,7 +22,10 @@ bindgen!({
   path: "../wit",
   world: "ecosystem",
   exports: { default: async },
-  with: { "doup:plugin/host-api": super::host::host_api },
+  with: {
+    "doup:plugin/host-api": super::host::host_api,
+    "doup:plugin/types": super::host::types,
+  },
 });
 
 /// Marker type binding the `ecosystem` WIT world to the generic session pool.
@@ -32,21 +35,21 @@ impl PluginWorld for EcosystemWorld {
   type Pre = EcosystemPre<HostState>;
   type Bindings = Ecosystem;
 
-  fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> Result<Self::Pre> {
+  fn pre(engine: &Engine, linker: &Linker<HostState>, path: &Path) -> wasmtime::Result<Self::Pre> {
     let component = Component::from_file(engine, path)?;
     let pre = EcosystemPre::new(linker.instantiate_pre(&component)?)?;
     Ok(pre)
   }
 
-  async fn instantiate(pre: &Self::Pre, store: &mut Store<HostState>) -> Result<Self::Bindings> {
-    Ok(pre.instantiate_async(store).await?)
+  async fn instantiate(pre: &Self::Pre, store: &mut Store<HostState>) -> wasmtime::Result<Self::Bindings> {
+    pre.instantiate_async(store).await
   }
 
   async fn configure(
     bindings: &Self::Bindings,
     store: &mut Store<HostState>,
     config: &str,
-  ) -> wasmtime::Result<Result<(), String>> {
+  ) -> wasmtime::Result<Result<(), GuestError>> {
     bindings.call_configure(store, config).await
   }
 }
@@ -73,12 +76,12 @@ impl EcosystemPlugin {
   }
 
   /// The host path of the `/container-cache` dir, created if it doesn't exist yet.
-  fn container_cache_dir(&self) -> Result<PathBuf> {
+  fn container_cache_dir(&self) -> Result<PathBuf, PluginError> {
     let mut cache = self.container_cache.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(dir) = cache.as_ref() {
       return Ok(dir.path().to_path_buf());
     }
-    let dir = tempfile::Builder::new().prefix("doup-container-cache-").tempdir()?;
+    let dir = tempfile::Builder::new().prefix("doup-container-cache-").tempdir().map_err(PluginError::TempDir)?;
     let path = dir.path().to_path_buf();
     *cache = Some(dir);
     Ok(path)
@@ -92,43 +95,42 @@ impl EcosystemPlugin {
   /// # Errors
   ///
   /// Returns an error if the plugin cannot be loaded, instantiated or configured.
-  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self> {
+  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self, PluginError> {
     let instance = Self::new(plugin, module_search_dirs);
     let session = instance.session_pool.checkout_session().await?;
-    instance.session_pool.checkin_session(session, Ok(()))?;
+    instance.session_pool.checkin_session(session);
     Ok(instance)
   }
 
   /// Lists the dependencies found in `workspace_dir`.
   /// The guest gets a read-only view of the workspace.
-  pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>> {
+  pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>, PluginError> {
     let workspace = workspace_dir.to_path_buf();
-    let policy =
-      SessionPolicy::new().wasi(move |b| Ok(b.preopened_dir(&workspace, "/workspace", FsPerms::ReadOnly)?));
-    let mut session = self.session_pool.create_session(policy).await?;
-    let result = session.call_async(async |b, a| b.call_discover_deps(a).await).await?;
-    result.map_err(anyhow::Error::msg)
+    let policy = SessionPolicy::new().wasi(move |b| b.preopened_dir(&workspace, "/workspace", FsPerms::ReadOnly));
+    self.session_pool.call_export("discover-deps", policy, async |b, a| b.call_discover_deps(a).await).await
   }
 
   /// Looks up the versions available for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
-  pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>> {
+  pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>, PluginError> {
     let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
-    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
-    let result = session.call_async(async |b, a| b.call_lookup_versions(a, dependency).await).await?;
-    result.map_err(anyhow::Error::msg)
+    self
+      .session_pool
+      .call_export("lookup-versions", policy, async |b, a| b.call_lookup_versions(a, dependency).await)
+      .await
   }
 
   /// Downloads release notes for for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
-  pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>> {
+  pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>, PluginError> {
     let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
-    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
-    let result = session.call_async(async |b, a| b.call_fetch_release_notes(a, dependency, to).await).await?;
-    result.map_err(anyhow::Error::msg)
+    self
+      .session_pool
+      .call_export("fetch-release-notes", policy, async |b, a| b.call_fetch_release_notes(a, dependency, to).await)
+      .await
   }
 
   /// Updates every occurrence of `dependency` found in `workspace_dir` to version `to`.
@@ -140,13 +142,18 @@ impl EcosystemPlugin {
   /// Containers also get a read-write `/container-cache` dir that the guest can't see. It lives as long as
   /// this [`EcosystemPlugin`], so is shared by every call, letting the tooling in the containers keep its
   /// caches (eg: downloaded packages) between runs. The host doesn't know or care what is stored in it.
-  pub async fn apply_updates(&self, workspace_dir: &Path, dependency: &Dependency, to: &str) -> Result<()> {
+  pub async fn apply_updates(
+    &self,
+    workspace_dir: &Path,
+    dependency: &Dependency,
+    to: &str,
+  ) -> Result<(), PluginError> {
     let workspace_dir = workspace_dir.to_path_buf();
     let cache_dir = self.container_cache_dir()?;
 
     // Must be bound to a variable, not chained inline: the dir is deleted when the `TempDir` is dropped,
     // so it has to outlive the session. The policy closure only gets a copy of the path.
-    let init_tmp = tempfile::Builder::new().prefix("doup-container-init-").tempdir()?;
+    let init_tmp = tempfile::Builder::new().prefix("doup-container-init-").tempdir().map_err(PluginError::TempDir)?;
     let init_dir = init_tmp.path().to_path_buf();
 
     let policy = SessionPolicy::new()
@@ -159,17 +166,44 @@ impl EcosystemPlugin {
         cache: cache_dir,
       }))
       .wasi(move |b| {
-        Ok(
-          b //
-            .preopened_dir(&workspace_dir, "/workspace", FsPerms::ReadWrite)?
-            .preopened_dir(&init_dir, "/container-init", FsPerms::ReadWrite)?,
-        )
+        b //
+          .preopened_dir(&workspace_dir, "/workspace", FsPerms::ReadWrite)?
+          .preopened_dir(&init_dir, "/container-init", FsPerms::ReadWrite)
       });
 
-    let mut session = self.session_pool.create_session(policy).await?;
     let dependency = dependency.clone();
     let to = to.to_string();
-    let result = session.call_async(async |b, a| b.call_apply_updates(a, dependency, to).await).await?;
-    result.map_err(anyhow::Error::msg)
+    self
+      .session_pool
+      .call_export("apply-updates", policy, async |b, a| b.call_apply_updates(a, dependency, to).await)
+      .await
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn plugin(reference: &str) -> DoupRepoPlugin {
+    DoupRepoPlugin { plugin: reference.to_string(), with: None }
+  }
+
+  #[tokio::test]
+  async fn missing_plugins_report_everywhere_searched() {
+    let dir = tempfile::tempdir().unwrap();
+    let Err(err) = EcosystemPlugin::load(&plugin("missing.wasm"), vec![dir.path().to_path_buf()]).await else {
+      panic!("expected the plugin to be missing");
+    };
+    let PluginError::NotFound { plugin, searched } = &err else { panic!("unexpected error: {err}") };
+    assert_eq!(plugin, "missing.wasm");
+    assert_eq!(searched.last(), Some(&dir.path().join("missing.wasm")));
+  }
+
+  #[tokio::test]
+  async fn wkg_references_are_not_supported_yet() {
+    let Err(err) = EcosystemPlugin::load(&plugin("doup:cargo@1.0.0"), Vec::new()).await else {
+      panic!("expected wkg references to be rejected");
+    };
+    assert!(matches!(&err, PluginError::WkgUnsupported { plugin } if plugin == "doup:cargo@1.0.0"), "{err}");
   }
 }

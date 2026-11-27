@@ -2,6 +2,7 @@
 
 use crate::{
   Dependency, ReleaseNote,
+  error::CargoError,
   http::{get, github_api_headers},
   registry, release_notes,
 };
@@ -19,7 +20,7 @@ const MAX_RELEASE_PAGES: usize = 5;
 /// Crates from other registries, or without a GitHub repository, have no release notes.
 /// Any failure to reach GitHub (rate limited, missing, etc) is an error, so problems aren't masked.
 /// The only exception is a repository without a `CHANGELOG.md`.
-pub async fn release_notes(dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>, String> {
+pub async fn release_notes(dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>, CargoError> {
   if dependency.registry.is_some() {
     return Ok(Vec::new());
   }

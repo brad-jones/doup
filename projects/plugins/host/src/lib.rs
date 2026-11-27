@@ -58,6 +58,20 @@
 //!
 //! Stdout and stderr are inherited so plugin output is visible to the user.
 //!
+//! # Errors
+//!
+//! Every fallible function returns a [`PluginError`], one variant per way loading or calling a
+//! plugin can fail, eg: [`PluginError::NotFound`] or [`PluginError::Trap`] when a guest traps.
+//!
+//! Plugins return errors as the WIT `guest-error` record (`doup:plugin/types`), which is surfaced as
+//! a [`GuestError`] by [`PluginError::Configure`] & [`PluginError::Guest`]. Its [`GuestErrorKind`]
+//! categorises the failure (eg: `http`, `not-found` or `invalid-workspace`) so callers can react to
+//! it without parsing messages, and the causes the plugin reported form its
+//! [`source`](std::error::Error::source) chain. Render with `{:#}` (anyhow) to see the whole chain.
+//!
+//! Likewise `host-api.run` fails with a typed `run-error`, so a guest can tell a command that exited
+//! with a non-zero code apart from containers not being permitted or the runtime being unavailable.
+//!
 //! # Remote plugins
 //!
 //! References in the `wkg` form (`namespace:package@version`) are recognised but not supported
@@ -70,10 +84,13 @@
 //!
 //! [wasmtime]: https://docs.wasmtime.dev
 
+mod error;
 mod host;
 mod session;
 mod wkg;
 mod world;
+
+pub use error::{GuestError, GuestErrorKind, PluginError, WasmtimeError};
 
 pub mod ecosystem_plugin;
 pub use ecosystem_plugin::EcosystemPlugin;

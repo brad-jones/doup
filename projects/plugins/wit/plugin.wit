@@ -1,5 +1,52 @@
 package doup:plugin@0.1.0;
 
+/// Types shared by every plugin world.
+interface types {
+  /// The broad category of a `guest-error`, lets the host react to a failure without parsing messages.
+  enum error-kind {
+    /// The config passed to `configure` is invalid, or the plugin has not been configured.
+    invalid-config,
+
+    /// An argument passed to an export is invalid, eg: a malformed version number.
+    invalid-input,
+
+    /// The workspace holds something the plugin can't understand, eg: a malformed manifest or lockfile.
+    invalid-workspace,
+
+    /// Something the export needed does not exist, eg: a repository, registry or package.
+    not-found,
+
+    /// An HTTP request failed or returned an unsuccessful status.
+    http,
+
+    /// A remote service, or the host, responded with something the plugin could not understand.
+    invalid-response,
+
+    /// Reading or writing the workspace (or any other file) failed.
+    io,
+
+    /// Running a container through `host-api.run` failed.
+    container,
+
+    /// Anything else.
+    other,
+  }
+
+  /// The error returned by every plugin export.
+  ///
+  /// WIT has no recursive types, so rather than nesting errors the chain of causes is flattened
+  /// into `causes`. The host rebuilds it into a regular error chain.
+  record guest-error {
+    kind: error-kind,
+
+    /// Describes only this error's own context, eg: "failed to read Cargo.toml".
+    message: string,
+
+    /// The underlying causes, outermost first, eg: ["No such file or directory (os error 2)"].
+    causes: list<string>,
+  }
+}
+
 interface host-api {
   host-version: func() -> string;
 
@@ -26,6 +73,31 @@ interface host-api {
     stderr: string,
   }
 
+  /// The outcome of a container whose command did not exit successfully.
+  record run-exit {
+    /// The exit code, none if the container runtime could not report one.
+    code: option<s64>,
+    stdout: string,
+
+    /// The tail of stderr, the host truncates it to keep the error a reasonable size.
+    stderr: string,
+  }
+
+  /// Why `run` failed.
+  variant run-error {
+    /// Containers are not permitted for the current call.
+    not-permitted,
+
+    /// The request is invalid, eg: an empty `command`.
+    invalid-request(string),
+
+    /// The container could not be run, eg: the runtime is unavailable or the image can't be pulled.
+    runtime(string),
+
+    /// The command ran but exited with a non-zero (or unknown) code.
+    exited(run-exit),
+  }
+
   /// Runs a short lived container, managed by the host, to completion & returns its output.
   ///
   /// This keeps the guest sandboxed while letting it lean on real tooling (eg: `cargo update`)
@@ -47,18 +119,21 @@ interface host-api {
   ///
   /// The command runs as the owner of the workspace, so `HOME` may not be writable.
   ///
-  /// Returns an error if containers are not permitted for the current call, the container runtime
-  /// is unavailable, the image can't be pulled, or the command exits with a non-zero code.
-  run: async func(request: run-request) -> result<run-output, string>;
+  /// Returns an error if containers are not permitted for the current call, the request is invalid,
+  /// the container runtime is unavailable, the image can't be pulled, or the command exits with a
+  /// non-zero code, see `run-error`.
+  run: async func(request: run-request) -> result<run-output, run-error>;
 }
 
 /// Host-only world used to generate the shared host bindings.
 world shared {
+  import types;
   import host-api;
 }
 
 world platform {
   import host-api;
+  use types.{guest-error};
 
   record pull-request {
     /// The pull request number.
@@ -103,31 +178,32 @@ world platform {
   }
 
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
-  export configure: func(config: string) -> result<_, string>;
+  export configure: func(config: string) -> result<_, guest-error>;
 
   /// Opens a new pull request from `head-branch`, which has already been pushed, using `content`.
-  export create-pr: async func(head-branch: string, content: pull-request-content) -> result<pull-request, string>;
+  export create-pr: async func(head-branch: string, content: pull-request-content) -> result<pull-request, guest-error>;
 
   /// Replaces the base branch, title, body & version of the open pull request `number` with `content`.
   /// The head branch of a pull request can not be changed, push to it instead.
-  export update-pr: async func(number: s64, content: pull-request-content) -> result<pull-request, string>;
+  export update-pr: async func(number: s64, content: pull-request-content) -> result<pull-request, guest-error>;
 
   /// Closes the pull request `number` without merging it, returning it as it is once closed.
   /// Closing a pull request that is already closed is not an error.
   ///
   /// When `comment` is given (& is not blank) it is first posted to the pull request, as markdown,
   /// to explain why it is being closed. If posting it fails the pull request is left open.
-  export close-pr: async func(number: s64, comment: option<string>) -> result<pull-request, string>;
+  export close-pr: async func(number: s64, comment: option<string>) -> result<pull-request, guest-error>;
 
   /// List all open pull requests where their head branch name starts with `head-branch-prefix`.
-  export list-open-prs: async func(head-branch-prefix: string) -> result<list<pull-request>, string>;
+  export list-open-prs: async func(head-branch-prefix: string) -> result<list<pull-request>, guest-error>;
 
   /// List all closed pull requests where their head branch exactly matches one of `head-branches`.
-  export list-closed-prs: async func(head-branches: list<string>) -> result<list<pull-request>, string>;
+  export list-closed-prs: async func(head-branches: list<string>) -> result<list<pull-request>, guest-error>;
 }
 
 world ecosystem {
   import host-api;
+  use types.{guest-error};
 
   record dependency {
     /// The name of the dependency, unique within this ecosystem, eg: "@types/node".
@@ -210,19 +286,19 @@ world ecosystem {
   }
 
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
-  export configure: func(config: string) -> result<_, string>;
+  export configure: func(config: string) -> result<_, guest-error>;
 
   /// Returns a list of dependencies discovered in the current workspace.
   /// Async because under WASI p3 a guest may only block on I/O (eg: reading the workspace) from an async task.
-  export discover-deps: async func() -> result<list<dependency>, string>;
+  export discover-deps: async func() -> result<list<dependency>, guest-error>;
 
   /// Looks up the latest version for a given dependency.
   /// If the latest version matches what is already installed then return `None`.
-  export lookup-versions: async func(dependency: dependency) -> result<option<versions>, string>;
+  export lookup-versions: async func(dependency: dependency) -> result<option<versions>, guest-error>;
 
   /// Downloads release notes for every version between the dependencies lowest recorded version & `to`.
   /// Where `to` is `versions.latest` if returned by `lookup-versions`, otherwise `versions.next`.
-  export fetch-release-notes: async func(dependency: dependency, to: string) -> result<list<release-note>, string>;
+  export fetch-release-notes: async func(dependency: dependency, to: string) -> result<list<release-note>, guest-error>;
 
   /// Updates every occurrence of `dependency` in the workspace to version `to`.
   /// Where `to` is either `versions.next` or `versions.latest` as returned by `lookup-versions`.
@@ -233,5 +309,5 @@ world ecosystem {
   ///
   /// This is the only export that may call `host-api.run`. It is also given an empty, read-write
   /// `/container-init` directory, scratch space for files to mount into those containers.
-  export apply-updates: async func(dependency: dependency, to: string) -> result<_, string>;
+  export apply-updates: async func(dependency: dependency, to: string) -> result<_, guest-error>;
 }

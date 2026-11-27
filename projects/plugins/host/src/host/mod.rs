@@ -19,4 +19,4 @@ pub use container_runner::{ContainerMounts, ContainerPolicy};
 pub use http::HttpPolicy;
 pub use policy::SessionPolicy;
 pub use state::HostState;
-pub use state::host_api;
+pub use state::{host_api, types};

@@ -3,6 +3,7 @@
 //! Like [`crate::graphql`], this module only uses plain `std` / `serde` types (plus the WIT records)
 //! so that it can be unit tested natively, without a wasm runtime.
 
+use crate::error::GithubError;
 use crate::{PullRequest, PullRequestContent, version};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -15,9 +16,9 @@ const TRUNCATED_NOTICE: &str = "\n\n---\n\n_This description was truncated to fi
 
 /// The JSON body that opens a pull request from `head_branch`.
 /// See <https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request>.
-pub fn create_pr_request(head_branch: &str, content: &PullRequestContent) -> Result<Value, String> {
+pub fn create_pr_request(head_branch: &str, content: &PullRequestContent) -> Result<Value, GithubError> {
   if head_branch.trim().is_empty() {
-    return Err("head branch must not be empty".to_string());
+    return Err(GithubError::Empty("head branch"));
   }
   let mut request = update_pr_request(content)?;
   request["head"] = json!(head_branch);
@@ -26,12 +27,12 @@ pub fn create_pr_request(head_branch: &str, content: &PullRequestContent) -> Res
 
 /// The JSON body that replaces the base branch, title & body of a pull request.
 /// See <https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request>.
-pub fn update_pr_request(content: &PullRequestContent) -> Result<Value, String> {
+pub fn update_pr_request(content: &PullRequestContent) -> Result<Value, GithubError> {
   if content.base_branch.trim().is_empty() {
-    return Err("base branch must not be empty".to_string());
+    return Err(GithubError::Empty("base branch"));
   }
   if content.title.trim().is_empty() {
-    return Err("title must not be empty".to_string());
+    return Err(GithubError::Empty("title"));
   }
   Ok(json!({ "title": content.title, "body": pr_body(content)?, "base": content.base_branch }))
 }
@@ -56,10 +57,10 @@ pub fn comment_request(body: &str) -> Option<Value> {
 ///
 /// The marker comes first so that it is never truncated, and so that [`version::parse`], which takes
 /// the first marker it finds, is never fooled by marker-like text in the body (eg: quoted release notes).
-fn pr_body(content: &PullRequestContent) -> Result<String, String> {
+fn pr_body(content: &PullRequestContent) -> Result<String, GithubError> {
   let version = &content.version;
   if version.is_empty() || version.chars().any(char::is_whitespace) || version.contains("-->") {
-    return Err(format!("invalid version {version:?}, it must be non-empty without whitespace or `-->`"));
+    return Err(GithubError::InvalidVersion(version.clone()));
   }
 
   let mut body = version::marker(version);
@@ -98,9 +99,9 @@ struct BranchRef {
 }
 
 /// Parses a pull request, as returned by the create & update endpoints.
-pub fn parse_pr(response: Value) -> Result<PullRequest, String> {
+pub fn parse_pr(response: Value) -> Result<PullRequest, GithubError> {
   let pr: PrResponse =
-    serde_json::from_value(response).map_err(|err| format!("invalid GitHub pull request response: {err}"))?;
+    serde_json::from_value(response).map_err(|source| GithubError::InvalidResponse { what: "pull request", source })?;
   Ok(PullRequest {
     number: pr.number,
     url: pr.html_url,

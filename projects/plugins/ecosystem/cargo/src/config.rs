@@ -1,5 +1,6 @@
 //! The plugin's config, validated as soon as it is given to `configure`.
 
+use crate::error::CargoError;
 use garde::Validate;
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -23,16 +24,16 @@ pub struct Config {
 }
 
 impl Config {
-  fn parse(json: &str) -> Result<Self, String> {
-    let config: Self = serde_json::from_str(json).map_err(|err| format!("invalid config: {err}"))?;
-    config.validate().map_err(|err| format!("invalid config: {err}"))?;
+  fn parse(json: &str) -> Result<Self, CargoError> {
+    let config: Self = serde_json::from_str(json).map_err(CargoError::ParseConfig)?;
+    config.validate().map_err(CargoError::ValidateConfig)?;
     Ok(config)
   }
 }
 
 /// Parses and validates `json`, then keeps it for [`get`]. May only be called once.
-pub fn init(json: &str) -> Result<(), String> {
-  CONFIG.set(Config::parse(json)?).map_err(|_| "already configured".to_string())
+pub fn init(json: &str) -> Result<(), CargoError> {
+  CONFIG.set(Config::parse(json)?).map_err(|_| CargoError::AlreadyConfigured)
 }
 
 /// The config given to [`init`], if there was one.
@@ -48,6 +49,7 @@ pub fn image() -> &'static str {
 #[cfg(test)]
 mod tests {
   use super::Config;
+  use crate::error::CargoError;
 
   #[test]
   fn an_empty_config_is_valid() {
@@ -68,7 +70,8 @@ mod tests {
   #[test]
   fn unknown_keys_are_rejected() {
     let err = Config::parse(r#"{"githubTokn":"abc"}"#).err().unwrap();
-    assert!(err.contains("githubTokn"), "{err}");
+    let CargoError::ParseConfig(source) = err else { panic!("unexpected error: {err}") };
+    assert!(source.to_string().contains("githubTokn"), "{source}");
   }
 
   #[test]

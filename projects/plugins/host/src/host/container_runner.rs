@@ -4,7 +4,7 @@
 //! wrapper around the Docker API that suits our "start, wait for exit, collect output, remove"
 //! lifecycle. The usual `DOCKER_HOST` etc. environment variables are honoured.
 
-use super::state::host_api::{RunOutput, RunRequest};
+use super::state::host_api::{self, RunOutput, RunRequest};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use testcontainers::core::logs::LogFrame;
@@ -27,6 +27,42 @@ const RUN_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// How much of a failed command's stderr is included in the error returned to the guest.
 const MAX_ERROR_STDERR: usize = 4096;
+
+/// Every way running a container can fail.
+#[derive(Debug, thiserror::Error)]
+pub enum ContainerError {
+  #[error("running containers is not permitted here")]
+  NotPermitted,
+
+  #[error("a container command must be given")]
+  EmptyCommand,
+
+  /// The container could not be created, started or inspected, `action` describes which.
+  /// Boxed as a `TestcontainersError` is large and would bloat every `Result`.
+  #[error("failed to {action} {image}")]
+  Runtime { image: String, action: &'static str, source: Box<testcontainers::TestcontainersError> },
+
+  /// The command ran but did not exit successfully, `code` is none if the runtime didn't report one.
+  #[error(
+    "`{command}` in {image} exited with code {}",
+    code.map_or_else(|| "unknown".to_string(), |code| code.to_string())
+  )]
+  Exited { image: String, command: String, code: Option<i64>, stdout: String, stderr: String },
+}
+
+/// The guest only sees `run-error`, which can't nest, so a runtime failure's causes are flattened into its message.
+impl From<ContainerError> for host_api::RunError {
+  fn from(error: ContainerError) -> Self {
+    match error {
+      ContainerError::NotPermitted => Self::NotPermitted,
+      ContainerError::EmptyCommand => Self::InvalidRequest(error.to_string()),
+      ContainerError::Runtime { .. } => Self::Runtime(error_chain(&error)),
+      ContainerError::Exited { code, stdout, stderr, .. } => {
+        Self::Exited(host_api::RunExit { code, stdout, stderr: tail(stderr.trim_end(), MAX_ERROR_STDERR).to_string() })
+      }
+    }
+  }
+}
 
 /// Whether a session's guest may run containers via `doup:plugin/host-api`.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -61,17 +97,15 @@ pub struct ContainerMounts {
 }
 
 /// Runs `request` to completion, as permitted by `policy`.
-///
-/// The error is guest facing, so it is a plain string.
-pub async fn run(policy: &ContainerPolicy, request: RunRequest) -> Result<RunOutput, String> {
+pub async fn run(policy: &ContainerPolicy, request: RunRequest) -> Result<RunOutput, ContainerError> {
   let ContainerPolicy::Allowed(mounts) = policy else {
-    return Err("running containers is not permitted here".to_string());
+    return Err(ContainerError::NotPermitted);
   };
   if request.command.is_empty() {
-    return Err("a container command must be given".to_string());
+    return Err(ContainerError::EmptyCommand);
   }
 
-  let container = start(mounts, &request).await.map_err(|err| format!("failed to run {}: {err}", request.image))?;
+  let container = start(mounts, &request).await.map_err(runtime_error(&request, "run"))?;
   let output = collect(&container, &request).await;
   if let Err(err) = container.rm().await {
     eprintln!("warning: failed to remove container for {}: {err}", request.image);
@@ -111,28 +145,37 @@ async fn start(
 }
 
 /// Reads the output of an exited container, failing if its command exited with a non-zero code.
-async fn collect(container: &ContainerAsync<GenericImage>, request: &RunRequest) -> Result<RunOutput, String> {
-  let exit_code =
-    container.exit_code().await.map_err(|err| format!("failed to get the exit code of {}: {err}", request.image))?;
-  let stdout =
-    container.stdout_to_vec().await.map_err(|err| format!("failed to read the stdout of {}: {err}", request.image))?;
-  let stderr =
-    container.stderr_to_vec().await.map_err(|err| format!("failed to read the stderr of {}: {err}", request.image))?;
-  let output = RunOutput {
-    stdout: String::from_utf8_lossy(&stdout).into_owned(),
-    stderr: String::from_utf8_lossy(&stderr).into_owned(),
-  };
+async fn collect(container: &ContainerAsync<GenericImage>, request: &RunRequest) -> Result<RunOutput, ContainerError> {
+  let exit_code = container.exit_code().await.map_err(runtime_error(request, "get the exit code of"))?;
+  let stdout = container.stdout_to_vec().await.map_err(runtime_error(request, "read the stdout of"))?;
+  let stderr = container.stderr_to_vec().await.map_err(runtime_error(request, "read the stderr of"))?;
+  let stdout = String::from_utf8_lossy(&stdout).into_owned();
+  let stderr = String::from_utf8_lossy(&stderr).into_owned();
 
   match exit_code {
-    Some(0) => Ok(output),
-    code => Err(format!(
-      "`{}` in {} exited with code {}: {}",
-      request.command.join(" "),
-      request.image,
-      code.map_or_else(|| "unknown".to_string(), |code| code.to_string()),
-      tail(output.stderr.trim_end(), MAX_ERROR_STDERR),
-    )),
+    Some(0) => Ok(RunOutput { stdout, stderr }),
+    code => Err(ContainerError::Exited {
+      image: request.image.clone(),
+      command: request.command.join(" "),
+      code,
+      stdout,
+      stderr,
+    }),
   }
+}
+
+/// Wraps a testcontainers error as a [`ContainerError::Runtime`] while trying to `action` the request's image.
+fn runtime_error(
+  request: &RunRequest,
+  action: &'static str,
+) -> impl FnOnce(testcontainers::TestcontainersError) -> ContainerError {
+  let image = request.image.clone();
+  move |source| ContainerError::Runtime { image, action, source: Box::new(source) }
+}
+
+/// Renders `error` & every one of its causes, separated by `: `.
+fn error_chain(error: &dyn std::error::Error) -> String {
+  std::iter::successors(Some(error), |err| err.source()).map(ToString::to_string).collect::<Vec<_>>().join(": ")
 }
 
 /// Splits an image reference into the name & tag testcontainers wants, which it rejoins with a `:`.
@@ -228,7 +271,23 @@ mod tests {
   #[tokio::test]
   async fn runs_are_denied_by_default() {
     let err = run(&ContainerPolicy::Denied, request(&["true"])).await.unwrap_err();
-    assert!(err.contains("not permitted"), "{err}");
+    assert!(matches!(err, ContainerError::NotPermitted), "{err}");
+    assert!(matches!(host_api::RunError::from(err), host_api::RunError::NotPermitted));
+  }
+
+  #[test]
+  fn exits_keep_the_tail_of_stderr_for_the_guest() {
+    let err = ContainerError::Exited {
+      image: "busybox".to_string(),
+      command: "false".to_string(),
+      code: Some(1),
+      stdout: "out".to_string(),
+      stderr: format!("{}tail\n", "x".repeat(MAX_ERROR_STDERR)),
+    };
+    assert_eq!(err.to_string(), "`false` in busybox exited with code 1");
+    let host_api::RunError::Exited(exit) = host_api::RunError::from(err) else { panic!("expected an exit") };
+    assert_eq!((exit.code, exit.stdout.as_str(), exit.stderr.len()), (Some(1), "out", MAX_ERROR_STDERR));
+    assert!(exit.stderr.ends_with("tail"), "{}", exit.stderr);
   }
 
   #[tokio::test]
@@ -259,7 +318,7 @@ mod tests {
     }
 
     let err = run(&policy, request(&["touch", "/container-init/new"])).await.unwrap_err();
-    assert!(err.contains("exited with code 1"), "{err}");
+    assert!(matches!(err, ContainerError::Exited { code: Some(1), .. }), "{err}");
     assert!(!init.path().join("new").exists());
 
     // The cache is writable & persists between runs.
@@ -284,6 +343,6 @@ mod tests {
     });
 
     let err = run(&policy, request(&["sh", "-c", "echo oops >&2; exit 3"])).await.unwrap_err();
-    assert!(err.contains("exited with code 3: oops"), "{err}");
+    assert!(matches!(&err, ContainerError::Exited { code: Some(3), stderr, .. } if stderr == "oops\n"), "{err}");
   }
 }

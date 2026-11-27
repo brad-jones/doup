@@ -9,8 +9,10 @@ mod bindings {
 }
 
 use bindings::*;
+use error::GithubError;
 
 mod config;
+mod error;
 mod graphql;
 mod http;
 mod rest;
@@ -19,30 +21,30 @@ mod version;
 struct DoupPlatformPluginGithub;
 
 impl Guest for DoupPlatformPluginGithub {
-  fn configure(config: String) -> Result<(), String> {
-    config::init(&config)
+  fn configure(config: String) -> Result<(), GuestError> {
+    Ok(config::init(&config)?)
   }
 
-  async fn create_pr(head_branch: String, content: PullRequestContent) -> Result<PullRequest, String> {
+  async fn create_pr(head_branch: String, content: PullRequestContent) -> Result<PullRequest, GuestError> {
     let (owner, name) = config::get()?.owner_and_name();
     let request = rest::create_pr_request(&head_branch, &content)?;
     let response = http::rest(http::Method::Post, &format!("/repos/{owner}/{name}/pulls"), &request).await?;
-    rest::parse_pr(response)
+    Ok(rest::parse_pr(response)?)
   }
 
-  async fn update_pr(number: i64, content: PullRequestContent) -> Result<PullRequest, String> {
+  async fn update_pr(number: i64, content: PullRequestContent) -> Result<PullRequest, GuestError> {
     if number <= 0 {
-      return Err(format!("invalid pull request number {number}"));
+      return Err(GithubError::InvalidPrNumber(number).into());
     }
     let (owner, name) = config::get()?.owner_and_name();
     let request = rest::update_pr_request(&content)?;
     let response = http::rest(http::Method::Patch, &format!("/repos/{owner}/{name}/pulls/{number}"), &request).await?;
-    rest::parse_pr(response)
+    Ok(rest::parse_pr(response)?)
   }
 
-  async fn close_pr(number: i64, comment: Option<String>) -> Result<PullRequest, String> {
+  async fn close_pr(number: i64, comment: Option<String>) -> Result<PullRequest, GuestError> {
     if number <= 0 {
-      return Err(format!("invalid pull request number {number}"));
+      return Err(GithubError::InvalidPrNumber(number).into());
     }
     let (owner, name) = config::get()?.owner_and_name();
     // Pull requests are issues as far as comments go, there is no pulls endpoint for a plain comment.
@@ -51,10 +53,10 @@ impl Guest for DoupPlatformPluginGithub {
     }
     let request = rest::close_pr_request();
     let response = http::rest(http::Method::Patch, &format!("/repos/{owner}/{name}/pulls/{number}"), &request).await?;
-    rest::parse_pr(response)
+    Ok(rest::parse_pr(response)?)
   }
 
-  async fn list_open_prs(head_branch_prefix: String) -> Result<Vec<PullRequest>, String> {
+  async fn list_open_prs(head_branch_prefix: String) -> Result<Vec<PullRequest>, GuestError> {
     let (owner, name) = config::get()?.owner_and_name();
     let mut pull_requests = Vec::new();
     let mut cursor = None;
@@ -69,7 +71,7 @@ impl Guest for DoupPlatformPluginGithub {
     }
   }
 
-  async fn list_closed_prs(mut head_branches: Vec<String>) -> Result<Vec<PullRequest>, String> {
+  async fn list_closed_prs(mut head_branches: Vec<String>) -> Result<Vec<PullRequest>, GuestError> {
     let (owner, name) = config::get()?.owner_and_name();
     head_branches.sort_unstable();
     head_branches.dedup();

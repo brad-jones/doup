@@ -3,7 +3,7 @@
 //! Edits are made with `toml_edit` so that formatting and comments are kept. This module only
 //! uses plain `std` / `toml_edit` types (plus the WIT records) so that it can be unit tested natively.
 
-use crate::{Dependency, registry, requirement};
+use crate::{Dependency, error::CargoError, registry, requirement};
 use semver::Version;
 use std::{collections::BTreeSet, fs, path::Path};
 use toml_edit::{DocumentMut, Item, TableLike, Value};
@@ -12,14 +12,15 @@ const KINDS: [&str; 5] =
   ["dependencies", "dev-dependencies", "dev_dependencies", "build-dependencies", "build_dependencies"];
 
 /// Bumps every declaration of `dependency`, in each manifest it occurs in beneath `root`, to `to`.
-pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<(), String> {
+pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<(), CargoError> {
   let manifests: BTreeSet<&str> = dependency.occurrences.iter().map(|o| o.manifest_path.as_str()).collect();
 
   for manifest in manifests {
     let path = root.join(manifest);
     let manifest_dir = Path::new(manifest).parent().unwrap_or(Path::new(""));
-    let content = fs::read_to_string(&path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-    let mut doc: DocumentMut = content.parse().map_err(|err| format!("failed to parse {}: {err}", path.display()))?;
+    let content = fs::read_to_string(&path).map_err(|source| CargoError::Read { path: path.clone(), source })?;
+    let mut doc: DocumentMut =
+      content.parse().map_err(|source| CargoError::ParseTomlEdit { path: path.clone(), source })?;
 
     let is_same_registry = |alias: Option<&str>| match (alias, dependency.registry.as_deref()) {
       (None, None) => Ok(true),
@@ -27,11 +28,11 @@ pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<(), 
       _ => Ok(false),
     };
     for_each_declaration(&mut doc, &mut |key, item| update_declaration(key, item, dependency, to, &is_same_registry))
-      .map_err(|err| format!("{}: {err}", path.display()))?;
+      .map_err(|err| CargoError::Manifest { path: path.clone(), source: Box::new(err) })?;
 
     let updated = doc.to_string();
     if updated != content {
-      fs::write(&path, updated).map_err(|err| format!("failed to write {}: {err}", path.display()))?;
+      fs::write(&path, updated).map_err(|source| CargoError::Write { path, source })?;
     }
   }
   Ok(())
@@ -40,8 +41,8 @@ pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<(), 
 /// Calls `f` with every entry of every dependency table that `discover` reads.
 fn for_each_declaration(
   doc: &mut DocumentMut,
-  f: &mut dyn FnMut(&str, &mut Item) -> Result<(), String>,
-) -> Result<(), String> {
+  f: &mut dyn FnMut(&str, &mut Item) -> Result<(), CargoError>,
+) -> Result<(), CargoError> {
   let root = doc.as_table_mut();
   visit_kinds(root, f)?;
   if let Some(targets) = root.get_mut("target").and_then(Item::as_table_like_mut) {
@@ -61,8 +62,8 @@ fn for_each_declaration(
 
 fn visit_kinds(
   table: &mut dyn TableLike,
-  f: &mut dyn FnMut(&str, &mut Item) -> Result<(), String>,
-) -> Result<(), String> {
+  f: &mut dyn FnMut(&str, &mut Item) -> Result<(), CargoError>,
+) -> Result<(), CargoError> {
   for kind in KINDS {
     if let Some(dependencies) = table.get_mut(kind).and_then(Item::as_table_like_mut) {
       visit(dependencies, f)?;
@@ -71,7 +72,10 @@ fn visit_kinds(
   Ok(())
 }
 
-fn visit(table: &mut dyn TableLike, f: &mut dyn FnMut(&str, &mut Item) -> Result<(), String>) -> Result<(), String> {
+fn visit(
+  table: &mut dyn TableLike,
+  f: &mut dyn FnMut(&str, &mut Item) -> Result<(), CargoError>,
+) -> Result<(), CargoError> {
   for (key, item) in table.iter_mut() {
     f(key.get(), item)?;
   }
@@ -84,8 +88,8 @@ fn update_declaration(
   item: &mut Item,
   dependency: &Dependency,
   to: &Version,
-  is_same_registry: &dyn Fn(Option<&str>) -> Result<bool, String>,
-) -> Result<(), String> {
+  is_same_registry: &dyn Fn(Option<&str>) -> Result<bool, CargoError>,
+) -> Result<(), CargoError> {
   if let Some(value) = item.as_value_mut().filter(|v| v.is_str()) {
     if key == dependency.name && is_same_registry(None)? {
       bump_value(value, to);

@@ -3,6 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
+use crate::error::CargoError;
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -30,15 +31,15 @@ fn index_path(name: &str) -> String {
 /// The alias is looked up through the `registries.<alias>.index` key of a `.cargo/config.toml` (or `.cargo/config`)
 /// found by walking up from `manifest_dir` to `root`, so the closest config wins as it does in cargo.
 /// Only sparse (`sparse+https://…`) indexes are supported, there is no way to clone a git index from the sandbox.
-pub fn resolve_index(root: &Path, manifest_dir: &Path, alias: &str) -> Result<String, String> {
+pub fn resolve_index(root: &Path, manifest_dir: &Path, alias: &str) -> Result<String, CargoError> {
   let url = manifest_dir
     .ancestors()
     .find_map(|dir| registry_index(&root.join(dir).join(".cargo"), alias).transpose())
     .transpose()?
-    .ok_or_else(|| format!("registry `{alias}` is not defined in any .cargo/config.toml"))?;
+    .ok_or_else(|| CargoError::UndefinedRegistry { alias: alias.to_string() })?;
 
   let Some(url) = url.strip_prefix("sparse+") else {
-    return Err(format!("registry `{alias}` uses `{url}`, only sparse+https:// indexes are supported"));
+    return Err(CargoError::UnsupportedRegistry { alias: alias.to_string(), url });
   };
   Ok(if url.ends_with('/') { url.to_string() } else { format!("{url}/") })
 }
@@ -55,12 +56,12 @@ struct Registry {
 }
 
 /// Reads the index of `alias` from the cargo config inside `cargo_dir`, if there is one that defines it.
-fn registry_index(cargo_dir: &Path, alias: &str) -> Result<Option<String>, String> {
+fn registry_index(cargo_dir: &Path, alias: &str) -> Result<Option<String>, CargoError> {
   for file in ["config.toml", "config"] {
     let path = cargo_dir.join(file);
     let Ok(content) = fs::read_to_string(&path) else { continue };
     let config: CargoConfig =
-      toml::from_str(&content).map_err(|err| format!("failed to parse {}: {err}", path.display()))?;
+      toml::from_str(&content).map_err(|source| CargoError::ParseToml { path: path.clone(), source })?;
     if let Some(index) = config.registries.get(alias).and_then(|r| r.index.clone()) {
       return Ok(Some(index));
     }
@@ -117,7 +118,7 @@ mod tests {
   fn undefined_alias_is_an_error() {
     let dir = TempDir::new().unwrap();
     let err = resolve_index(dir.path(), Path::new(""), "corp").unwrap_err();
-    assert!(err.contains("corp"), "{err}");
+    assert!(matches!(&err, CargoError::UndefinedRegistry { alias } if alias == "corp"), "{err}");
   }
 
   #[test]
@@ -125,6 +126,6 @@ mod tests {
     let dir = TempDir::new().unwrap();
     write(dir.path(), ".cargo/config.toml", "[registries.corp]\nindex = \"https://git.example.com/index.git\"\n");
     let err = resolve_index(dir.path(), Path::new(""), "corp").unwrap_err();
-    assert!(err.contains("sparse"), "{err}");
+    assert!(matches!(err, CargoError::UnsupportedRegistry { .. }), "{err}");
   }
 }

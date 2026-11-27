@@ -1179,6 +1179,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.21",
  "toml 1.2.2+spec-1.1.0",
  "toml_edit 0.25.21+spec-1.1.0",
  "wasi-fetch",
@@ -1221,6 +1222,7 @@ dependencies = [
  "garde",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
  "wasi-fetch",
  "wit-bindgen 0.63.0",
 ]
@@ -1229,7 +1231,6 @@ dependencies = [
 name = "doup-plugin-host"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "doup-config",
  "http",
  "http-body-util",
@@ -1237,6 +1238,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "testcontainers",
+ "thiserror 2.0.21",
  "tokio",
  "wasmtime",
  "wasmtime-wasi",

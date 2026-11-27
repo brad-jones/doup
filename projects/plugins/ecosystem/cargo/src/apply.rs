@@ -9,6 +9,7 @@ use crate::{
   bindings::doup::plugin::host_api::{self, RunRequest},
   config,
   discover::{self, LockPackage},
+  error::CargoError,
   manifest,
 };
 use semver::Version;
@@ -37,8 +38,12 @@ exec cargo "$@"
 /// Updates every occurrence of `dependency` beneath `root` to version `to`.
 ///
 /// `init` is the guest's view of the `/container-init` dir mounted into the containers it runs.
-pub async fn apply(root: &Path, init: &Path, dependency: &Dependency, to: &str) -> Result<(), String> {
-  let to = Version::parse(to).map_err(|err| format!("invalid version `{to}` for {}: {err}", dependency.name))?;
+pub async fn apply(root: &Path, init: &Path, dependency: &Dependency, to: &str) -> Result<(), CargoError> {
+  let to = Version::parse(to).map_err(|source| CargoError::InvalidVersion {
+    name: dependency.name.clone(),
+    version: to.to_string(),
+    source,
+  })?;
   manifest::update(root, dependency, &to)?;
 
   let lock_paths = lock_paths(dependency);
@@ -47,24 +52,34 @@ pub async fn apply(root: &Path, init: &Path, dependency: &Dependency, to: &str) 
   }
 
   let script = init.join("cargo.sh");
-  fs::write(&script, CARGO_SH).map_err(|err| format!("failed to write {}: {err}", script.display()))?;
+  fs::write(&script, CARGO_SH).map_err(|source| CargoError::Write { path: script, source })?;
 
   for lock_path in lock_paths {
     let manifest_path = container_manifest_path(lock_path);
 
-    // Re-resolves just enough of the lockfile to satisfy the bumped manifests, like renovate does.
-    cargo(&["update", "--manifest-path", &manifest_path, "--workspace"])
+    update_lock(root, &manifest_path, lock_path, dependency, &to)
       .await
-      .map_err(|err| format!("{lock_path}: {err}"))?;
+      .map_err(|err| CargoError::Lockfile { path: lock_path.to_string(), source: Box::new(err) })?;
+  }
+  Ok(())
+}
 
-    // A requirement that already allowed `to` wasn't changed by the bump, so its locked version
-    // still needs moving to `to` explicitly.
-    let packages = discover::parse_lock(&root.join(lock_path))?;
-    for spec in precise_specs(&packages, dependency, lock_path, &to) {
-      cargo(&["update", "--manifest-path", &manifest_path, "--package", &spec, "--precise", &to.to_string()])
-        .await
-        .map_err(|err| format!("{lock_path}: {err}"))?;
-    }
+/// Updates `dependency` to `to` in the lockfile at `lock_path`, using the workspace manifest at `manifest_path`.
+async fn update_lock(
+  root: &Path,
+  manifest_path: &str,
+  lock_path: &str,
+  dependency: &Dependency,
+  to: &Version,
+) -> Result<(), CargoError> {
+  // Re-resolves just enough of the lockfile to satisfy the bumped manifests, like renovate does.
+  cargo(&["update", "--manifest-path", manifest_path, "--workspace"]).await?;
+
+  // A requirement that already allowed `to` wasn't changed by the bump, so its locked version
+  // still needs moving to `to` explicitly.
+  let packages = discover::parse_lock(&root.join(lock_path))?;
+  for spec in precise_specs(&packages, dependency, lock_path, to) {
+    cargo(&["update", "--manifest-path", manifest_path, "--package", &spec, "--precise", &to.to_string()]).await?;
   }
   Ok(())
 }
@@ -121,7 +136,7 @@ fn is_from_registry(package: &LockPackage, registry: Option<&str>) -> bool {
 }
 
 /// Runs `cargo` with `args` in a container.
-async fn cargo(args: &[&str]) -> Result<(), String> {
+async fn cargo(args: &[&str]) -> Result<(), CargoError> {
   let mut command = vec!["sh".to_string(), "/container-init/cargo.sh".to_string()];
   command.extend(args.iter().map(ToString::to_string));
   host_api::run(RunRequest {
@@ -131,7 +146,8 @@ async fn cargo(args: &[&str]) -> Result<(), String> {
     env: vec![],
     working_dir: None,
   })
-  .await?;
+  .await
+  .map_err(|error| CargoError::Container { command: format!("cargo {}", args.join(" ")), error })?;
   Ok(())
 }
 

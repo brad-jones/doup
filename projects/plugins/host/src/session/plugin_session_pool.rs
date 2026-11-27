@@ -1,8 +1,8 @@
 use super::plugin_session::PluginSession;
-use crate::host::{HostState, SessionPolicy};
+use crate::error::PluginError;
+use crate::host::{HostState, SessionPolicy, types};
 use crate::wkg::is_wkg_reference;
 use crate::world::PluginWorld;
-use anyhow::{Context, Result, bail};
 use doup_config::repo::DoupRepoPlugin;
 use std::{
   any::TypeId,
@@ -11,8 +11,10 @@ use std::{
   sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError},
 };
 use wasmtime::Config;
-use wasmtime::component::Linker;
+use wasmtime::component::{Accessor, Linker};
 use wasmtime::{Engine, Store};
+
+type Result<T, E = PluginError> = std::result::Result<T, E>;
 
 /// Fallback engine for pools that were not given one. Engines are expensive and meant to be shared.
 static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -37,10 +39,10 @@ static WORLD_LINKERS: LazyLock<Mutex<HashMap<TypeId, Arc<Linker<HostState>>>>> =
 ///     }
 ///   }
 ///
-///   pub async fn hello_world(&self) -> Result<String> {
-///     let mut session = self.session_pool.checkout_session().await?;
-///     let result = session.bindings.call_hello_world(&mut session.store).await;
-///     self.session_pool.checkin_session(session, result)
+///   pub async fn hello_world(&self) -> Result<String, PluginError> {
+///     self.session_pool
+///       .call_export("hello-world", SessionPolicy::new(), async |b, a| b.call_hello_world(a).await)
+///       .await
 ///   }
 /// }
 /// ```
@@ -78,7 +80,7 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     }
     let mut config = Config::new();
     config.wasm_component_model(true);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&config).map_err(|err| PluginError::Engine(err.into_boxed_dyn_error()))?;
     Ok(DEFAULT_ENGINE.get_or_init(|| engine))
   }
 
@@ -89,7 +91,7 @@ impl<W: PluginWorld> PluginSessionPool<W> {
       return Ok(linker.clone());
     }
 
-    let linker = Arc::new(W::linker(self.engine()?)?);
+    let linker = Arc::new(W::linker(self.engine()?).map_err(|err| PluginError::Linker(err.into_boxed_dyn_error()))?);
     map.insert(TypeId::of::<W>(), linker.clone());
     Ok(linker)
   }
@@ -103,10 +105,10 @@ impl<W: PluginWorld> PluginSessionPool<W> {
       if path.is_file() {
         return Ok(path.to_path_buf());
       }
-      bail!("plugin not found: {}", path.display());
+      return Err(PluginError::NotFound { plugin: plugin_ref.clone(), searched: vec![path.to_path_buf()] });
     }
 
-    let mut searched = vec![std::env::current_dir()?.join(path)];
+    let mut searched = vec![std::env::current_dir().map_err(PluginError::CurrentDir)?.join(path)];
     for candidate in self.module_search_dirs.iter().map(|dir| dir.join(path)) {
       if !searched.contains(&candidate) {
         searched.push(candidate);
@@ -119,14 +121,10 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     // TODO: Remember we also need to somehow handle doup.lock
     // when we start downloading packages from the internet
     if is_wkg_reference(plugin_ref) {
-      bail!("wkg package references are not supported yet: {plugin_ref}");
+      return Err(PluginError::WkgUnsupported { plugin: plugin_ref.clone() });
     }
 
-    bail!(
-      "plugin not found: {} (searched: {})",
-      path.display(),
-      searched.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
-    )
+    Err(PluginError::NotFound { plugin: plugin_ref.clone(), searched })
   }
 
   // Pre-compiles the component & caches the result.
@@ -137,7 +135,9 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     }
 
     let linker = self.world_linker()?;
-    let pre = W::pre(self.engine()?, &linker, &self.module_path()?)?;
+    let path = self.module_path()?;
+    let pre = W::pre(self.engine()?, &linker, &path)
+      .map_err(|err| PluginError::Load { path, source: err.into_boxed_dyn_error() })?;
     Ok(self.pre.get_or_init(|| pre))
   }
 
@@ -152,16 +152,53 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// `policy` decides the guest's WASI context and which capabilities beyond WASI (eg: outbound
   /// `wasi:http` requests) it is granted, pooled sessions are never granted any, see [`Self::checkout_session`].
   pub async fn create_session(&self, policy: SessionPolicy) -> Result<PluginSession<W>> {
-    let mut store = Store::new(self.engine()?, HostState::new(policy, W::wasi)?);
-    let bindings = W::instantiate(self.component_pre()?, &mut store).await?;
+    let plugin = || self.plugin.plugin.clone();
+    let state = HostState::new(policy, W::wasi)
+      .map_err(|err| PluginError::Sandbox { plugin: plugin(), source: err.into_boxed_dyn_error() })?;
+    let mut store = Store::new(self.engine()?, state);
+    let bindings = W::instantiate(self.component_pre()?, &mut store)
+      .await
+      .map_err(|err| PluginError::Instantiate { plugin: plugin(), source: err.into_boxed_dyn_error() })?;
 
-    let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())?;
+    let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())
+      .map_err(|source| PluginError::SerializeConfig { plugin: plugin(), source })?;
     W::configure(&bindings, &mut store, &plugin_config)
-      .await?
-      .map_err(anyhow::Error::msg)
-      .with_context(|| format!("plugin {} rejected its config", self.plugin.plugin))?;
+      .await
+      .map_err(|err| self.trap("configure", err))?
+      .map_err(|err| PluginError::Configure { plugin: plugin(), source: err.into() })?;
 
     Ok(PluginSession { store, bindings })
+  }
+
+  /// Calls the `async func` export named `export` (its WIT name, used in errors) on a new session
+  /// created with `policy`, see [`Self::create_session`]. The session is dropped afterwards.
+  ///
+  /// ```ignore
+  /// let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+  /// self.session_pool.call_export("my-export", policy, async |b, a| b.call_my_export(a).await).await
+  /// ```
+  ///
+  /// # Errors
+  ///
+  /// Returns [`PluginError::Trap`] if the guest traps, [`PluginError::Guest`] if it returns an
+  /// error, or any error from [`Self::create_session`].
+  pub async fn call_export<R>(
+    &self,
+    export: &'static str,
+    policy: SessionPolicy,
+    call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<Result<R, types::GuestError>>,
+  ) -> Result<R> {
+    let mut session = self.create_session(policy).await?;
+    session.call_async(call).await.map_err(|err| self.trap(export, err))?.map_err(|err| PluginError::Guest {
+      plugin: self.plugin.plugin.clone(),
+      export,
+      source: err.into(),
+    })
+  }
+
+  /// Wraps a wasmtime level failure of `export` as a [`PluginError::Trap`].
+  fn trap(&self, export: &'static str, err: wasmtime::Error) -> PluginError {
+    PluginError::Trap { plugin: self.plugin.plugin.clone(), export, source: err.into_boxed_dyn_error() }
   }
 
   /// Takes an idle session, or creates and configures a new one. Hand it back with [`Self::checkin_session`].
@@ -176,15 +213,8 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     }
   }
 
-  /// Returns the session to the pool if the call succeeded, and unwraps the call's result.
-  pub fn checkin_session<R>(&self, session: PluginSession<W>, result: wasmtime::Result<R>) -> Result<R> {
-    // An Err is a trap or host failure, so the session is dropped rather than reused.
-    let value = result?;
-
-    // Check the session back into the pool
+  /// Returns a healthy session to the pool. A session whose call trapped must be dropped instead.
+  pub fn checkin_session(&self, session: PluginSession<W>) {
     self.session_pool.lock().unwrap_or_else(PoisonError::into_inner).push(session);
-
-    // Hand back the inner result
-    Ok(value)
   }
 }

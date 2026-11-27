@@ -1,7 +1,7 @@
 use super::container_runner::ContainerPolicy;
 use super::http::HttpPolicy;
-use anyhow::Result;
 use std::fmt;
+use wasmtime::Result;
 use wasmtime_wasi::WasiCtxBuilder;
 
 /// Customises the [`WasiCtxBuilder`] of a session, eg: to preopen directories.

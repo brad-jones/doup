@@ -3,7 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, Occurrence, Versions};
+use crate::{Dependency, Occurrence, Versions, error::CargoError};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 
@@ -27,12 +27,15 @@ pub struct Analysis {
 }
 
 /// Parses the declared version requirement of every occurrence of the dependency called `name`.
-pub fn requirements(name: &str, occurrences: &[Occurrence]) -> Result<Vec<VersionReq>, String> {
+pub fn requirements(name: &str, occurrences: &[Occurrence]) -> Result<Vec<VersionReq>, CargoError> {
   occurrences
     .iter()
     .map(|o| {
-      VersionReq::parse(&o.current_version)
-        .map_err(|err| format!("invalid version requirement `{}` for {name}: {err}", o.current_version))
+      VersionReq::parse(&o.current_version).map_err(|source| CargoError::InvalidRequirement {
+        name: name.to_string(),
+        requirement: o.current_version.clone(),
+        source,
+      })
     })
     .collect()
 }
@@ -40,13 +43,15 @@ pub fn requirements(name: &str, occurrences: &[Occurrence]) -> Result<Vec<Versio
 /// The lowest version installed across `occurrences`, whose `requirements` come from [`requirements`].
 ///
 /// An occurrence's installed version is its locked version, or the lower bound of its requirement without a lock.
-pub fn installed(occurrences: &[Occurrence], requirements: &[VersionReq]) -> Result<Option<Version>, String> {
+pub fn installed(occurrences: &[Occurrence], requirements: &[VersionReq]) -> Result<Option<Version>, CargoError> {
   Ok(
     occurrences
       .iter()
       .zip(requirements)
       .map(|(o, requirement)| match &o.locked_version {
-        Some(locked) => Version::parse(locked).map_err(|err| format!("invalid locked version `{locked}`: {err}")),
+        Some(locked) => {
+          Version::parse(locked).map_err(|source| CargoError::InvalidLockedVersion { version: locked.clone(), source })
+        }
         None => Ok(lower_bound(requirement)),
       })
       .collect::<Result<Vec<_>, _>>()?
@@ -56,7 +61,7 @@ pub fn installed(occurrences: &[Occurrence], requirements: &[VersionReq]) -> Res
 }
 
 /// Parses the newline delimited JSON `index` entry of the crate behind `dependency`.
-pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String> {
+pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, CargoError> {
   let requirements = requirements(&dependency.name, &dependency.occurrences)?;
   let installed = installed(&dependency.occurrences, &requirements)?;
 
@@ -65,8 +70,8 @@ pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String>
 
   let mut candidates = Vec::new();
   for line in index.lines().filter(|line| !line.trim().is_empty()) {
-    let entry: IndexEntry =
-      serde_json::from_str(line).map_err(|err| format!("invalid index entry for {}: {err}", dependency.name))?;
+    let entry: IndexEntry = serde_json::from_str(line)
+      .map_err(|source| CargoError::InvalidIndexEntry { name: dependency.name.clone(), source })?;
     if entry.yanked {
       continue;
     }
@@ -85,7 +90,7 @@ pub fn analyse(dependency: &Dependency, index: &str) -> Result<Analysis, String>
 /// - `latest` is the highest candidate overall, if it is newer than `next`.
 ///
 /// Returns `None` when nothing newer than the installed version exists.
-pub fn select(dependency: &Dependency, index: &str) -> Result<Option<Versions>, String> {
+pub fn select(dependency: &Dependency, index: &str) -> Result<Option<Versions>, CargoError> {
   let Analysis { installed, requirements, candidates } = analyse(dependency, index)?;
 
   let next = candidates.iter().filter(|v| requirements.iter().all(|r| r.matches(v))).max();
@@ -194,7 +199,11 @@ mod tests {
   #[test]
   fn invalid_requirement_is_an_error() {
     let dep = dependency(vec![occurrence("not-a-version", None)]);
-    assert!(select(&dep, &index(&[("1.0.0", false)])).unwrap_err().contains("not-a-version"));
+    let err = select(&dep, &index(&[("1.0.0", false)])).unwrap_err();
+    assert!(
+      matches!(&err, CargoError::InvalidRequirement { requirement, .. } if requirement == "not-a-version"),
+      "{err}"
+    );
   }
 
   #[test]

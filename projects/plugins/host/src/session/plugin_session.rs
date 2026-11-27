@@ -18,19 +18,18 @@ impl<W: PluginWorld> PluginSession<W> {
   /// Calls an `async func` export. Their generated `call_*` methods take an [`Accessor`] instead of the
   /// `Store`, so they can only run inside [`Store::run_concurrent`], this takes care of that.
   ///
-  /// The result has the same shape as a sync `call_*`, so it feeds straight into
-  /// [`PluginSessionPool::checkin_session`]:
+  /// Usually called via [`PluginSessionPool::call_export`](super::PluginSessionPool::call_export):
   ///
   /// ```ignore
   /// let mut session = self.session_pool.checkout_session().await?;
-  /// let result = session.call_async(async |bindings, accessor| bindings.call_my_export(accessor).await).await;
-  /// self.session_pool.checkin_session(session, result)
+  /// let result = session.call_async(async |bindings, accessor| bindings.call_my_export(accessor).await).await?;
+  /// self.session_pool.checkin_session(session);
   /// ```
   ///
   /// # Errors
   ///
   /// Returns an error if the guest traps or the call otherwise fails at the wasmtime level,
-  /// the guest's own `result<_, string>` is left for the caller to handle.
+  /// the guest's own `result<_, guest-error>` is left for the caller to handle.
   pub async fn call_async<R>(
     &mut self,
     call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<R>,

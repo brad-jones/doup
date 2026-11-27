@@ -3,7 +3,7 @@
 //! This module only uses plain `std` / `serde` types (plus the WIT records) so that it can be
 //! unit tested natively, without a wasm runtime.
 
-use crate::{Dependency, Occurrence, lookup, registry};
+use crate::{Dependency, Occurrence, error::CargoError, lookup, registry};
 use ignore::WalkBuilder;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
@@ -16,7 +16,7 @@ use std::{
 /// Discovers every registry dependency declared by the manifests found beneath `root`.
 ///
 /// `.git` is always skipped and any `.gitignore` files are honoured.
-pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
+pub fn discover(root: &Path) -> Result<Vec<Dependency>, CargoError> {
   let (manifests, lockfiles) = find_files(root)?;
 
   let mut locks = BTreeMap::new();
@@ -32,10 +32,13 @@ pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
 
     for dep in declared {
       let registry = match &dep.registry {
-        Some(alias) => Some(
-          registry::resolve_index(root, &manifest_dir, alias)
-            .map_err(|err| format!("{} (dependency {}): {err}", manifest_file.display(), dep.name))?,
-        ),
+        Some(alias) => {
+          Some(registry::resolve_index(root, &manifest_dir, alias).map_err(|err| CargoError::Declaration {
+            manifest: manifest_file.clone(),
+            dependency: dep.name.clone(),
+            source: Box::new(err),
+          })?)
+        }
         None => None,
       };
       let occurrence = Occurrence {
@@ -62,11 +65,11 @@ pub fn discover(root: &Path) -> Result<Vec<Dependency>, String> {
 }
 
 /// The canonical current version of a dependency: its lowest installed version, as a bare version number.
-fn current_version(name: &str, occurrences: &[Occurrence]) -> Result<String, String> {
+fn current_version(name: &str, occurrences: &[Occurrence]) -> Result<String, CargoError> {
   let requirements = lookup::requirements(name, occurrences)?;
   lookup::installed(occurrences, &requirements)?
     .map(|version| version.to_string())
-    .ok_or_else(|| format!("{name} has no occurrences"))
+    .ok_or_else(|| CargoError::NoOccurrences { name: name.to_string() })
 }
 
 fn same_declaration(a: &Occurrence, b: &Occurrence) -> bool {
@@ -75,7 +78,7 @@ fn same_declaration(a: &Occurrence, b: &Occurrence) -> bool {
 
 /// Returns the (sorted) directories, relative to `root`, that contain a `Cargo.toml`
 /// and the ones that contain a `Cargo.lock`.
-fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
+fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), CargoError> {
   let walker = WalkBuilder::new(root)
     .hidden(false)
     .parents(false)
@@ -88,7 +91,7 @@ fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
 
   let (mut manifests, mut lockfiles) = (Vec::new(), Vec::new());
   for entry in walker {
-    let entry = entry.map_err(|err| format!("failed to walk {}: {err}", root.display()))?;
+    let entry = entry.map_err(|source| CargoError::Walk { path: root.to_path_buf(), source })?;
     if !entry.file_type().is_some_and(|t| t.is_file()) {
       continue;
     }
@@ -97,7 +100,11 @@ fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
       Some("Cargo.lock") => &mut lockfiles,
       _ => continue,
     };
-    let relative = entry.path().strip_prefix(root).map_err(|err| err.to_string())?;
+    let relative = entry.path().strip_prefix(root).map_err(|source| CargoError::OutsideRoot {
+      path: entry.path().to_path_buf(),
+      root: root.to_path_buf(),
+      source,
+    })?;
     target.push(relative.parent().unwrap_or(Path::new("")).to_path_buf());
   }
   manifests.sort();
@@ -188,10 +195,8 @@ impl Spec {
 }
 
 /// Returns the dependencies declared by a manifest.
-fn parse_manifest(path: &Path) -> Result<Vec<Declared>, String> {
-  let content = fs::read_to_string(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-  let manifest: Manifest =
-    toml::from_str(&content).map_err(|err| format!("failed to parse {}: {err}", path.display()))?;
+fn parse_manifest(path: &Path) -> Result<Vec<Declared>, CargoError> {
+  let manifest: Manifest = read_toml(path)?;
 
   let workspace = manifest.workspace.iter().flat_map(|w| &w.dependencies);
   let target = manifest.target.values().flat_map(DependencyTables::all);
@@ -229,10 +234,15 @@ impl LockPackage {
 }
 
 /// Reads the packages recorded in the `Cargo.lock` at `path`.
-pub fn parse_lock(path: &Path) -> Result<Vec<LockPackage>, String> {
-  let content = fs::read_to_string(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-  let lock: Lock = toml::from_str(&content).map_err(|err| format!("failed to parse {}: {err}", path.display()))?;
+pub fn parse_lock(path: &Path) -> Result<Vec<LockPackage>, CargoError> {
+  let lock: Lock = read_toml(path)?;
   Ok(lock.package)
+}
+
+/// Reads & deserializes the TOML file at `path`.
+fn read_toml<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, CargoError> {
+  let content = fs::read_to_string(path).map_err(|source| CargoError::Read { path: path.to_path_buf(), source })?;
+  toml::from_str(&content).map_err(|source| CargoError::ParseToml { path: path.to_path_buf(), source })
 }
 
 /// Picks the locked version of `name`. A lockfile can hold several versions of one crate, in which
@@ -463,7 +473,9 @@ winapi = "0.3"
     write(dir.path(), "Cargo.toml", "[dependencies]\ninternal = { version = \"1\", registry = \"corp\" }\n");
 
     let err = discover(dir.path()).unwrap_err();
-    assert!(err.contains("corp") && err.contains("internal"), "{err}");
+    let CargoError::Declaration { dependency, source, .. } = &err else { panic!("unexpected error: {err}") };
+    assert_eq!(dependency, "internal");
+    assert!(matches!(&**source, CargoError::UndefinedRegistry { alias } if alias == "corp"), "{source}");
   }
 
   #[test]
@@ -487,6 +499,6 @@ winapi = "0.3"
     write(dir.path(), "Cargo.toml", "[dependencies\n");
 
     let err = discover(dir.path()).unwrap_err();
-    assert!(err.contains("Cargo.toml"), "{err}");
+    assert!(matches!(&err, CargoError::ParseToml { path, .. } if path.ends_with("Cargo.toml")), "{err}");
   }
 }
