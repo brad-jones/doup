@@ -23,6 +23,7 @@ mod registry;
 mod release_notes;
 mod requirement;
 mod resolve;
+mod workspace;
 
 use std::path::Path;
 

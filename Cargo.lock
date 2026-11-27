@@ -950,6 +950,7 @@ dependencies = [
 name = "doup-ecosystem-plugin-cargo"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "garde",
  "ignore",
  "semver",

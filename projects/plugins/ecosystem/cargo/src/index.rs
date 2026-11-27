@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap};
 
 /// How crates.io is written as a source in `Cargo.lock`, even when fetched over the sparse protocol.
 pub const CRATES_IO_SOURCE: &str = "registry+https://github.com/rust-lang/crates.io-index";
-const CRATES_IO_GIT_INDEX: &str = "https://github.com/rust-lang/crates.io-index";
+pub const CRATES_IO_GIT_INDEX: &str = "https://github.com/rust-lang/crates.io-index";
 
 /// One published version of a crate, see <https://doc.rust-lang.org/cargo/reference/registry-index.html>.
 #[derive(Deserialize, Debug, Clone)]
@@ -23,6 +23,12 @@ pub struct IndexEntry {
   pub features2: Option<BTreeMap<String, Vec<String>>>,
   #[serde(default)]
   pub yanked: bool,
+  /// The native library the crate links to, only one crate in a graph may link to each.
+  #[serde(default)]
+  pub links: Option<String>,
+  /// The minimum supported rust version, eg: `"1.70"`.
+  #[serde(default)]
+  pub rust_version: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -103,6 +109,11 @@ pub fn index_base(source: &str) -> Result<Option<String>, String> {
 /// Whether two lockfile sources are the same, ignoring a trailing slash.
 pub fn same_source(a: &str, b: &str) -> bool {
   a.trim_end_matches('/') == b.trim_end_matches('/')
+}
+
+/// Whether `source` is a registry, whose packages can be looked up in an index.
+pub fn is_registry(source: &str) -> bool {
+  source.starts_with("registry+") || source.starts_with("sparse+")
 }
 
 /// The index files fetched so far, keyed by source & crate name.

@@ -75,7 +75,7 @@ fn same_declaration(a: &Occurrence, b: &Occurrence) -> bool {
 
 /// Returns the (sorted) directories, relative to `root`, that contain a `Cargo.toml`
 /// and the ones that contain a `Cargo.lock`.
-fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
+pub(crate) fn find_files(root: &Path) -> Result<(Vec<PathBuf>, Vec<PathBuf>), String> {
   let walker = WalkBuilder::new(root)
     .hidden(false)
     .parents(false)

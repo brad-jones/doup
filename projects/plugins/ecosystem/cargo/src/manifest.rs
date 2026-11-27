@@ -11,20 +11,10 @@ use toml_edit::{DocumentMut, Item, TableLike, Value};
 const KINDS: [&str; 5] =
   ["dependencies", "dev-dependencies", "dev_dependencies", "build-dependencies", "build_dependencies"];
 
-/// The features the workspace asks of a dependency, across all of its declarations.
-#[derive(Debug, Default, PartialEq)]
-pub struct Requested {
-  pub features: BTreeSet<String>,
-  /// True when any declaration leaves the dependency's default features on.
-  pub default_features: bool,
-}
-
 /// Bumps every declaration of `dependency`, in each manifest it occurs in beneath `root`, to `to`.
-/// Returns the features those declarations request.
-pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<Requested, String> {
+pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<(), String> {
   let manifests: BTreeSet<&str> = dependency.occurrences.iter().map(|o| o.manifest_path.as_str()).collect();
 
-  let mut requested = Requested::default();
   for manifest in manifests {
     let path = root.join(manifest);
     let manifest_dir = Path::new(manifest).parent().unwrap_or(Path::new(""));
@@ -36,17 +26,15 @@ pub fn update(root: &Path, dependency: &Dependency, to: &Version) -> Result<Requ
       (Some(alias), Some(registry)) => Ok(registry::resolve_index(root, manifest_dir, alias)? == registry),
       _ => Ok(false),
     };
-    for_each_declaration(&mut doc, &mut |key, item| {
-      update_declaration(key, item, dependency, to, &is_same_registry, &mut requested)
-    })
-    .map_err(|err| format!("{}: {err}", path.display()))?;
+    for_each_declaration(&mut doc, &mut |key, item| update_declaration(key, item, dependency, to, &is_same_registry))
+      .map_err(|err| format!("{}: {err}", path.display()))?;
 
     let updated = doc.to_string();
     if updated != content {
       fs::write(&path, updated).map_err(|err| format!("failed to write {}: {err}", path.display()))?;
     }
   }
-  Ok(requested)
+  Ok(())
 }
 
 /// Calls `f` with every entry of every dependency table that `discover` reads.
@@ -90,19 +78,17 @@ fn visit(table: &mut dyn TableLike, f: &mut dyn FnMut(&str, &mut Item) -> Result
   Ok(())
 }
 
-/// Bumps a single declaration if it is one of `dependency`, recording the features it requests.
+/// Bumps a single declaration if it is one of `dependency`.
 fn update_declaration(
   key: &str,
   item: &mut Item,
   dependency: &Dependency,
   to: &Version,
   is_same_registry: &dyn Fn(Option<&str>) -> Result<bool, String>,
-  requested: &mut Requested,
 ) -> Result<(), String> {
   if let Some(value) = item.as_value_mut().filter(|v| v.is_str()) {
     if key == dependency.name && is_same_registry(None)? {
       bump_value(value, to);
-      requested.default_features = true;
     }
     return Ok(());
   }
@@ -122,12 +108,6 @@ fn update_declaration(
     return Ok(());
   };
   bump_value(version, to);
-
-  let default_features = table.get("default-features").or_else(|| table.get("default_features"));
-  requested.default_features |= default_features.and_then(Item::as_bool).unwrap_or(true);
-  if let Some(features) = table.get("features").and_then(Item::as_array) {
-    requested.features.extend(features.iter().filter_map(Value::as_str).map(str::to_string));
-  }
   Ok(())
 }
 
@@ -199,8 +179,7 @@ inherited = { workspace = true }
 "#,
     );
 
-    let requested =
-      update(dir.path(), &dependency("serde", None, &["Cargo.toml"]), &Version::parse("1.0.228").unwrap()).unwrap();
+    update(dir.path(), &dependency("serde", None, &["Cargo.toml"]), &Version::parse("1.0.228").unwrap()).unwrap();
 
     assert_eq!(
       fs::read_to_string(dir.path().join("Cargo.toml")).unwrap(),
@@ -225,10 +204,6 @@ serde = { version = "1.0.228" }
 inherited = { workspace = true }
 "#
     );
-    assert_eq!(
-      requested,
-      Requested { features: ["derive".to_string(), "rc".to_string()].into(), default_features: true }
-    );
   }
 
   #[test]
@@ -248,15 +223,5 @@ inherited = { workspace = true }
       fs::read_to_string(dir.path().join("crates/a/Cargo.toml")).unwrap(),
       "[dependencies]\nfoo = \"1.0\"\nfoo-corp = { package = \"foo\", version = \"2.0\", registry = \"corp\" }\n",
     );
-  }
-
-  #[test]
-  fn default_features_off_everywhere_is_reported() {
-    let dir = TempDir::new().unwrap();
-    write(dir.path(), "Cargo.toml", "[dependencies]\nfoo = { version = \"1\", default-features = false }\n");
-
-    let requested =
-      update(dir.path(), &dependency("foo", None, &["Cargo.toml"]), &Version::parse("1.1.0").unwrap()).unwrap();
-    assert!(!requested.default_features);
   }
 }
