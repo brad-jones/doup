@@ -137,4 +137,12 @@ world ecosystem {
   /// Downloads release notes for every version between the dependencies lowest recorded version & `to`.
   /// Where `to` is `versions.latest` if returned by `lookup-versions`, otherwise `versions.next`.
   export fetch-release-notes: async func(dependency: dependency, to: string) -> result<list<release-note>, string>;
+
+  /// Updates every occurrence of `dependency` in the workspace to version `to`.
+  /// Where `to` is either `versions.next` or `versions.latest` as returned by `lookup-versions`.
+  ///
+  /// The guest is given read-write access to the workspace (a fresh git worktree mounted at
+  /// `/workspace`) & may make HTTP calls. It is expected to edit manifests & lockfiles in place,
+  /// the host then commits whatever changed.
+  export apply-updates: async func(dependency: dependency, to: string) -> result<_, string>;
 }

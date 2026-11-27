@@ -178,7 +178,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
           let ecosystem_plugin = &ecosystems[doup_repo_plugin];
           let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
           let worktree = repo.worktree_add(&branch).await?;
-          ecosystem_plugin.apply_updates(worktree.path()).await?;
+          ecosystem_plugin.apply_updates(worktree.path(), dependency, &to_version.version).await?;
           worktree
             .commit(format!(
               "chore(doup): update {} from {} to {}",
@@ -203,7 +203,7 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
           let ecosystem_plugin = &ecosystems[doup_repo_plugin];
           let branch = doup_branch(doup_repo_plugin, dependency, to_version.latest);
           let worktree = repo.worktree_add(&branch).await?;
-          ecosystem_plugin.apply_updates(worktree.path()).await?;
+          ecosystem_plugin.apply_updates(worktree.path(), dependency, &to_version.version).await?;
           worktree
             .commit(format!(
               "chore(doup): update {} from {} to {}",

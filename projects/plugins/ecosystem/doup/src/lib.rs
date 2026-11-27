@@ -33,6 +33,10 @@ impl Guest for DoupEcosystemPluginDoup {
   async fn fetch_release_notes(_dependency: Dependency, _to: String) -> Result<Vec<ReleaseNote>, String> {
     Ok(Vec::new())
   }
+
+  async fn apply_updates(_dependency: Dependency, _to: String) -> Result<(), String> {
+    Ok(())
+  }
 }
 
 export!(DoupEcosystemPluginDoup);

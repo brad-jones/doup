@@ -107,4 +107,15 @@ impl EcosystemPlugin {
     let result = session.call_async(async |b, a| b.call_fetch_release_notes(a, dependency, to).await).await?;
     result.map_err(anyhow::Error::msg)
   }
+
+  /// Updates every occurrence of `dependency` found in `workspace_dir` to version `to`.
+  /// The guest gets a read-write view of the workspace & is able to make HTTP calls.
+  pub async fn apply_updates(&self, workspace_dir: &Path, dependency: &Dependency, to: &str) -> Result<()> {
+    let permissions = wasi(|b| Ok(b.preopened_dir(workspace_dir, "/workspace", FsPerms::ReadWrite)?));
+    let mut session = self.session_pool.create_session(HttpPolicy::Allowed, permissions).await?;
+    let dependency = dependency.clone();
+    let to = to.to_string();
+    let result = session.call_async(async |b, a| b.call_apply_updates(a, dependency, to).await).await?;
+    result.map_err(anyhow::Error::msg)
+  }
 }

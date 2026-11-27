@@ -10,13 +10,19 @@ mod bindings {
 
 use bindings::*;
 
+mod apply;
 mod config;
 mod discover;
 mod fetch;
 mod http;
+mod index;
+mod lockfile;
 mod lookup;
+mod manifest;
 mod registry;
 mod release_notes;
+mod requirement;
+mod resolve;
 
 use std::path::Path;
 
@@ -39,6 +45,10 @@ impl Guest for DoupEcosystemPluginCargo {
 
   async fn fetch_release_notes(dependency: Dependency, to: String) -> Result<Vec<ReleaseNote>, String> {
     fetch::release_notes(&dependency, &to).await
+  }
+
+  async fn apply_updates(dependency: Dependency, to: String) -> Result<(), String> {
+    apply::apply(Path::new("/workspace"), &dependency, &to).await
   }
 }
 
