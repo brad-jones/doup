@@ -68,17 +68,53 @@ impl ClonedRepo {
   /// - Another [`GitError`] when the remote cannot be reached or the worktree cannot be created,
   ///   e.g. because `branch` is already checked out in this clone.
   pub async fn worktree_add(&self, branch: &str) -> Result<Worktree, GitError> {
-    if branch.trim().is_empty() {
-      return Err(GitError::EmptyBranch);
-    }
-    if grit_lib::refs::check_ref_format::RefName::branch(branch).is_err() {
-      return Err(GitError::InvalidBranch { branch: branch.to_owned() });
-    }
+    validate_branch(branch)?;
     let git = &self.git;
     let lease = crate::delegate_git!(git.remote_tips(self, Some(branch)).await)?.branch_tip;
     let worktree = Worktree::new(self.clone(), branch, lease)?;
     crate::delegate_git!(git.worktree_add(&worktree).await)?;
     Ok(worktree)
+  }
+
+  /// Deletes `branch` on `origin`, like `git push --force-with-lease origin :<branch>`, unless
+  /// someone has pushed to it since doup last looked at it.
+  ///
+  /// The lease is the tip last fetched into `refs/remotes/origin/<branch>` (e.g. by
+  /// [`Self::branch_authors`]), so a branch vetted before deleting it is only deleted while it
+  /// still holds what was vetted. A branch that was never fetched is leased at the tip `origin`
+  /// has just before deleting it. The local `refs/remotes/origin/<branch>` is deleted too.
+  ///
+  /// A branch that does not exist on `origin`, or is deleted by someone else meanwhile, is not an
+  /// error: there is nothing left to delete.
+  ///
+  /// # Errors
+  ///
+  /// - [`GitError::EmptyBranch`] or [`GitError::InvalidBranch`] when `branch` is not a valid name.
+  /// - [`GitError::DeleteDefaultBranch`] when `branch` is `origin`'s default branch.
+  /// - [`GitError::StaleLease`] when `origin`'s branch has moved since it was last fetched.
+  /// - [`GitError::PushRejected`] when `origin` refuses the deletion, e.g. it is protected.
+  /// - Another [`GitError`] when the remote cannot be reached.
+  pub async fn delete_remote_branch(&self, branch: &str) -> Result<(), GitError> {
+    validate_branch(branch)?;
+    let git = &self.git;
+    let tips = crate::delegate_git!(git.remote_tips(self, Some(branch)).await)?;
+    if tips.default_branch == branch {
+      return Err(GitError::DeleteDefaultBranch { branch: branch.to_owned() });
+    }
+    let Some(remote_tip) = tips.branch_tip else {
+      return Ok(());
+    };
+    let lease = crate::delegate_git!(git.tracking_tip(self, branch).await)?.unwrap_or(remote_tip);
+    match crate::delegate_git!(git.delete_remote_branch(self, branch, &lease).await) {
+      // A lease also fails when the branch is already gone, which is what was wanted.
+      Err(GitError::StaleLease { branch: stale }) => {
+        match crate::delegate_git!(git.remote_tips(self, Some(branch)).await)?.branch_tip {
+          None => Ok(()),
+          Some(_) => Err(GitError::StaleLease { branch: stale }),
+        }
+      }
+      result => result,
+    }
   }
 
   /// Lists every branch on the `origin` remote, like `git ls-remote --heads origin`.
@@ -212,6 +248,17 @@ impl ClonedRepo {
     crate::delegate_git!(git.fetch_branch(self, branch, &tips.default_branch).await)?;
     Ok(Some(tips.default_tip))
   }
+}
+
+/// Checks `branch` is a name a branch can have, before it is handed to a backend.
+fn validate_branch(branch: &str) -> Result<(), GitError> {
+  if branch.trim().is_empty() {
+    return Err(GitError::EmptyBranch);
+  }
+  if grit_lib::refs::check_ref_format::RefName::branch(branch).is_err() {
+    return Err(GitError::InvalidBranch { branch: branch.to_owned() });
+  }
+  Ok(())
 }
 
 impl fmt::Debug for ClonedRepo {

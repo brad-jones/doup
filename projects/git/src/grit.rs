@@ -85,6 +85,28 @@ impl GitBackend for Grit {
     tokio::task::spawn_blocking(move || branch_commits_blocking(&repo, &branch)).await?
   }
 
+  async fn tracking_tip(&self, repo: &ClonedRepo, branch: &str) -> Result<Option<String>, GitError> {
+    let (repo, branch) = (repo.clone(), branch.to_owned());
+    tokio::task::spawn_blocking(move || {
+      let (git_repo, _) = open(&repo, None)?;
+      Ok(tracking_ref(&git_repo, &branch)?.map(|id| id.to_hex()))
+    })
+    .await?
+  }
+
+  async fn delete_remote_branch(&self, repo: &ClonedRepo, branch: &str, lease: &str) -> Result<(), GitError> {
+    let agent = SshAgent::for_auth(repo.auth())?;
+    let ssh_command = agent.as_ref().map(SshAgent::ssh_command).transpose()?;
+    let (repo, branch, lease) = (repo.clone(), branch.to_owned(), lease.to_owned());
+    let cancel = CancelToken::new();
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    let result =
+      tokio::task::spawn_blocking(move || delete_remote_branch_blocking(&repo, &branch, &lease, ssh_command, &cancel))
+        .await?;
+    drop(agent);
+    result
+  }
+
   async fn worktree_add(&self, worktree: &Worktree) -> Result<(), GitError> {
     let parts = WorktreeParts::of(worktree);
     let cancel = CancelToken::new();
@@ -258,6 +280,47 @@ fn classify_push_rejection(branch: &str, rejected: &PushRefResult) -> GitError {
 
 fn worktree_remove_blocking(parts: &WorktreeParts) -> Result<(), GitError> {
   parts.open_clone()?.worktrees().remove(&parts.path, true).map_err(GitError::Grit)
+}
+
+/// The id `refs/remotes/origin/<branch>` points at in `git_repo`, if it exists.
+fn tracking_ref(git_repo: &Repository, branch: &str) -> Result<Option<ObjectId>, GitError> {
+  let name = format!("refs/remotes/origin/{branch}");
+  // Listing, rather than resolving, tells a missing ref apart from a failure to read one.
+  let refs = git_repo.references().list("refs/remotes/origin/").map_err(GitError::Grit)?;
+  Ok(refs.into_iter().find(|(found, _)| found.as_str() == name).map(|(_, id)| id))
+}
+
+fn delete_remote_branch_blocking(
+  repo: &ClonedRepo,
+  branch: &str,
+  lease: &str,
+  ssh_command: Option<String>,
+  cancel: &CancelToken,
+) -> Result<(), GitError> {
+  let (git_repo, http_factory) = open(repo, ssh_command)?;
+  let spec = PushRefSpec {
+    dst: format!("refs/heads/{branch}"),
+    delete: true,
+    force: true,
+    expected_old: Some(ObjectId::from_hex(lease).map_err(GitError::Grit)?),
+    ..PushRefSpec::default()
+  };
+  let options = PushOptions { no_verify: true, ..PushOptions::default() };
+
+  let pushed = git_repo.remotes().get(DEFAULT_REMOTE).and_then(|remote| {
+    let http_factory = http_factory.as_ref().map(|factory| factory as &dyn HttpClientFactory);
+    git_repo.remotes().push(&remote, &[spec], options, &mut NoProgress, cancel, http_factory)
+  });
+  let outcome = pushed.map_err(|err| classify_failure(repo.url(), &err).unwrap_or(GitError::Grit(err)))?;
+  if let Some(rejected) = outcome.results.iter().find(|result| result.status.is_error()) {
+    return Err(classify_push_rejection(branch, rejected));
+  }
+  // Push only prunes the tracking ref when the fetch refspec covers it, which a single-branch
+  // clone's does not.
+  if tracking_ref(&git_repo, branch)?.is_some() {
+    git_repo.references().delete(format!("refs/remotes/origin/{branch}")).map_err(GitError::Grit)?;
+  }
+  Ok(())
 }
 
 /// grit is synchronous, so stop its blocking work if the awaiting future is dropped.

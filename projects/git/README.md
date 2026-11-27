@@ -24,6 +24,7 @@ let default = repo.default_branch().await?; // the branch origin's HEAD points a
 let commits = repo.branch_commits("doup/foo").await?; // like `git log origin/HEAD..origin/doup/foo`
 let authors = repo.branch_authors("doup/foo").await?; // their `%ae`, sorted and deduplicated
 let behind = repo.branch_is_behind("doup/foo").await?; // true when it lacks the default branch's tip
+repo.delete_remote_branch("doup/old").await?; // like `git push --force-with-lease origin :doup/old`
 
 let worktree = repo.worktree_add("doup/foo").await?; // like `git worktree add -B doup/foo <tmp> HEAD`
 std::fs::write(worktree.path().join("Cargo.lock"), lockfile)?;
@@ -82,6 +83,20 @@ Commits are made as the clone's `Identity` (`CloneOptions::with_identity`, defau
 <doup[bot]@users.noreply.github.com>`) for both author and committer, are never signed, and no hooks run at any step:
 `core.hooksPath` points at an empty dir, so neither the user's (e.g. a global hooks path) nor the clone's run.
 
+### Deleting branches
+
+`delete_remote_branch(branch)` deletes `branch` on `origin` with a lease, so a branch someone pushed to since doup last
+looked at it is never deleted:
+
+- The lease is the tip last fetched into `refs/remotes/origin/<branch>`, eg: by `branch_authors` when vetting the
+  branch. A branch that was never fetched is leased at the tip `origin` has just before deleting it.
+- A branch that moved since fails with `GitError::StaleLease` and is left alone.
+- A branch that does not exist on `origin`, or that someone else deletes meanwhile, is not an error.
+- `origin`'s default branch is never deleted: that fails with `GitError::DeleteDefaultBranch`.
+- The clone's `refs/remotes/origin/<branch>` is deleted too, as push only prunes it when the fetch refspec covers it,
+  which a `--depth` (so single-branch) clone's does not.
+- `pre-push` hooks never run.
+
 ### Update branch names
 
 `UpdateBranch::new(plugin, dependency, latest)` names the branch a dependency update is pushed to, always a valid branch
@@ -139,6 +154,8 @@ Notes from building this crate against `grit-lib` 0.5.x:
 - A linked worktree is opened with `Repository::open` on its admin dir (`.git/worktrees/<id>`, named in its `.git` file)
   and `with_work_tree`.
 - Push rejections are not errors: check each `PushOutcome::results` status. A lost lease is `RejectStale`.
+- A remote branch is deleted with a `PushRefSpec` with `delete: true` and no `src`; `expected_old` is its lease, and a
+  branch that no longer exists also fails it as `RejectStale`. Read or delete local refs through `references()`.
 - `porcelain::commit::CommitScope::AutoStage` leaves untracked files out when `status.showUntrackedFiles=no`, so stage
   with `index().stage` (`StageMode::All`) and commit what is staged.
 

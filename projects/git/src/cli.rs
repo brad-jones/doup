@@ -65,6 +65,29 @@ impl GitBackend for GitCli {
     parse_cat_file_batch(&objects)
   }
 
+  async fn tracking_tip(&self, repo: &ClonedRepo, branch: &str) -> Result<Option<String>, GitError> {
+    let tracking = format!("refs/remotes/origin/{branch}^{{commit}}");
+    let invocation = in_clone(repo, ["rev-parse", "--quiet", "--verify", "--end-of-options", &tracking]);
+    match run(invocation, |_| None).await {
+      Ok(stdout) => Ok(Some(String::from_utf8_lossy(&stdout).trim().to_owned())),
+      // `--verify --quiet` exits 1, saying nothing, when the ref does not exist.
+      Err(GitError::CommandFailed { status, .. }) if status.code() == Some(1) => Ok(None),
+      Err(err) => Err(err),
+    }
+  }
+
+  async fn delete_remote_branch(&self, repo: &ClonedRepo, branch: &str, lease: &str) -> Result<(), GitError> {
+    let agent = SshAgent::for_auth(repo.auth())?;
+    let invocation = delete_invocation(repo, branch, lease, agent.as_ref())?;
+    let result = run(invocation, |stderr| classify_push_failure(repo.url(), branch, stderr)).await;
+    drop(agent);
+    result?;
+    // Push only prunes the tracking ref when the fetch refspec covers it, which a single-branch
+    // clone's does not. Deleting a missing ref succeeds.
+    let tracking = format!("refs/remotes/origin/{branch}");
+    run(in_clone(repo, ["update-ref", "-d", &tracking]), |_| None).await.map(drop)
+  }
+
   async fn worktree_add(&self, worktree: &Worktree) -> Result<(), GitError> {
     run(worktree_add_invocation(worktree), |_| None).await.map(drop)
   }
@@ -228,6 +251,32 @@ fn fetch_branch_invocation(
     current_dir: Some(repo.path().to_path_buf()),
     stdin: None,
   })
+}
+
+/// Runs git `args` in the clone itself, without touching the remote.
+fn in_clone<'a>(repo: &ClonedRepo, args: impl IntoIterator<Item = &'a str>) -> Invocation {
+  Invocation {
+    args: args.into_iter().map(Into::into).collect(),
+    envs: Vec::new(),
+    current_dir: Some(repo.path().to_path_buf()),
+    stdin: None,
+  }
+}
+
+/// Deletes `branch` on `origin` with a lease. `--no-verify` as the user's `pre-push` hook (e.g.
+/// from a global `core.hooksPath`) must never run.
+fn delete_invocation(
+  repo: &ClonedRepo,
+  branch: &str,
+  lease: &str,
+  agent: Option<&SshAgent>,
+) -> Result<Invocation, GitError> {
+  let dst = format!("refs/heads/{branch}");
+  let lease = format!("--force-with-lease={dst}:{lease}");
+  let refspec = format!(":{dst}");
+  let mut invocation = in_clone(repo, ["push", "--quiet", "--no-verify", &lease, "origin", &refspec]);
+  invocation.envs = auth_envs(repo.url(), repo.auth(), agent)?;
+  Ok(invocation)
 }
 
 /// Runs git `args` in `worktree` as the clone's identity, with an empty hooks path so none of the
@@ -624,6 +673,18 @@ mod tests {
       ]
     );
     assert_eq!(push(Push::ForceWithLease(None))[3], "--force-with-lease=refs/heads/doup/x:");
+  }
+
+  #[test]
+  fn builds_a_leased_branch_delete_in_the_clone() {
+    let invocation = delete_invocation(&https_repo(), "doup/x", "2222", None).unwrap();
+    assert_eq!(
+      args(&invocation),
+      ["push", "--quiet", "--no-verify", "--force-with-lease=refs/heads/doup/x:2222", "origin", ":refs/heads/doup/x"]
+    );
+    assert_eq!(invocation.current_dir.as_deref(), Some(std::path::Path::new("/tmp/b")));
+    assert_eq!(env(&invocation, "GIT_TERMINAL_PROMPT"), Some("0"));
+    assert_eq!(env(&invocation, "GIT_CONFIG_VALUE_0"), Some(basic_auth_header("user", "hunter2").as_str()));
   }
 
   #[test]

@@ -67,6 +67,9 @@ pub enum GitError {
   #[error("remote '{url}' has no default branch")]
   NoDefaultBranch { url: String },
 
+  #[error("refusing to delete '{branch}', the remote's default branch")]
+  DeleteDefaultBranch { branch: String },
+
   #[error("remote branch '{branch}' has no commits that are not already on the default branch")]
   NoUniqueCommits { branch: String },
 

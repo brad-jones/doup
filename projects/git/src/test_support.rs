@@ -663,6 +663,92 @@ macro_rules! backend_contract_tests {
         // The branch is no longer checked out anywhere, so can be again.
         repo.worktree_add(BRANCH).await.unwrap().remove().await.unwrap();
       }
+
+      fn tracking_tip(repo: &ClonedRepo, branch: &str) -> Option<String> {
+        let tracking = format!("refs/remotes/origin/{branch}");
+        let output = std::process::Command::new("git")
+          .current_dir(repo.path())
+          .args(["rev-parse", "-q", "--verify", &tracking])
+          .output()
+          .unwrap();
+        output.status.success().then(|| String::from_utf8(output.stdout).unwrap().trim().to_owned())
+      }
+
+      #[tokio::test]
+      async fn deletes_a_fetched_branch() {
+        let fixture = Fixture::new();
+        fixture.commit(BRANCH, "doup[bot]@users.noreply.github.com", "ours");
+        let repo = shallow_clone(&fixture).await;
+        // Vetting fetches the branch, so it becomes the lease.
+        repo.branch_authors(BRANCH).await.unwrap();
+        assert_eq!(tracking_tip(&repo, BRANCH), fixture.tip(BRANCH));
+
+        repo.delete_remote_branch(BRANCH).await.unwrap();
+        assert_eq!(fixture.tip(BRANCH), None);
+        assert_eq!(tracking_tip(&repo, BRANCH), None);
+        assert_eq!(repo.list_remote_branches().await.unwrap(), ["feature", "main"]);
+      }
+
+      #[tokio::test]
+      async fn deletes_a_branch_that_was_never_fetched() {
+        let fixture = Fixture::new();
+        fixture.add_branch(BRANCH);
+        let repo = clone(CloneOptions::new(&fixture.url, fixture.path("clone"))).await.unwrap();
+        repo.delete_remote_branch("feature").await.unwrap();
+        repo.delete_remote_branch(BRANCH).await.unwrap();
+        assert_eq!((fixture.tip("feature"), fixture.tip(BRANCH)), (None, None));
+        assert_eq!(tracking_tip(&repo, "feature"), None, "a full clone's tracking ref is deleted too");
+        assert_eq!(repo.list_remote_branches().await.unwrap(), ["main"]);
+      }
+
+      #[tokio::test]
+      async fn refuses_to_delete_a_branch_moved_since_it_was_fetched() {
+        let fixture = Fixture::new();
+        fixture.commit(BRANCH, "doup[bot]@users.noreply.github.com", "ours");
+        let repo = shallow_clone(&fixture).await;
+        repo.branch_authors(BRANCH).await.unwrap();
+        fixture.commit(BRANCH, "someone@example.com", "theirs");
+        let moved = fixture.tip(BRANCH);
+
+        let err = repo.delete_remote_branch(BRANCH).await.unwrap_err();
+        assert!(matches!(&err, GitError::StaleLease { branch } if branch == BRANCH), "{err:?}");
+        assert_eq!(fixture.tip(BRANCH), moved);
+      }
+
+      #[tokio::test]
+      async fn deleting_a_missing_branch_is_not_an_error() {
+        let fixture = Fixture::new();
+        fixture.commit(BRANCH, "doup[bot]@users.noreply.github.com", "ours");
+        let repo = shallow_clone(&fixture).await;
+        repo.delete_remote_branch("doup/never/existed").await.unwrap();
+
+        // Fetched, then deleted by someone else.
+        repo.branch_authors(BRANCH).await.unwrap();
+        let other = clone(CloneOptions::new(&fixture.url, fixture.path("other"))).await.unwrap();
+        other.delete_remote_branch(BRANCH).await.unwrap();
+        repo.delete_remote_branch(BRANCH).await.unwrap();
+        assert_eq!(fixture.tip(BRANCH), None);
+      }
+
+      #[tokio::test]
+      async fn refuses_to_delete_the_default_branch() {
+        let fixture = Fixture::new();
+        let main = fixture.tip("main");
+        let repo = shallow_clone(&fixture).await;
+        let err = repo.delete_remote_branch("main").await.unwrap_err();
+        assert!(matches!(&err, GitError::DeleteDefaultBranch { branch } if branch == "main"), "{err:?}");
+        assert_eq!(fixture.tip("main"), main);
+      }
+
+      #[tokio::test]
+      async fn refuses_to_delete_invalid_branch_names() {
+        let fixture = Fixture::new();
+        let repo = shallow_clone(&fixture).await;
+        let err = repo.delete_remote_branch(" ").await.unwrap_err();
+        assert!(matches!(err, GitError::EmptyBranch), "{err:?}");
+        let err = repo.delete_remote_branch("a..b").await.unwrap_err();
+        assert!(matches!(err, GitError::InvalidBranch { .. }), "{err:?}");
+      }
     }
   };
 }

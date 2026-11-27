@@ -235,15 +235,20 @@ pub async fn update(args: UpdateArgs) -> Result<()> {
         }
       }
     }
-    if action_failed {
-      failed += 1;
-    }
-
     // Finally delete any branches
     for action in &actions {
       if let DoupAction::DeleteBranch(branch_name, _reason) = action {
-        eprintln!("TODO: Delete branch {}", branch_name)
+        match repo.delete_remote_branch(branch_name.as_ref()).await {
+          Ok(()) => eprintln!("Deleted branch {branch_name}"),
+          Err(err) => {
+            eprintln!("Failed to apply action `{}`: {err:#}", action.summary());
+            action_failed = true;
+          }
+        }
       }
+    }
+    if action_failed {
+      failed += 1;
     }
   }
 
