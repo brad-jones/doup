@@ -80,12 +80,19 @@ jobs:
           mkdir -p ./target/wasm32-wasip3/release
           mv ./*.wasm ./target/wasm32-wasip3/release/.
 
+      - name: 🔑 Authenticate as Github App
+        uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.RENOVATE_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_PRIVATE_KEY }}
+
       - name: 🚀 Update Dependencies with Doup
         run: doup update
         env:
           DOUP_BOT__GIT_BACKEND: grit
           DOUP_BOT_REPOS_0_ORIGIN: https://github.com/${{ github.repository }}.git
           DOUP_BOT_REPOS_0_AUTH_USER: x-access-token
-          DOUP_BOT_REPOS_0_AUTH_PASS: ${{ github.token }}
-          DOUP_REPO_0__PLATFORM__WITH__GITHUB_TOKEN: ${{ github.token }}
-          DOUP_REPO_0__ECOSYSTEMS__1__WITH__GITHUB_TOKEN: ${{ github.token }}
+          DOUP_BOT_REPOS_0_AUTH_PASS: ${{ steps.app-token.outputs.token }}
+          DOUP_REPO_0__PLATFORM__WITH__GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          DOUP_REPO_0__ECOSYSTEMS__1__WITH__GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
