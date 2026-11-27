@@ -239,6 +239,30 @@ mod tests {
   }
 
   #[test]
+  fn indexes_above_the_max_are_keys() {
+    let v = run(&[("APP_HUGE_65536", "x"), ("APP_MAX_65535", "y")], "APP");
+    assert_eq!(v["huge"], json!({"65536": "x"}));
+    assert_eq!(v["max"].as_array().map(Vec::len), Some(MAX_ARRAY_INDEX + 1));
+  }
+
+  #[test]
+  fn signed_numbers_are_keys() {
+    let v = run(&[("APP_LIST_+1", "x")], "APP");
+    assert_eq!(v, json!({"list": {"+1": "x"}}));
+  }
+
+  #[test]
+  fn conflicting_paths_resolve_the_same_whatever_the_env_order() {
+    let pairs = [("APP_A", "x"), ("APP_A_B", "y"), ("APP_L_0", "z"), ("APP_L_K", "w")];
+    let expected = json!({"a": {"b": "y"}, "l": {"k": "w"}});
+    assert_eq!(run(&pairs, "APP"), expected);
+
+    let mut reversed = pairs;
+    reversed.reverse();
+    assert_eq!(run(&reversed, "APP"), expected);
+  }
+
+  #[test]
   fn no_matches_gives_empty_object() {
     assert_eq!(run(&[("A", "1")], "NOPE"), json!({}));
   }

@@ -26,7 +26,8 @@ let bot = DoupBotConfigFile::load(None, None)?.merged;
 for (index, repo) in bot.repos.iter().enumerate() {
   // ...clone repo.origin into `dir`...
 
-  // Find doup.{json,yaml,yml} in `dir` or a parent, then apply DOUP_REPO_* and DOUP_REPO_<index>_* env vars over it.
+  // Find doup.{json,yaml,yml} in `dir` or a parent up to the repo root, then apply DOUP_REPO_* and DOUP_REPO_<index>_*
+  // env vars over it.
   let prefix = DoupRepoConfigFile::repo_env_prefix(index);
   let config = DoupRepoConfigFile::load(Some(dir), Some(&prefix))?.merged;
 }
@@ -43,17 +44,24 @@ With no file, `merged` is built from the env alone. Either way it is validated a
 
 The rest of `ConfigFile` does each step on its own:
 
-| Method                              | Does                                                                              |
-| ----------------------------------- | --------------------------------------------------------------------------------- |
-| `locate_file(start_dir)`            | Walks up from `start_dir` (default: current dir) to the first of `DEFAULT_NAMES`. |
-| `from_file(path)` / `to_file(path)` | Reads or writes JSON or YAML, chosen by the extension (`.json`, `.yaml`, `.yml`). |
-| `from_json` / `from_yaml`           | Parses, validates and hydrates a string.                                          |
-| `to_json` / `to_yaml`               | Serializes back to a string.                                                      |
-| `from_env(env_prefix)`              | Builds a config from env vars alone.                                              |
-| `save()`                            | `to_file` back to where `from_file` read it from.                                 |
+| Method                              | Does                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `locate_file(start_dir)`            | Walks up from `start_dir` (default: current dir) to the first of `DEFAULT_NAMES`, see below. |
+| `from_file(path)` / `to_file(path)` | Reads or writes JSON or YAML, chosen by the extension (`.json`, `.yaml`, `.yml`).            |
+| `from_json` / `from_yaml`           | Parses, validates and hydrates a string.                                                     |
+| `to_json` / `to_yaml`               | Serializes back to a string.                                                                 |
+| `from_env(env_prefix)`              | Builds a config from env vars alone.                                                         |
+| `save()`                            | `to_file` back to where `from_file` read it from.                                            |
 
 Every config round trips: `$schema` is kept if the file has one, and an SSH key given as a `key_path` is written back as
 the path, not the key.
+
+### Finding the file
+
+`locate_file` looks in `start_dir`, then each parent in turn, and returns the first file it finds. The nearest dir wins,
+and within a dir `.json` beats `.yaml`, which beats `.yml`. The repo config (`STOP_AT_GIT_ROOT`) searches no higher than
+the first dir containing `.git`, so a repo without a config never picks one up from outside it, eg: from `/tmp` above a
+clone. The bot config searches all the way up.
 
 ### Validation
 

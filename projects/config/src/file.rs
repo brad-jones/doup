@@ -51,6 +51,10 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
   /// except for scopes passed to `load`/`from_env`, which deliberately extend it (eg: `DOUP_REPO_0`).
   const ENV_PREFIX: &'static str;
 
+  /// When true, `locate_file` searches no higher than the first dir containing `.git` (a repo's
+  /// root), so it never picks up a config from outside the repo.
+  const STOP_AT_GIT_ROOT: bool = false;
+
   // Used by `save` to save a loaded file back to the same place it came from.
   fn source(&self) -> Option<&Path>;
 
@@ -69,18 +73,24 @@ pub trait ConfigFile: Serialize + DeserializeOwned + Sized {
 
   /// Recurses up from the given start_dir (defaulting to the current working directory)
   /// looking for the standard doup config file names, returning the first match otherwise None.
+  /// Earlier `DEFAULT_NAMES` win within a dir. See [`Self::STOP_AT_GIT_ROOT`].
   fn locate_file(start_dir: Option<&Path>) -> Result<Option<PathBuf>, ConfigError> {
     let dir = match start_dir {
       Some(d) => d.to_path_buf(),
       None => current_dir().map_err(ConfigError::CurrentDir)?,
     };
 
-    Ok(
-      dir
-        .ancestors()
-        .flat_map(|dir| Self::DEFAULT_NAMES.iter().map(move |name| dir.join(name)))
-        .find(|candidate| candidate.is_file()),
-    )
+    for dir in dir.ancestors() {
+      let found = Self::DEFAULT_NAMES.iter().map(|name| dir.join(name)).find(|candidate| candidate.is_file());
+      if found.is_some() {
+        return Ok(found);
+      }
+      // `exists` as `.git` is a file, not a dir, in a linked worktree.
+      if Self::STOP_AT_GIT_ROOT && dir.join(".git").exists() {
+        break;
+      }
+    }
+    Ok(None)
   }
 
   /// Convenience function for the default case of loading a config file, with env overrides.
@@ -185,4 +195,117 @@ fn parse_json(value: &str) -> Result<Value, ConfigError> {
 
 fn parse_yaml(value: &str) -> Result<Value, ConfigError> {
   serde_saphyr::from_str(value).map_err(ConfigError::ParseYaml)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use assert_fs::{TempDir, prelude::*};
+  use serde::Deserialize;
+
+  /// A minimal config, with names unlikely to exist above the temp dir.
+  #[derive(Debug, PartialEq, Serialize, Deserialize)]
+  struct TestConfig {
+    name: String,
+
+    #[serde(skip)]
+    source: Option<PathBuf>,
+  }
+
+  impl ConfigFile for TestConfig {
+    const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = |_| Ok(());
+    const DEFAULT_NAMES: &'static [&'static str] =
+      &["doup-config-test.json", "doup-config-test.yaml", "doup-config-test.yml"];
+    const ENV_PREFIX: &'static str = "DOUP_CONFIG_TEST";
+
+    fn source(&self) -> Option<&Path> {
+      self.source.as_deref()
+    }
+
+    fn set_source(&mut self, path: PathBuf) {
+      self.source = Some(path)
+    }
+  }
+
+  fn locate(start: &Path) -> Option<PathBuf> {
+    TestConfig::locate_file(Some(start)).unwrap()
+  }
+
+  #[test]
+  fn locate_file_finds_a_file_in_a_parent_dir() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup-config-test.json");
+    file.touch().unwrap();
+    let start = dir.child("a/b");
+    start.create_dir_all().unwrap();
+    assert_eq!(locate(start.path()), Some(file.path().to_path_buf()));
+  }
+
+  #[test]
+  fn locate_file_prefers_the_nearest_dir() {
+    let dir = TempDir::new().unwrap();
+    dir.child("doup-config-test.json").touch().unwrap();
+    let nearer = dir.child("a/doup-config-test.yml");
+    nearer.touch().unwrap();
+    let start = dir.child("a/b");
+    start.create_dir_all().unwrap();
+    assert_eq!(locate(start.path()), Some(nearer.path().to_path_buf()));
+  }
+
+  #[test]
+  fn locate_file_prefers_earlier_names_within_a_dir() {
+    let dir = TempDir::new().unwrap();
+    for name in TestConfig::DEFAULT_NAMES {
+      dir.child(name).touch().unwrap();
+    }
+    assert_eq!(locate(dir.path()), Some(dir.path().join("doup-config-test.json")));
+
+    std::fs::remove_file(dir.child("doup-config-test.json").path()).unwrap();
+    assert_eq!(locate(dir.path()), Some(dir.path().join("doup-config-test.yaml")));
+  }
+
+  #[test]
+  fn locate_file_skips_dirs_with_a_config_name() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup-config-test.json");
+    file.touch().unwrap();
+    let start = dir.child("a");
+    start.child("doup-config-test.json").create_dir_all().unwrap();
+    assert_eq!(locate(start.path()), Some(file.path().to_path_buf()));
+  }
+
+  #[test]
+  fn locate_file_searches_past_git_roots_by_default() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup-config-test.json");
+    file.touch().unwrap();
+    let repo = dir.child("repo");
+    repo.child(".git").create_dir_all().unwrap();
+    assert_eq!(locate(repo.path()), Some(file.path().to_path_buf()));
+  }
+
+  #[test]
+  fn save_writes_yaml_back_to_a_yaml_file() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup-config-test.yaml");
+    file.write_str("name: a\n").unwrap();
+
+    let mut config = TestConfig::from_file(file.path()).unwrap();
+    config.name = "b".into();
+    config.save().unwrap();
+
+    let saved = std::fs::read_to_string(file.path()).unwrap();
+    assert!(parse_json(&saved).is_err(), "{saved}");
+    assert_eq!(TestConfig::from_file(file.path()).unwrap(), config);
+  }
+
+  #[test]
+  fn to_file_rejects_an_unsupported_extension() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup-config-test.toml");
+    let config = TestConfig { name: "a".into(), source: None };
+    let err = config.to_file(file.path()).unwrap_err();
+    assert!(matches!(err, ConfigError::UnsupportedExtension { ref path } if path == file.path()), "{err:?}");
+    assert!(!file.exists());
+  }
 }

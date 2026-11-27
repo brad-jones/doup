@@ -70,6 +70,8 @@ impl ConfigFile for DoupRepoConfigFile {
 
   const ENV_PREFIX: &'static str = "DOUP_REPO";
 
+  const STOP_AT_GIT_ROOT: bool = true;
+
   const VALIDATE: for<'i> fn(&'i Value) -> Result<(), ValidationError<'i>> = Schema::validate;
 
   fn source(&self) -> Option<&Path> {
@@ -190,6 +192,21 @@ ecosystems:
   #[test]
   fn repo_env_prefix_includes_the_index() {
     assert_eq!(DoupRepoConfigFile::repo_env_prefix(3), "DOUP_REPO_3");
+  }
+
+  #[test]
+  fn locate_file_stops_at_the_git_root() {
+    let dir = TempDir::new().unwrap();
+    dir.child("doup.json").touch().unwrap();
+    let repo = dir.child("repo");
+    repo.child(".git").create_dir_all().unwrap();
+    let sub = repo.child("sub");
+    sub.create_dir_all().unwrap();
+    assert_eq!(DoupRepoConfigFile::locate_file(Some(sub.path())).unwrap(), None);
+
+    let file = repo.child("doup.yaml");
+    file.touch().unwrap();
+    assert_eq!(DoupRepoConfigFile::locate_file(Some(sub.path())).unwrap(), Some(file.path().to_path_buf()));
   }
 
   #[test]
