@@ -41,16 +41,28 @@ static WORLD_LINKERS: LazyLock<Mutex<HashMap<TypeId, Arc<Linker<HostState>>>>> =
 ///
 ///   pub async fn hello_world(&self) -> Result<String, PluginError> {
 ///     self.session_pool
-///       .call_export("hello-world", SessionPolicy::new(), async |b, a| b.call_hello_world(a).await)
+///       .call_export("hello-world", self.session_pool.default_policy(), async |b, a| b.call_hello_world(a).await)
 ///       .await
 ///   }
 /// }
 /// ```
 pub struct PluginSessionPool<W: PluginWorld> {
+  /// The engine supplied at construction, when `None` the process wide default is used.
   engine: Option<Engine>,
+
+  /// The plugin reference & its config from the repo's doup config.
   plugin: DoupRepoPlugin,
+
+  /// The compiled component, built on first use & shared by every session.
   pre: OnceLock<W::Pre>,
+
+  /// The plugin's config serialised as JSON, built on first use as every session is configured with the same value.
+  plugin_config: OnceLock<String>,
+
+  /// Idle, already configured sessions waiting to be checked out.
   session_pool: Mutex<Vec<PluginSession<W>>>,
+
+  /// Extra dirs searched for a relative plugin path, the current working dir is always searched first.
   module_search_dirs: Vec<PathBuf>,
 }
 
@@ -65,6 +77,7 @@ impl<W: PluginWorld> PluginSessionPool<W> {
       engine,
       plugin: plugin.clone(),
       pre: OnceLock::new(),
+      plugin_config: OnceLock::new(),
       session_pool: Mutex::new(Vec::new()),
       module_search_dirs,
     }
@@ -141,6 +154,22 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     Ok(self.pre.get_or_init(|| pre))
   }
 
+  /// The policy sessions of this world start from, see [`PluginWorld::default_policy`].
+  /// Build on it to grant a call more, eg: `pool.default_policy().http(HttpPolicy::Allowed)`.
+  pub fn default_policy(&self) -> SessionPolicy {
+    W::default_policy()
+  }
+
+  /// The plugin's config as JSON, serialised once & cached for the lifetime of the pool.
+  fn plugin_config(&self) -> Result<&str> {
+    if let Some(config) = self.plugin_config.get() {
+      return Ok(config);
+    }
+    let config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())
+      .map_err(|source| PluginError::SerializeConfig { plugin: self.plugin.plugin.clone(), source })?;
+    Ok(self.plugin_config.get_or_init(|| config))
+  }
+
   /// Creates a new session which includes the bindings and their Store.
   /// Ensures that the new Store is configured by calling the `configure` export
   /// & passing along any plugin config from the original [`DoupRepoPlugin`] reference.
@@ -149,23 +178,29 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// custom WASI context overrides need to be given. Do not attempt to check
   /// the resulting session into the pool, just drop it.
   ///
+  /// The `configure` export always runs with no I/O whatsoever (no HTTP, containers, stdio or files)
+  /// so it can only parse & store its config, `policy` is only applied once it has returned.
+  ///
   /// `policy` decides the guest's WASI context and which capabilities beyond WASI (eg: outbound
-  /// `wasi:http` requests) it is granted, pooled sessions are never granted any, see [`Self::checkout_session`].
+  /// `wasi:http` requests) it is granted. It is used exactly as given, so it should usually be built
+  /// on [`Self::default_policy`]. Pooled sessions use the default as is, see [`Self::checkout_session`].
   pub async fn create_session(&self, policy: SessionPolicy) -> Result<PluginSession<W>> {
     let plugin = || self.plugin.plugin.clone();
-    let state = HostState::new(policy, W::wasi)
+    let state = HostState::new(policy)
       .map_err(|err| PluginError::Sandbox { plugin: plugin(), source: err.into_boxed_dyn_error() })?;
     let mut store = Store::new(self.engine()?, state);
     let bindings = W::instantiate(self.component_pre()?, &mut store)
       .await
       .map_err(|err| PluginError::Instantiate { plugin: plugin(), source: err.into_boxed_dyn_error() })?;
 
-    let plugin_config = serde_json::to_string(&self.plugin.with.clone().unwrap_or_default())
-      .map_err(|source| PluginError::SerializeConfig { plugin: plugin(), source })?;
-    W::configure(&bindings, &mut store, &plugin_config)
+    let plugin_config = self.plugin_config()?;
+    W::configure(&bindings, &mut store, plugin_config)
       .await
       .map_err(|err| self.trap("configure", err))?
       .map_err(|err| PluginError::Configure { plugin: plugin(), source: err.into() })?;
+
+    // Only now that the guest is configured is it given the I/O its policy describes.
+    store.data_mut().grant();
 
     Ok(PluginSession { store, bindings })
   }
@@ -174,7 +209,7 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// created with `policy`, see [`Self::create_session`]. The session is dropped afterwards.
   ///
   /// ```ignore
-  /// let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+  /// let policy = self.session_pool.default_policy().http(HttpPolicy::Allowed);
   /// self.session_pool.call_export("my-export", policy, async |b, a| b.call_my_export(a).await).await
   /// ```
   ///
@@ -189,11 +224,38 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<Result<R, types::GuestError>>,
   ) -> Result<R> {
     let mut session = self.create_session(policy).await?;
-    session.call_async(call).await.map_err(|err| self.trap(export, err))?.map_err(|err| PluginError::Guest {
-      plugin: self.plugin.plugin.clone(),
-      export,
-      source: err.into(),
-    })
+    session.call_async(call).await.map_err(|err| self.trap(export, err))?.map_err(|err| self.guest_error(export, err))
+  }
+
+  /// Like [`Self::call_export`], but runs on a pooled session (see [`Self::checkout_session`]) that is
+  /// returned to the pool afterwards, so the session is reused by later calls instead of being dropped.
+  /// A guest returning an error leaves the session healthy so it's still returned, a trap drops it.
+  ///
+  /// Pooled sessions only get the world's [`Self::default_policy`], so this suits worlds whose calls
+  /// all need the same capabilities.
+  ///
+  /// ```ignore
+  /// self.session_pool.call_pooled_export("my-export", async |b, a| b.call_my_export(a).await).await
+  /// ```
+  ///
+  /// # Errors
+  ///
+  /// Returns [`PluginError::Trap`] if the guest traps, [`PluginError::Guest`] if it returns an
+  /// error, or any error from [`Self::checkout_session`].
+  pub async fn call_pooled_export<R>(
+    &self,
+    export: &'static str,
+    call: impl AsyncFnOnce(&W::Bindings, &Accessor<HostState>) -> wasmtime::Result<Result<R, types::GuestError>>,
+  ) -> Result<R> {
+    let mut session = self.checkout_session().await?;
+    let result = session.call_async(call).await.map_err(|err| self.trap(export, err))?;
+    self.checkin_session(session);
+    result.map_err(|err| self.guest_error(export, err))
+  }
+
+  /// Wraps an error returned by the guest's `export` as a [`PluginError::Guest`].
+  fn guest_error(&self, export: &'static str, err: types::GuestError) -> PluginError {
+    PluginError::Guest { plugin: self.plugin.plugin.clone(), export, source: err.into() }
   }
 
   /// Wraps a wasmtime level failure of `export` as a [`PluginError::Trap`].
@@ -204,12 +266,14 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   /// Takes an idle session, or creates and configures a new one. Hand it back with [`Self::checkin_session`].
   /// A session that is never checked in (error, or the caller's future cancelled) is simply dropped.
   ///
-  /// Pooled sessions have no HTTP or container access, use [`Self::create_session`] for calls that need it.
+  /// Pooled sessions are created with the world's [`Self::default_policy`], use [`Self::create_session`]
+  /// (or [`Self::call_export`]) for calls that need more, eg: HTTP or container access. See also
+  /// [`Self::call_pooled_export`] which handles the check out & in around a call.
   pub async fn checkout_session(&self) -> Result<PluginSession<W>> {
     let session = self.session_pool.lock().unwrap_or_else(PoisonError::into_inner).pop();
     match session {
       Some(session) => Ok(session),
-      None => self.create_session(SessionPolicy::new()).await,
+      None => self.create_session(self.default_policy()).await,
     }
   }
 

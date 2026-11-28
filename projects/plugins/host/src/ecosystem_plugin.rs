@@ -6,7 +6,7 @@
 //! [`EcosystemPlugin`], a handle that runs calls against pooled plugin sessions.
 
 use crate::error::PluginError;
-use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy, SessionPolicy};
+use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy};
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
 use doup_config::repo::DoupRepoPlugin;
@@ -106,14 +106,15 @@ impl EcosystemPlugin {
   /// The guest gets a read-only view of the workspace.
   pub async fn discover_deps(&self, workspace_dir: &Path) -> Result<Vec<Dependency>, PluginError> {
     let workspace = workspace_dir.to_path_buf();
-    let policy = SessionPolicy::new().wasi(move |b| b.preopened_dir(&workspace, "/workspace", FsPerms::ReadOnly));
+    let policy =
+      self.session_pool.default_policy().wasi(move |b| b.preopened_dir(&workspace, "/workspace", FsPerms::ReadOnly));
     self.session_pool.call_export("discover-deps", policy, async |b, a| b.call_discover_deps(a).await).await
   }
 
   /// Looks up the versions available for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn lookup_versions(&self, dependency: &Dependency) -> Result<Option<Versions>, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let policy = self.session_pool.default_policy().http(HttpPolicy::Allowed);
     let dependency = dependency.clone();
     self
       .session_pool
@@ -124,7 +125,7 @@ impl EcosystemPlugin {
   /// Downloads release notes for for `dependency`.
   /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn fetch_release_notes(&self, dependency: &Dependency, to: &str) -> Result<Vec<ReleaseNote>, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let policy = self.session_pool.default_policy().http(HttpPolicy::Allowed);
     let dependency = dependency.clone();
     let to = to.to_string();
     self
@@ -156,7 +157,9 @@ impl EcosystemPlugin {
     let init_tmp = tempfile::Builder::new().prefix("doup-container-init-").tempdir().map_err(PluginError::TempDir)?;
     let init_dir = init_tmp.path().to_path_buf();
 
-    let policy = SessionPolicy::new()
+    let policy = self
+      .session_pool
+      .default_policy()
       .http(HttpPolicy::Allowed)
       .containers(ContainerPolicy::Allowed(ContainerMounts {
         workspace: workspace_dir.clone(),

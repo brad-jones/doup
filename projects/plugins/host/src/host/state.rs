@@ -1,5 +1,5 @@
 use super::container_runner::{self as runner, ContainerPolicy};
-use super::http::HttpHooks;
+use super::http::{HttpHooks, HttpPolicy};
 use super::policy::SessionPolicy;
 use wasmtime::Result;
 use wasmtime::component::{Accessor, HasSelf, ResourceTable, bindgen};
@@ -20,34 +20,55 @@ pub struct HostState {
   http_hooks: HttpHooks,
   container_policy: ContainerPolicy,
   table: ResourceTable,
+
+  /// What the session's [`SessionPolicy`] grants, held back until [`HostState::grant`] is called.
+  pending: Option<Granted>,
+}
+
+/// The parts of a [`SessionPolicy`] that [`HostState::grant`] installs.
+struct Granted {
+  wasi: WasiCtx,
+  http: HttpPolicy,
+  container: ContainerPolicy,
 }
 
 impl HostState {
-  /// Creates a new host state.
+  /// Creates a new host state that can do no I/O at all, not even write to stdout or stderr, until
+  /// [`HostState::grant`] is called. This is what lets a guest's `configure` export run with nothing
+  /// but its own memory, whatever the policy otherwise allows.
   ///
-  /// `policy` decides which capabilities beyond WASI the guest is granted. Its `wasi` closure
-  /// receives the [`WasiCtxBuilder`] (already prepared by `base`) so callers can customise the
+  /// `policy` decides which capabilities beyond WASI the guest is granted. Its `wasi` closures
+  /// receive the [`WasiCtxBuilder`], in the order they were added, so callers can customise the
   /// WASI context (e.g. inherit stdio, preopen directories, set env vars) before it is built.
   ///
   /// # Errors
   ///
   /// Returns an error if a closure fails, e.g. a preopened directory cannot be opened.
-  pub fn new(
-    policy: SessionPolicy,
-    base: impl FnOnce(&mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder>,
-  ) -> Result<Self> {
+  pub fn new(policy: SessionPolicy) -> Result<Self> {
     let mut builder = WasiCtxBuilder::new();
-    base(&mut builder)?;
-    if let Some(configure) = policy.wasi {
+    for configure in policy.wasi {
       configure(&mut builder)?;
     }
     Ok(Self {
-      wasi: builder.build(),
+      wasi: WasiCtxBuilder::new().build(),
       http: WasiHttpCtx::new(),
-      http_hooks: HttpHooks { http_policy: policy.http },
-      container_policy: policy.container,
+      http_hooks: HttpHooks { http_policy: HttpPolicy::Denied },
+      container_policy: ContainerPolicy::Denied,
       table: ResourceTable::new(),
+      // Built now, rather than in `grant`, so a bad closure (eg: a missing preopen dir) fails session creation early.
+      pending: Some(Granted { wasi: builder.build(), http: policy.http, container: policy.container }),
     })
+  }
+
+  /// Installs what the session's [`SessionPolicy`] grants, replacing the I/O free state from [`HostState::new`].
+  /// This only swaps the host side state, the guest's memory & instance are left untouched. Does nothing if
+  /// already granted.
+  pub fn grant(&mut self) {
+    if let Some(granted) = self.pending.take() {
+      self.wasi = granted.wasi;
+      self.http_hooks.http_policy = granted.http;
+      self.container_policy = granted.container;
+    }
   }
 }
 
@@ -84,5 +105,53 @@ impl<T> host_api::HostWithStore<T> for HasSelf<HostState> {
     // The store can't be held across an await, so take what's needed from it up front.
     let policy = accessor.with(|mut access| access.get().container_policy.clone());
     Ok(runner::run(&policy, request).await?)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::sync::{Arc, Mutex};
+
+  #[test]
+  fn nothing_is_granted_until_asked_for() {
+    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
+    let mut state = HostState::new(policy).unwrap();
+    assert_eq!(state.http_hooks.http_policy, HttpPolicy::Denied);
+
+    state.grant();
+    assert_eq!(state.http_hooks.http_policy, HttpPolicy::Allowed);
+  }
+
+  #[test]
+  fn wasi_configurers_are_additive_and_run_in_order() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let (first, second) = (calls.clone(), calls.clone());
+    let policy = SessionPolicy::new()
+      .wasi(move |b| {
+        first.lock().unwrap().push(1);
+        Ok(b)
+      })
+      .wasi(move |b| {
+        second.lock().unwrap().push(2);
+        Ok(b)
+      });
+
+    HostState::new(policy).unwrap();
+    assert_eq!(*calls.lock().unwrap(), vec![1, 2]);
+  }
+
+  #[test]
+  fn failing_wasi_configurer_stops_session_creation() {
+    let ran_after = Arc::new(Mutex::new(false));
+    let flag = ran_after.clone();
+    let policy = SessionPolicy::new().wasi(|_| Err(wasmtime::format_err!("boom"))).wasi(move |b| {
+      *flag.lock().unwrap() = true;
+      Ok(b)
+    });
+
+    let Err(err) = HostState::new(policy) else { panic!("expected the failing configurer to error") };
+    assert_eq!(err.to_string(), "boom");
+    assert!(!*ran_after.lock().unwrap(), "configurers after a failure must not run");
   }
 }

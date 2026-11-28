@@ -8,14 +8,13 @@
 //! [`PluginWorld`] captures only the parts that differ between worlds, implemented by a marker
 //! type per world, so the rest of the host can be written once and be generic over the world.
 //! The trait also provides the default linker (WASI p3, `wasi:http` and the host API) and the
-//! default WASI permissions, both of which a world may override.
+//! default [`SessionPolicy`] that sessions build on, both of which a world may override.
 
 use crate::host::types::GuestError;
-use crate::host::{HostState, host_api};
+use crate::host::{HostState, SessionPolicy, host_api};
 use std::path::Path;
 use wasmtime::component::{HasSelf, Linker};
 use wasmtime::{Engine, Result, Store};
-use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p3::add_to_linker;
 use wasmtime_wasi_http::p3::add_to_linker as add_http_to_linker;
 
@@ -83,8 +82,15 @@ pub trait PluginWorld: 'static {
     Ok(linker)
   }
 
-  /// Override to give a world different WASI permissions.
-  fn wasi(builder: &mut WasiCtxBuilder) -> Result<&mut WasiCtxBuilder> {
-    Ok(builder.inherit_stdout().inherit_stderr())
+  /// The policy every session of this world starts from, worlds are free to override.
+  ///
+  /// Pooled sessions (see [`crate::session::PluginSessionPool::checkout_session`]) use it as is,
+  /// while call specific sessions build on it, eg: `pool.default_policy().http(HttpPolicy::Allowed)`.
+  /// As [`SessionPolicy::wasi`] is additive, those calls keep whatever WASI setup the world provides.
+  ///
+  /// The default inherits stdout & stderr, so plugin output is visible to the user, and grants nothing else.
+  /// A world overriding this builds its own policy from scratch.
+  fn default_policy() -> SessionPolicy {
+    SessionPolicy::new().wasi(|b| Ok(b.inherit_stdout().inherit_stderr()))
   }
 }

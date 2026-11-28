@@ -178,6 +178,14 @@ world platform {
   }
 
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
+  ///
+  /// Its only job is to parse & validate that config and keep the result in the component's own memory
+  /// for later exports to use, returning a `guest-error` if the config is invalid.
+  ///
+  /// It must remain pure. The host grants it no I/O at all, regardless of what any later export is
+  /// allowed: no HTTP, no containers, no filesystem, not even stdout or stderr. Attempts fail, so anything
+  /// that needs I/O (eg: logging, looking something up) belongs in the other exports. The host only
+  /// grants a session its capabilities once this has returned.
   export configure: func(config: string) -> result<_, guest-error>;
 
   /// Opens a new pull request from `head-branch`, which has already been pushed, using `content`.
@@ -286,6 +294,14 @@ world ecosystem {
   }
 
   /// Called once, before any other export, with the repo config's `with` as a JSON object string.
+  ///
+  /// Its only job is to parse & validate that config and keep the result in the component's own memory
+  /// for later exports to use, returning a `guest-error` if the config is invalid.
+  ///
+  /// It must remain pure. The host grants it no I/O at all, regardless of what any later export is
+  /// allowed: no HTTP, no containers, no filesystem, not even stdout or stderr. Attempts fail, so anything
+  /// that needs I/O (eg: logging, looking something up) belongs in the other exports. The host only
+  /// grants a session its capabilities once this has returned.
   export configure: func(config: string) -> result<_, guest-error>;
 
   /// Returns a list of dependencies discovered in the current workspace.

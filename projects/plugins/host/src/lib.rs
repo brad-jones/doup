@@ -41,7 +41,8 @@
 //!   need, such as a read-only `/workspace` when discovering dependencies.
 //!
 //! - **HTTP**: outbound `wasi:http` requests are denied unless a session is created with
-//!   `HttpPolicy::Allowed`. Pooled sessions never have network access.
+//!   `HttpPolicy::Allowed`. Ecosystem plugins only get it for the calls that need it, while every
+//!   platform plugin call (including pooled sessions) has it, as talking to the platform is its job.
 //!
 //! - **Containers**: the `run` function of `doup:plugin/host-api` lets a guest run a short lived container
 //!   of any image, with its `/workspace`, a scratch `/container-init` dir & a shared `/container-cache` dir
@@ -55,8 +56,14 @@
 //! - **Host API**: the `doup:plugin/host-api` imports, which are provided to every plugin.
 //!
 //! Every capability beyond WASI, and the WASI context itself, is described by the `SessionPolicy` a session is created with.
+//! Each world provides a default policy (`PluginWorld::default_policy`) that pooled sessions use as is
+//! and that call specific policies build on.
 //!
-//! Stdout and stderr are inherited so plugin output is visible to the user.
+//! By default stdout and stderr are inherited so plugin output is visible to the user.
+//!
+//! The `configure` export is the exception: it always runs with no I/O at all (no HTTP, containers, files, stdout
+//! or stderr), whatever the policy says, and the policy is only applied once it has returned. Its only job is to
+//! parse its config and keep it in the guest's memory.
 //!
 //! # Errors
 //!

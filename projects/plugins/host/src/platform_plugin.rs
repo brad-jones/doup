@@ -50,12 +50,19 @@ impl PluginWorld for PlatformWorld {
   ) -> wasmtime::Result<Result<(), GuestError>> {
     bindings.call_configure(store, config).await
   }
+
+  /// Every export talks to the platform's API, so all sessions may make HTTP calls. No other I/O is granted.
+  fn default_policy() -> SessionPolicy {
+    SessionPolicy::new().http(HttpPolicy::Allowed).wasi(|b| Ok(b.inherit_stdout().inherit_stderr()))
+  }
 }
 
 /// A loaded platform plugin.
 ///
 /// Each call checks a session out of an internal pool, invokes the plugin
 /// export, and returns the session to the pool.
+///
+/// Every session is granted HTTP access, as every export talks to the platform's API, but no other I/O.
 pub struct PlatformPlugin {
   session_pool: PluginSessionPool<PlatformWorld>,
 }
@@ -82,45 +89,37 @@ impl PlatformPlugin {
   }
 
   /// Opens a new pull request from `head_branch`, which must already have been pushed.
-  /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn create_pr(&self, head_branch: &str, content: &PullRequestContent) -> Result<PullRequest, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let head_branch = head_branch.to_string();
     let content = content.clone();
     self
       .session_pool
-      .call_export("create-pr", policy, async |b, a| b.call_create_pr(a, head_branch, content).await)
+      .call_pooled_export("create-pr", async |b, a| b.call_create_pr(a, head_branch, content).await)
       .await
   }
 
   /// Replaces the base branch, title, body & version of the open pull request `number`.
-  /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn update_pr(&self, number: i64, content: &PullRequestContent) -> Result<PullRequest, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let content = content.clone();
-    self.session_pool.call_export("update-pr", policy, async |b, a| b.call_update_pr(a, number, content).await).await
+    self.session_pool.call_pooled_export("update-pr", async |b, a| b.call_update_pr(a, number, content).await).await
   }
 
   /// Closes the pull request `number` without merging it, first posting `comment` to it when given.
-  /// The guest is able to make HTTP calls but no other I/O is granted.
   pub async fn close_pr(&self, number: i64, comment: Option<&str>) -> Result<PullRequest, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let comment = comment.map(str::to_string);
-    self.session_pool.call_export("close-pr", policy, async |b, a| b.call_close_pr(a, number, comment).await).await
+    self.session_pool.call_pooled_export("close-pr", async |b, a| b.call_close_pr(a, number, comment).await).await
   }
 
   pub async fn list_open_prs(&self, head_branch_prefix: &str) -> Result<Vec<PullRequest>, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let prefix = head_branch_prefix.to_string();
-    self.session_pool.call_export("list-open-prs", policy, async |b, a| b.call_list_open_prs(a, prefix).await).await
+    self.session_pool.call_pooled_export("list-open-prs", async |b, a| b.call_list_open_prs(a, prefix).await).await
   }
 
   pub async fn list_closed_prs(&self, head_branches: &[String]) -> Result<Vec<PullRequest>, PluginError> {
-    let policy = SessionPolicy::new().http(HttpPolicy::Allowed);
     let branches = head_branches.to_vec();
     self
       .session_pool
-      .call_export("list-closed-prs", policy, async |b, a| b.call_list_closed_prs(a, branches).await)
+      .call_pooled_export("list-closed-prs", async |b, a| b.call_list_closed_prs(a, branches).await)
       .await
   }
 }
