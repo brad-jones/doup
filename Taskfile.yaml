@@ -217,3 +217,13 @@ tasks:
       - wkg publish {{.TASKFILE_DIR}}/target/doup-plugin.wasm
     sources:
       - "{{.TASKFILE_DIR}}/target/doup-plugin.wasm"
+
+  wkg:publish:plugins:
+    desc: Publishes the built doup WASM plugins to ghcr.io/brad-jones/doup.
+    summary: |
+      Needs a token with `write:packages`, taken from GITHUB_TOKEN or `gh auth token -u brad-jones`.
+      Pass `--dry-run` to only print what would be published: task wkg:publish:plugins -- --dry-run
+    deps:
+      - build:plugins
+    cmds:
+      - bun scripts/wkg-publish-plugins.ts {{.CLI_ARGS}}
