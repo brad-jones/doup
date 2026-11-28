@@ -8,7 +8,7 @@ name = "doup"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.104"
+anyhow = "1.0.105"
 clap = { version = "4.6.7", features = ["derive"] }
 doup-config = { path = "../config" }
 doup-core = { path = "../core" }
