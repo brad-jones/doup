@@ -7,7 +7,7 @@ description = "Loads and validates doup's bot and per-repo configuration files."
 [dependencies]
 jsonschema = { version = "0.61.0", features = ["macros"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde-saphyr = "2.1.0"
+serde-saphyr = "2.2.0"
 serde_json = "1.0.154"
 ssh-key = "0.6.7"
 thiserror = "2.0.21"
