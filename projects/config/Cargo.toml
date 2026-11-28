@@ -5,7 +5,7 @@ edition = "2024"
 description = "Loads and validates doup's bot and per-repo configuration files."
 
 [dependencies]
-jsonschema = { version = "0.61.0", features = ["macros"] }
+jsonschema = { version = "0.61.2", features = ["macros"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "2.1.0"
 serde_json = "1.0.154"
