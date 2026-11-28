@@ -1,13 +1,12 @@
 use super::plugin_session::PluginSession;
 use crate::error::PluginError;
 use crate::host::{HostState, SessionPolicy, types};
-use crate::wkg::is_wkg_reference;
 use crate::world::PluginWorld;
 use doup_config::repo::DoupRepoPlugin;
 use std::{
   any::TypeId,
   collections::HashMap,
-  path::{Path, PathBuf},
+  path::PathBuf,
   sync::{Arc, LazyLock, Mutex, OnceLock, PoisonError},
 };
 use wasmtime::Config;
@@ -33,9 +32,9 @@ static WORLD_LINKERS: LazyLock<Mutex<HashMap<TypeId, Arc<Linker<HostState>>>>> =
 /// }
 ///
 /// impl MyPlugin {
-///   pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
+///   pub fn new(plugin: &DoupRepoPlugin, module_path: PathBuf) -> Self {
 ///     Self {
-///       session_pool: PluginSessionPool::new(None, plugin, module_search_dirs),
+///       session_pool: PluginSessionPool::new(None, plugin, module_path),
 ///     }
 ///   }
 ///
@@ -62,8 +61,8 @@ pub struct PluginSessionPool<W: PluginWorld> {
   /// Idle, already configured sessions waiting to be checked out.
   session_pool: Mutex<Vec<PluginSession<W>>>,
 
-  /// Extra dirs searched for a relative plugin path, the current working dir is always searched first.
-  module_search_dirs: Vec<PathBuf>,
+  /// The plugin's wasm module, see [`crate::ModuleResolver`].
+  module_path: PathBuf,
 }
 
 impl<W: PluginWorld> PluginSessionPool<W> {
@@ -71,15 +70,15 @@ impl<W: PluginWorld> PluginSessionPool<W> {
   ///
   /// - `engine`: An optional wasmtime [`Engine`] to share. When `None` a lazily created process wide default is used.
   /// - `plugin`: A reference to [`DoupRepoPlugin`] representing the plugin to load.
-  /// - `module_search_dirs`: A list of additional dir's to prefix to a relative plugin path. _(the current working dir is always included)_
-  pub fn new(engine: Option<Engine>, plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
+  /// - `module_path`: The plugin's wasm module, as found by [`crate::ModuleResolver`].
+  pub fn new(engine: Option<Engine>, plugin: &DoupRepoPlugin, module_path: PathBuf) -> Self {
     Self {
       engine,
       plugin: plugin.clone(),
       pre: OnceLock::new(),
       plugin_config: OnceLock::new(),
       session_pool: Mutex::new(Vec::new()),
-      module_search_dirs,
+      module_path,
     }
   }
 
@@ -109,37 +108,6 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     Ok(linker)
   }
 
-  /// Resolves the final path to a WASM file from a [`DoupRepoPlugin`] reference.
-  fn module_path(&self) -> Result<PathBuf> {
-    let plugin_ref = &self.plugin.plugin;
-    let path = Path::new(plugin_ref);
-
-    if path.is_absolute() {
-      if path.is_file() {
-        return Ok(path.to_path_buf());
-      }
-      return Err(PluginError::NotFound { plugin: plugin_ref.clone(), searched: vec![path.to_path_buf()] });
-    }
-
-    let mut searched = vec![std::env::current_dir().map_err(PluginError::CurrentDir)?.join(path)];
-    for candidate in self.module_search_dirs.iter().map(|dir| dir.join(path)) {
-      if !searched.contains(&candidate) {
-        searched.push(candidate);
-      }
-    }
-    if let Some(found) = searched.iter().find(|candidate| candidate.is_file()) {
-      return Ok(found.clone());
-    }
-
-    // TODO: Remember we also need to somehow handle doup.lock
-    // when we start downloading packages from the internet
-    if is_wkg_reference(plugin_ref) {
-      return Err(PluginError::WkgUnsupported { plugin: plugin_ref.clone() });
-    }
-
-    Err(PluginError::NotFound { plugin: plugin_ref.clone(), searched })
-  }
-
   // Pre-compiles the component & caches the result.
   // Subsequent sessions will re-use this instance.
   fn component_pre(&self) -> Result<&W::Pre> {
@@ -148,9 +116,9 @@ impl<W: PluginWorld> PluginSessionPool<W> {
     }
 
     let linker = self.world_linker()?;
-    let path = self.module_path()?;
-    let pre = W::pre(self.engine()?, &linker, &path)
-      .map_err(|err| PluginError::Load { path, source: err.into_boxed_dyn_error() })?;
+    let path = &self.module_path;
+    let pre = W::pre(self.engine()?, &linker, path)
+      .map_err(|err| PluginError::Load { path: path.clone(), source: err.into_boxed_dyn_error() })?;
     Ok(self.pre.get_or_init(|| pre))
   }
 

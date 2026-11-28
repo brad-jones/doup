@@ -1,7 +1,11 @@
+use super::ConfigError;
 use super::file::ConfigFile;
+use super::lock::LOCK_FILE_NAME;
 use jsonschema::ValidationError;
+use semver::VersionReq;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// Embed the Json Schema, we will use this for runtime validation.
@@ -38,13 +42,72 @@ pub struct DoupRepoPlugin {
   #[serde(rename = "use")]
   pub plugin: String,
 
+  /// Where a package reference is downloaded from, overriding the registry its namespace maps to.
+  /// Either `host/prefix` (an OCI registry, eg: `ghcr.io/brad-jones` → `ghcr.io/brad-jones/<ns>/<pkg>`)
+  /// or a bare `host` (a wasm-pkg registry, its metadata is discovered). Only valid with package references.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub registry: Option<String>,
+
   /// An optional untyped property bag, this will be passed as a JSON string over the WIT contract.
   /// The plugin is then free to deserialize, validate & do what it wishes with it's own config.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub with: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// What [`DoupRepoPlugin::plugin`] refers to, see [`DoupRepoPlugin::reference`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginRef<'a> {
+  /// A path to a wasm module, relative paths are resolved by the plugin host.
+  Module(&'a Path),
+
+  /// A package to download from a registry.
+  Package(PackageSpec<'a>),
+}
+
+/// A package reference parsed from `namespace:package[@requirement]`, with the plugin's registry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackageSpec<'a> {
+  /// The package without its version, eg: `doup:ecosystem-plugin-cargo`.
+  pub name: &'a str,
+
+  /// The versions that may be used. Cargo semantics: `@0.1.0` means `^0.1.0`, no version means any.
+  pub requirement: VersionReq,
+
+  /// See [`DoupRepoPlugin::registry`].
+  pub registry: Option<&'a str>,
+}
+
+impl fmt::Display for PackageSpec<'_> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}@{}", self.name, self.requirement)?;
+    if let Some(registry) = self.registry {
+      write!(f, " (from {registry})")?;
+    }
+    Ok(())
+  }
+}
+
 impl DoupRepoPlugin {
+  /// Parses [`Self::plugin`]: anything ending in `.wasm` is a module path, anything else a package reference.
+  ///
+  /// # Errors
+  ///
+  /// [`ConfigError::InvalidVersionRequirement`] if a package's version is not a valid semver requirement.
+  pub fn reference(&self) -> Result<PluginRef<'_>, ConfigError> {
+    if self.plugin.ends_with(".wasm") {
+      return Ok(PluginRef::Module(Path::new(&self.plugin)));
+    }
+    let (name, requirement) = match self.plugin.split_once('@') {
+      Some((name, requirement)) => (
+        name,
+        VersionReq::parse(requirement)
+          .map_err(|source| ConfigError::InvalidVersionRequirement { plugin: self.plugin.clone(), source })?,
+      ),
+      None => (self.plugin.as_str(), VersionReq::STAR),
+    };
+    Ok(PluginRef::Package(PackageSpec { name, requirement, registry: self.registry.as_deref() }))
+  }
+
   /// A short, version independent name for the plugin, derived from [`Self::plugin`]:
   ///
   /// - A wasm module path gives its file name minus the extension, eg: `./a/b.wasm` → `b`.
@@ -62,6 +125,17 @@ impl DoupRepoConfigFile {
   /// The env prefix scoping overrides to the bot's repo at `index`, eg: `DOUP_REPO_0`.
   pub fn repo_env_prefix(index: usize) -> String {
     format!("{}_{index}", Self::ENV_PREFIX)
+  }
+
+  /// Where this config's [`DoupLockFile`](crate::lock::DoupLockFile) lives: next to the config file.
+  /// `None` when the config was not loaded from a file.
+  pub fn lock_path(&self) -> Option<PathBuf> {
+    Some(self.source.as_deref()?.parent()?.join(LOCK_FILE_NAME))
+  }
+
+  /// The platform followed by every ecosystem, in config order.
+  pub fn plugins(&self) -> impl Iterator<Item = &DoupRepoPlugin> {
+    std::iter::once(&self.platform).chain(&self.ecosystems)
   }
 }
 
@@ -105,7 +179,71 @@ ecosystems:
 ";
 
   fn plugin(plugin: &str, with: Option<Value>) -> DoupRepoPlugin {
-    DoupRepoPlugin { plugin: plugin.into(), with: with.map(|v| v.as_object().unwrap().clone()) }
+    DoupRepoPlugin { plugin: plugin.into(), registry: None, with: with.map(|v| v.as_object().unwrap().clone()) }
+  }
+
+  #[test]
+  fn reference_parses_modules_and_packages() {
+    let req = |r: &str| VersionReq::parse(r).unwrap();
+    let mut registered = plugin("doup:cargo@=1.2.3", None);
+    registered.registry = Some("ghcr.io/acme".into());
+    for (plugin, expected) in [
+      (plugin("./a/b.wasm", None), PluginRef::Module(Path::new("./a/b.wasm"))),
+      (plugin("C:\\a\\b.wasm", None), PluginRef::Module(Path::new("C:\\a\\b.wasm"))),
+      (
+        plugin("doup:cargo@0.1.0", None),
+        PluginRef::Package(PackageSpec { name: "doup:cargo", requirement: req("^0.1.0"), registry: None }),
+      ),
+      (
+        plugin("doup:cargo", None),
+        PluginRef::Package(PackageSpec { name: "doup:cargo", requirement: VersionReq::STAR, registry: None }),
+      ),
+      (
+        registered.clone(),
+        PluginRef::Package(PackageSpec {
+          name: "doup:cargo",
+          requirement: req("=1.2.3"),
+          registry: Some("ghcr.io/acme"),
+        }),
+      ),
+    ] {
+      assert_eq!(plugin.reference().unwrap(), expected, "{}", plugin.plugin);
+    }
+  }
+
+  #[test]
+  fn reference_rejects_invalid_requirements() {
+    let err = plugin("doup:cargo@not-semver", None).reference().unwrap_err();
+    assert!(
+      matches!(err, ConfigError::InvalidVersionRequirement { ref plugin, .. } if plugin == "doup:cargo@not-semver")
+    );
+  }
+
+  #[test]
+  fn schema_accepts_registries_for_packages_only() {
+    for registry in ["ghcr.io", "ghcr.io/brad-jones", "localhost:5000/a/b"] {
+      let package = json!({ "use": "doup:github@1", "registry": registry });
+      let instance = json!({ "platform": package, "ecosystems": [package] });
+      assert!(Schema::validate(&instance).is_ok(), "{instance}");
+    }
+    for platform in [
+      json!({ "use": "./a.wasm", "registry": "ghcr.io" }),
+      json!({ "use": "doup:github", "registry": "https://ghcr.io" }),
+      json!({ "use": "doup:github", "registry": "" }),
+    ] {
+      let instance = json!({ "platform": platform, "ecosystems": [{ "use": "doup:doup" }] });
+      assert!(Schema::validate(&instance).is_err(), "{instance}");
+    }
+  }
+
+  #[test]
+  fn lock_path_is_next_to_the_config_file() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.child("doup.yaml");
+    file.write_str("platform: { use: doup:github }\necosystems: [{ use: doup:cargo }]\n").unwrap();
+    let config = DoupRepoConfigFile::from_file(file.path()).unwrap();
+    assert_eq!(config.lock_path(), Some(dir.path().join("doup.lock")));
+    assert_eq!(DoupRepoConfigFile::from_yaml(YAML).unwrap().lock_path(), None);
   }
 
   #[test]

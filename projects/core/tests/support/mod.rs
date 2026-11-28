@@ -5,7 +5,7 @@
 use doup_config::bot::{Concurrency, DoupBotRepo};
 use doup_config::repo::DoupRepoPlugin;
 use doup_core::Updater;
-use doup_core::plugins::{Ecosystem, Platform, PluginLoader};
+use doup_core::plugins::{Ecosystem, LoadContext, Platform, PluginLoader};
 use doup_git::Git;
 use doup_plugin_host::PluginError;
 use doup_plugin_host::ecosystem_plugin::{Dependency, ReleaseNote, Versions};
@@ -122,7 +122,7 @@ impl Remote {
 }
 
 pub fn plugin(reference: &str) -> DoupRepoPlugin {
-  DoupRepoPlugin { plugin: reference.to_string(), with: None }
+  DoupRepoPlugin { plugin: reference.to_string(), registry: None, with: None }
 }
 
 pub fn dependency(name: &str, current: &str) -> Dependency {
@@ -336,11 +336,11 @@ impl PluginLoader for FakePlugins {
   type Platform = Arc<FakePlatform>;
   type Ecosystem = Arc<FakeEcosystem>;
 
-  async fn load_platform(&self, plugin: &DoupRepoPlugin, _: Vec<PathBuf>) -> Result<Self::Platform, PluginError> {
+  async fn load_platform(&self, plugin: &DoupRepoPlugin, _: &LoadContext) -> Result<Self::Platform, PluginError> {
     self.platforms.get(&plugin.plugin).cloned().ok_or_else(|| fake_error(&plugin.plugin))
   }
 
-  async fn load_ecosystem(&self, plugin: &DoupRepoPlugin, _: Vec<PathBuf>) -> Result<Self::Ecosystem, PluginError> {
+  async fn load_ecosystem(&self, plugin: &DoupRepoPlugin, _: &LoadContext) -> Result<Self::Ecosystem, PluginError> {
     self.ecosystems.get(&plugin.plugin).cloned().ok_or_else(|| fake_error(&plugin.plugin))
   }
 }

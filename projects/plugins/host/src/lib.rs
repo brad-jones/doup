@@ -11,17 +11,17 @@
 //! - [`PlatformPlugin`]: teaches doup about a hosting platform.
 //!
 //! Both are cheap handles created from a [`doup_config::repo::DoupRepoPlugin`] (the plugin
-//! reference and its config from the repo's doup config) plus a list of directories used to
-//! resolve relative plugin paths. [`EcosystemPlugin::load`] and [`PlatformPlugin::load`] also
-//! warm the plugin up front so that load, instantiation and configuration failures surface early.
+//! reference and its config from the repo's doup config) plus the path of its wasm module.
+//! [`EcosystemPlugin::load`] and [`PlatformPlugin::load`] find that module with a [`ModuleResolver`]
+//! & also warm the plugin up front so that load, instantiation and configuration failures surface early.
 //!
 //! # How it works
 //!
 //! Every plugin world shares the same lifecycle, which is written once and made generic over the world:
 //!
-//! 1. The component is located (an absolute path, or a relative one searched for in the current
-//!    directory and then the supplied search dirs) and compiled once into a pre-instantiated form
-//!    that is reused for every later session.
+//! 1. The component is located by a [`ModuleResolver`] (an absolute path, a relative one searched for
+//!    in the current directory and then the supplied search dirs, or a locked package downloaded from its
+//!    registry) and compiled once into a pre-instantiated form that is reused for every later session.
 //!
 //! 2. A session, which is a wasmtime `Store` plus the world's generated bindings, is created from
 //!    it. The plugin's `configure` export is always called with the plugin's config (serialised
@@ -81,8 +81,11 @@
 //!
 //! # Remote plugins
 //!
-//! References in the `wkg` form (`namespace:package@version`) are recognised but not supported
-//! yet. Plugins must currently be local component files.
+//! A plugin's `use` may be a wasm package reference (`namespace:package@version`) rather than a path, eg:
+//! `doup:ecosystem-plugin-cargo@0.1.0`. Package references are always pinned by a `doup.lock` file (see
+//! [`doup_config::lock`]), which `doup lock` writes. A [`ModuleResolver`] only ever runs the exact release the
+//! lock pins, failing with [`PluginError::NotLocked`] otherwise, & the [`wkg::PackageClient`] it uses verifies
+//! every download against its locked digest. Downloads are cached on disk, see the [`wkg`] module.
 //!
 //! # Adding a world
 //!
@@ -93,11 +96,13 @@
 
 mod error;
 mod host;
+mod resolver;
 mod session;
-mod wkg;
+pub mod wkg;
 mod world;
 
-pub use error::{GuestError, GuestErrorKind, PluginError, WasmtimeError};
+pub use error::{BoxError, GuestError, GuestErrorKind, PluginError, WasmtimeError};
+pub use resolver::ModuleResolver;
 
 pub mod ecosystem_plugin;
 pub use ecosystem_plugin::EcosystemPlugin;

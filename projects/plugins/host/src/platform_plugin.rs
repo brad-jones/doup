@@ -7,6 +7,7 @@
 
 use crate::error::PluginError;
 use crate::host::{HostState, HttpPolicy, SessionPolicy};
+use crate::resolver::ModuleResolver;
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
 use doup_config::repo::DoupRepoPlugin;
@@ -68,21 +69,22 @@ pub struct PlatformPlugin {
 }
 
 impl PlatformPlugin {
-  /// Creates a plugin handle for `plugin`, resolving its module from `module_search_dirs`.
-  pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
-    Self { session_pool: PluginSessionPool::new(None, plugin, module_search_dirs) }
+  /// Creates a plugin handle for `plugin`, whose wasm module is at `module_path`.
+  pub fn new(plugin: &DoupRepoPlugin, module_path: PathBuf) -> Self {
+    Self { session_pool: PluginSessionPool::new(None, plugin, module_path) }
   }
 
-  /// Like [`Self::new`], but eagerly checks a session out and straight back in.
+  /// Like [`Self::new`], but first finds the plugin's module with `resolver` (downloading a package
+  /// if need be), then eagerly checks a session out and straight back in.
   ///
   /// This exercises the plugin (compilation, instantiation and configuration) so that
   /// failures surface here rather than during real work. The warmed session stays pooled.
   ///
   /// # Errors
   ///
-  /// Returns an error if the plugin cannot be loaded, instantiated or configured.
-  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self, PluginError> {
-    let instance = Self::new(plugin, module_search_dirs);
+  /// Returns an error if the plugin cannot be found, loaded, instantiated or configured.
+  pub async fn load(plugin: &DoupRepoPlugin, resolver: &ModuleResolver) -> Result<Self, PluginError> {
+    let instance = Self::new(plugin, resolver.resolve(plugin).await?);
     let session = instance.session_pool.checkout_session().await?;
     instance.session_pool.checkin_session(session);
     Ok(instance)

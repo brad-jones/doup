@@ -23,6 +23,7 @@ async fn main() {
     Commands::Init(args) => commands::init(args).await,
     Commands::Add(args) => commands::add(args).await,
     Commands::Remove(args) => commands::remove(args).await,
+    Commands::Lock(args) => commands::lock(args).await,
     Commands::Update(args) => commands::update(args).await,
     Commands::SelfUpdate(args) => commands::self_update(args).await,
   } {

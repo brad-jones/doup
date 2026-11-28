@@ -4,11 +4,12 @@ mod execute;
 mod shared_repo;
 
 use crate::error::{DependencyError, RepoError};
-use crate::plugins::{Ecosystem, Platform, PluginLoader};
+use crate::plugins::{Ecosystem, LoadContext, Platform, PluginLoader};
 use crate::reconcile::{Action, Candidate, ExistingPr, HeadStatus, PrNumber, PrState, RepoState, reconcile};
 use crate::report::{ActionOutcome, ActionReport, RepoReport};
 use doup_config::bot::{DoupBotRepo, DoupBotRepoAuth};
 use doup_config::file::ConfigFile;
+use doup_config::lock::{DoupLockFile, LOCK_FILE_NAME};
 use doup_config::repo::{DoupRepoConfigFile, DoupRepoPlugin};
 use doup_git::{Auth, CloneOptions, DOUP_BRANCH_PREFIX, Git, GitError, UpdateBranch};
 use doup_plugin_host::ecosystem_plugin::Dependency;
@@ -71,13 +72,15 @@ impl<L: PluginLoader> RepoJob<L> {
     let repo = SharedRepo::new(self.git.clone_repo(&options).await.map_err(|err| RepoError::Clone(err.into()))?);
 
     let env_prefix = DoupRepoConfigFile::repo_env_prefix(self.index);
-    let config = DoupRepoConfigFile::load(Some(workspace), Some(&env_prefix)).map_err(RepoError::Config)?.merged;
+    let loaded = DoupRepoConfigFile::load(Some(workspace), Some(&env_prefix)).map_err(RepoError::Config)?;
+    let context = load_context(loaded.file.as_ref(), workspace)?;
+    let config = loaded.merged;
 
     // Bounds this repo's concurrent plugin calls.
     let plugin_permits = Semaphore::new(self.plugin_calls.get());
 
     // Every plugin is loaded before any work starts, so a bad config or module fails fast.
-    let plugins = self.load_plugins(&config, workspace).await?;
+    let plugins = self.load_plugins(&config, &context).await?;
     let dependencies = discover(&plugins, workspace).await?;
     let (candidates, protected_branches) = self.lookup_versions(&plugins, dependencies, &plugin_permits, report).await;
     let observed = self.observe(&repo, &plugins.platform, candidates, protected_branches).await?;
@@ -102,28 +105,17 @@ impl<L: PluginLoader> RepoJob<L> {
   async fn load_plugins(
     &self,
     config: &DoupRepoConfigFile,
-    workspace: &Path,
+    context: &LoadContext,
   ) -> Result<Plugins<L::Platform, L::Ecosystem>, RepoError> {
-    let search_dirs = vec![workspace.to_path_buf()];
     let platform = async {
       debug!(plugin = %config.platform.plugin, "loading platform plugin");
-      self
-        .plugins
-        .load_platform(&config.platform, search_dirs.clone())
-        .await
-        .map_err(|err| RepoError::LoadPlatform(err.into()))
+      self.plugins.load_platform(&config.platform, context).await.map_err(|err| RepoError::LoadPlatform(err.into()))
     };
-    let ecosystems = try_join_all(config.ecosystems.iter().map(|ecosystem| {
-      let search_dirs = search_dirs.clone();
-      async move {
-        debug!(plugin = %ecosystem.plugin, "loading ecosystem plugin");
-        let plugin = self
-          .plugins
-          .load_ecosystem(ecosystem, search_dirs)
-          .await
-          .map_err(|err| RepoError::LoadEcosystem(err.into()))?;
-        Ok((ecosystem.clone(), plugin))
-      }
+    let ecosystems = try_join_all(config.ecosystems.iter().map(|ecosystem| async move {
+      debug!(plugin = %ecosystem.plugin, "loading ecosystem plugin");
+      let plugin =
+        self.plugins.load_ecosystem(ecosystem, context).await.map_err(|err| RepoError::LoadEcosystem(err.into()))?;
+      Ok((ecosystem.clone(), plugin))
     }));
     let (platform, ecosystems) = tokio::try_join!(platform, ecosystems)?;
     info!(ecosystems = ecosystems.len(), "loaded plugins");
@@ -256,6 +248,21 @@ fn planned(action: &Action) -> ActionOutcome {
   }
 }
 
+/// Where the plugins of the repo cloned to `workspace` are found: relative module paths in the workspace &
+/// package plugins pinned by the `doup.lock` next to its config file. A missing lock file is treated as
+/// empty, so only package plugins that need it fail.
+fn load_context(file: Option<&DoupRepoConfigFile>, workspace: &Path) -> Result<LoadContext, RepoError> {
+  let lock_file = file.and_then(DoupRepoConfigFile::lock_path).unwrap_or_else(|| workspace.join(LOCK_FILE_NAME));
+  let lock = DoupLockFile::load(&lock_file).map_err(RepoError::Config)?.unwrap_or_default();
+  debug!(path = %lock_file.display(), packages = lock.packages().len(), "loaded lock file");
+  Ok(LoadContext {
+    search_dirs: vec![workspace.to_path_buf()],
+    lock: Arc::new(lock),
+    // Relative to the repo, as the clone is temporary.
+    lock_file: lock_file.strip_prefix(workspace).map(Path::to_path_buf).unwrap_or(lock_file),
+  })
+}
+
 fn clone_auth(repo: &DoupBotRepo) -> Result<Option<Auth>, RepoError> {
   Ok(match &repo.auth {
     None => None,
@@ -316,4 +323,31 @@ async fn inspect_branches(repo: &SharedRepo) -> Result<(Vec<String>, HashMap<Str
       Ok((branches, statuses))
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn load_context_reads_the_lock_next_to_the_config() {
+    let workspace = tempfile::tempdir().unwrap();
+    let dir = workspace.path().join("sub");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("doup.yaml"), "platform: { use: doup:github@1 }\necosystems: [{ use: doup:cargo@1 }]\n")
+      .unwrap();
+    let lock = "version = 1\n[[packages]]\nname = \"doup:github\"\n[[packages.versions]]\nrequirement = \"^1\"\nversion = \"1.0.0\"\ndigest = \"sha256:00\"\nsize = 1\n";
+    std::fs::write(dir.join("doup.lock"), lock).unwrap();
+
+    let config = DoupRepoConfigFile::from_file(&dir.join("doup.yaml")).unwrap();
+    let context = load_context(Some(&config), workspace.path()).unwrap();
+    assert_eq!(context.lock_file, Path::new("sub/doup.lock"));
+    assert_eq!(context.lock.packages()[0].name, "doup:github");
+    assert_eq!(context.search_dirs, [workspace.path()]);
+
+    // Without a config file, eg: env only, an absent lock is simply empty.
+    let context = load_context(None, workspace.path()).unwrap();
+    assert_eq!(context.lock_file, Path::new("doup.lock"));
+    assert!(context.lock.is_empty());
+  }
 }

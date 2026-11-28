@@ -248,7 +248,7 @@ mod tests {
 
   fn update(target: Target, companion: Option<Target>) -> PlannedUpdate {
     PlannedUpdate {
-      ecosystem: DoupRepoPlugin { plugin: "./plugins/cargo.wasm".into(), with: None },
+      ecosystem: DoupRepoPlugin { plugin: "./plugins/cargo.wasm".into(), registry: None, with: None },
       dependency: Dependency {
         name: "serde".into(),
         registry: None,

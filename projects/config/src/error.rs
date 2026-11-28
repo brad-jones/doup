@@ -63,6 +63,24 @@ pub enum ConfigError {
 
   #[error("{} must not be protected by a passphrase", key_label(path))]
   EncryptedSshKey { path: Option<PathBuf> },
+
+  #[error("plugin '{plugin}' does not have a valid semver version requirement")]
+  InvalidVersionRequirement { plugin: String, source: semver::Error },
+
+  #[error("failed to read lock file '{}'", path.display())]
+  ReadLock { path: PathBuf, source: std::io::Error },
+
+  #[error("failed to write lock file '{}'", path.display())]
+  WriteLock { path: PathBuf, source: std::io::Error },
+
+  #[error("failed to parse lock file")]
+  ParseLock(#[source] toml::de::Error),
+
+  #[error("failed to serialize lock file")]
+  SerializeLock(#[source] toml::ser::Error),
+
+  #[error("lock file version {version} is not supported, it was probably written by a newer doup")]
+  UnsupportedLockVersion { version: u64 },
 }
 
 fn key_label(path: &Option<PathBuf>) -> String {

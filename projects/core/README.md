@@ -36,7 +36,8 @@ Every repo goes through the same pipeline, in its own tokio task:
 1. **Clone** the repo (depth 1) into a temp dir, with the auth from the bot config.
 2. **Load its config** (`doup.yaml`, plus `DOUP_REPO_*` & `DOUP_REPO_<index>_*` env overrides, see `doup-config`).
 3. **Load its plugins**, the platform & every ecosystem, concurrently. A bad config or module fails here, before any
-   work starts.
+   work starts. Package plugins must be pinned by the repo's `doup.lock`, & are downloaded (or taken from the cache) by
+   one `PackageClient` shared by every repo, see `doup-plugin-host`.
 4. **Discover** the dependencies, with every ecosystem concurrently.
 5. **Look up the versions** of every dependency, concurrently.
 6. **Observe** the repo's existing work, concurrently: inspect every `doup/` branch (who committed to it & whether it is
@@ -139,10 +140,18 @@ it.
 | `ecosystem`  | `name`              | Discovering an ecosystem's dependencies. |
 | `dependency` | `name`, `ecosystem` | Looking up a dependency's versions.      |
 | `action`     | `action`            | Carrying out an action.                  |
+| `download`   | `package`,`version` | Downloading a package plugin.            |
 
 Events are `info` for progress (eg: `update available`, `planned` with `action` & `reason`, `done` with `url`), `debug`
 for detail, `warn` for problems that don't fail anything (eg: release notes couldn't be fetched) & `error` for failures,
 with the error in an `error` field.
+
+## Locking
+
+`lock::lock` is what `doup lock` runs: it finds the repo config like `cargo` finds `Cargo.toml`, keeps every package
+plugin that's already locked, resolves the rest to the highest published version matching their requirement, removes
+entries no plugin uses anymore & writes `doup.lock` only when it changed. Every package is downloaded (unless cached),
+so locking also verifies the lock & warms the cache. Env overrides are ignored, as the lock is for the file.
 
 ## Plugins & testing
 

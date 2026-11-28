@@ -227,7 +227,7 @@ mod tests {
   const ORPHAN: &str = "doup/cargo/next/orphan-1234";
 
   fn plugin() -> DoupRepoPlugin {
-    DoupRepoPlugin { plugin: "./cargo.wasm".to_string(), with: None }
+    DoupRepoPlugin { plugin: "./cargo.wasm".to_string(), registry: None, with: None }
   }
 
   fn dependency() -> Dependency {

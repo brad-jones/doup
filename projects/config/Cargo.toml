@@ -6,11 +6,14 @@ description = "Loads and validates doup's bot and per-repo configuration files."
 
 [dependencies]
 jsonschema = { version = "0.61.0", features = ["macros"] }
+semver = { version = "1.0.28", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = "2.1.0"
 serde_json = "1.0.154"
 ssh-key = "0.6.7"
+tempfile = "3.27.0"
 thiserror = "2.0.21"
+toml = "1.2"
 
 [dev-dependencies]
 assert_fs = "1.1.4"

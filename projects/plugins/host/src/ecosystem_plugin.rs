@@ -7,6 +7,7 @@
 
 use crate::error::PluginError;
 use crate::host::{ContainerMounts, ContainerPolicy, HostState, HttpPolicy};
+use crate::resolver::ModuleResolver;
 use crate::session::PluginSessionPool;
 use crate::world::PluginWorld;
 use doup_config::repo::DoupRepoPlugin;
@@ -67,10 +68,10 @@ pub struct EcosystemPlugin {
 }
 
 impl EcosystemPlugin {
-  /// Creates a plugin handle for `plugin`, resolving its module from `module_search_dirs`.
-  pub fn new(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Self {
+  /// Creates a plugin handle for `plugin`, whose wasm module is at `module_path`.
+  pub fn new(plugin: &DoupRepoPlugin, module_path: PathBuf) -> Self {
     Self {
-      session_pool: PluginSessionPool::new(None, plugin, module_search_dirs), //
+      session_pool: PluginSessionPool::new(None, plugin, module_path), //
       container_cache: Mutex::new(None),
     }
   }
@@ -87,16 +88,17 @@ impl EcosystemPlugin {
     Ok(path)
   }
 
-  /// Like [`Self::new`], but eagerly checks a session out and straight back in.
+  /// Like [`Self::new`], but first finds the plugin's module with `resolver` (downloading a package
+  /// if need be), then eagerly checks a session out and straight back in.
   ///
   /// This exercises the plugin (compilation, instantiation and configuration) so that
   /// failures surface here rather than during real work. The warmed session stays pooled.
   ///
   /// # Errors
   ///
-  /// Returns an error if the plugin cannot be loaded, instantiated or configured.
-  pub async fn load(plugin: &DoupRepoPlugin, module_search_dirs: Vec<PathBuf>) -> Result<Self, PluginError> {
-    let instance = Self::new(plugin, module_search_dirs);
+  /// Returns an error if the plugin cannot be found, loaded, instantiated or configured.
+  pub async fn load(plugin: &DoupRepoPlugin, resolver: &ModuleResolver) -> Result<Self, PluginError> {
+    let instance = Self::new(plugin, resolver.resolve(plugin).await?);
     let session = instance.session_pool.checkout_session().await?;
     instance.session_pool.checkin_session(session);
     Ok(instance)
@@ -180,33 +182,5 @@ impl EcosystemPlugin {
       .session_pool
       .call_export("apply-updates", policy, async |b, a| b.call_apply_updates(a, dependency, to).await)
       .await
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  fn plugin(reference: &str) -> DoupRepoPlugin {
-    DoupRepoPlugin { plugin: reference.to_string(), with: None }
-  }
-
-  #[tokio::test]
-  async fn missing_plugins_report_everywhere_searched() {
-    let dir = tempfile::tempdir().unwrap();
-    let Err(err) = EcosystemPlugin::load(&plugin("missing.wasm"), vec![dir.path().to_path_buf()]).await else {
-      panic!("expected the plugin to be missing");
-    };
-    let PluginError::NotFound { plugin, searched } = &err else { panic!("unexpected error: {err}") };
-    assert_eq!(plugin, "missing.wasm");
-    assert_eq!(searched.last(), Some(&dir.path().join("missing.wasm")));
-  }
-
-  #[tokio::test]
-  async fn wkg_references_are_not_supported_yet() {
-    let Err(err) = EcosystemPlugin::load(&plugin("doup:cargo@1.0.0"), Vec::new()).await else {
-      panic!("expected wkg references to be rejected");
-    };
-    assert!(matches!(&err, PluginError::WkgUnsupported { plugin } if plugin == "doup:cargo@1.0.0"), "{err}");
   }
 }

@@ -13,7 +13,10 @@ use std::path::PathBuf;
 pub use crate::host::types::ErrorKind as GuestErrorKind;
 
 /// An error from wasmtime, which does not implement [`std::error::Error`] itself.
-pub type WasmtimeError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type WasmtimeError = BoxError;
+
+/// An error from a dependency whose error type is not part of this crate's API, eg: wasm-pkg.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Every way loading or calling a plugin can fail.
 ///
@@ -26,8 +29,37 @@ pub enum PluginError {
   #[error("plugin '{plugin}' not found, looked for {}", quoted_paths(searched))]
   NotFound { plugin: String, searched: Vec<PathBuf> },
 
-  #[error("plugin '{plugin}' is a wkg package reference, which is not supported yet")]
-  WkgUnsupported { plugin: String },
+  /// The plugin's `use` (or its `registry`) is not a valid package reference.
+  #[error("plugin '{plugin}' is not a valid package reference")]
+  InvalidReference { plugin: String, source: BoxError },
+
+  /// A package plugin has no entry in the lock file, or one for a different version requirement or registry.
+  #[error("plugin '{plugin}' is not locked in '{}', run `doup lock` & commit the result", lock_file.display())]
+  NotLocked { plugin: String, lock_file: PathBuf },
+
+  /// `available` is every published version that isn't yanked, in ascending order.
+  #[error("no published version of plugin '{plugin}' matches, found: {}", available.join(", "))]
+  NoMatchingVersion { plugin: String, available: Vec<String> },
+
+  #[error("failed to configure the registry of plugin '{plugin}'")]
+  RegistryConfig { plugin: String, source: BoxError },
+
+  /// The published versions or the release of a package could not be looked up.
+  #[error("failed to resolve plugin '{plugin}' from its registry")]
+  Resolve { plugin: String, source: BoxError },
+
+  /// The package could not be downloaded, or its content doesn't match its locked digest or size.
+  #[error("failed to download plugin '{plugin}'")]
+  Download { plugin: String, source: BoxError },
+
+  #[error("plugin '{plugin}' has an invalid digest in the lock file")]
+  InvalidDigest { plugin: String, source: BoxError },
+
+  #[error("failed to use the plugin cache at '{}'", path.display())]
+  Cache { path: PathBuf, source: std::io::Error },
+
+  #[error("failed to determine where to cache plugins, set DOUP_CACHE_DIR")]
+  NoCacheDir,
 
   #[error("failed to determine the current directory")]
   CurrentDir(#[source] std::io::Error),

@@ -23,6 +23,7 @@
 
 pub mod content;
 mod error;
+pub mod lock;
 pub mod plugins;
 pub mod reconcile;
 mod release_notes;

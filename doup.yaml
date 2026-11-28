@@ -1,10 +1,10 @@
 $schema: ./schemas/repo.schema.json
 
 platform:
-  use: ./target/wasm32-wasip3/release/doup_platform_plugin_github.wasm
+  use: doup:platform-plugin-github@0.1.0
   with:
     repository: brad-jones/doup
 
 ecosystems:
-  - use: ./target/wasm32-wasip3/release/doup_ecosystem_plugin_doup.wasm
-  - use: ./target/wasm32-wasip3/release/doup_ecosystem_plugin_cargo.wasm
+  - use: doup:ecosystem-plugin-doup@0.1.0
+  - use: doup:ecosystem-plugin-cargo@0.1.0

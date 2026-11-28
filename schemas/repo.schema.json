@@ -14,18 +14,25 @@
       "additionalProperties": false,
       "properties": {
         "use": {
-          "description": "Either a plugin package reference in wkg format (namespace:package@version) or a path to an explicit wasm module (eg: ./plugin.wasm).",
+          "description": "Either a plugin package reference in wkg format (namespace:package@version) or a path to an explicit wasm module (eg: ./plugin.wasm). Package references are locked in doup.lock, see `doup lock`.",
           "type": "string",
           "anyOf": [
             { "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*:[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*(@.+)?$" },
             { "pattern": "^\\S.*\\.wasm$" }
           ]
         },
+        "registry": {
+          "description": "Where a package reference is downloaded from, overriding the registry its namespace maps to. Either `host/prefix`, an OCI registry (eg: `ghcr.io/brad-jones` → `ghcr.io/brad-jones/<namespace>/<package>:<version>`), or a bare `host`, a wasm-pkg registry whose metadata is discovered. Only valid with package references.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$"
+        },
         "with": {
           "description": "An untyped property bag passed to the plugin, which is free to validate it as it wishes.",
           "type": "object"
         }
-      }
+      },
+      "if": { "properties": { "use": { "pattern": "\\.wasm$" } } },
+      "then": { "not": { "required": ["registry"] } }
     }
   },
   "properties": {

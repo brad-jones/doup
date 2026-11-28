@@ -1,14 +1,22 @@
 //! Sets up `tracing` so the logs of doup (& its crates) are written to stderr.
+//!
+//! When stderr is a terminal & logs are human readable, spans marked with `indicatif.pb_show` (eg: plugin
+//! downloads) are also rendered as progress bars, see `tracing-indicatif`.
 
 use clap::{ArgAction, Args, ValueEnum};
 use std::io::IsTerminal;
-use tracing_subscriber::EnvFilter;
+use tracing_indicatif::IndicatifLayer;
+use tracing_indicatif::filter::{IndicatifFilter, hide_indicatif_span_fields};
+use tracing_subscriber::fmt::format::DefaultFields;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer, fmt};
 
 /// Overrides the log filter entirely, using `tracing_subscriber`'s `EnvFilter` syntax, eg: `doup_core=trace,info`.
 pub const LOG_ENV: &str = "DOUP_LOG";
 
 /// The crates whose logs are shown at the chosen verbosity, every other crate only logs warnings & errors.
-const CRATES: &[&str] = &["doup", "doup_core", "doup_config", "doup_git", "doup_plugin_host"];
+const CRATES: &[&str] = &["doup", "doup_core", "doup_config", "doup_git", "doup_plugin_host", "wasm_pkg_client"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum LogFormat {
@@ -60,10 +68,19 @@ pub fn init(args: &LogArgs) {
     Err(_) => (EnvFilter::new(args.filter()), None),
   };
 
-  let builder = tracing_subscriber::fmt().with_env_filter(filter).with_writer(std::io::stderr);
+  let registry = tracing_subscriber::registry().with(filter);
   let installed = match args.log_format {
-    LogFormat::Human => builder.with_target(false).with_ansi(std::io::stderr().is_terminal()).try_init(),
-    LogFormat::Json => builder.json().with_current_span(true).with_span_list(true).try_init(),
+    LogFormat::Human if std::io::stderr().is_terminal() => {
+      let progress = IndicatifLayer::new().with_span_field_formatter(hide_indicatif_span_fields(DefaultFields::new()));
+      let logs = fmt::layer().with_target(false).with_ansi(true).with_writer(progress.get_stderr_writer());
+      registry.with(logs).with(progress.with_filter(IndicatifFilter::new(false))).try_init()
+    }
+    LogFormat::Human => {
+      registry.with(fmt::layer().with_target(false).with_ansi(false).with_writer(std::io::stderr)).try_init()
+    }
+    LogFormat::Json => registry
+      .with(fmt::layer().json().with_current_span(true).with_span_list(true).with_writer(std::io::stderr))
+      .try_init(),
   };
   if installed.is_ok()
     && let Some(err) = invalid_env
@@ -89,7 +106,10 @@ mod tests {
 
   #[test]
   fn verbosity_sets_the_level_of_doups_crates_only() {
-    assert_eq!(filter(&[]), "warn,doup=info,doup_core=info,doup_config=info,doup_git=info,doup_plugin_host=info");
+    assert_eq!(
+      filter(&[]),
+      "warn,doup=info,doup_core=info,doup_config=info,doup_git=info,doup_plugin_host=info,wasm_pkg_client=info"
+    );
     assert!(filter(&["-v"]).contains("doup_core=debug"));
     assert!(filter(&["-vvv"]).contains("doup_core=trace"));
     assert!(filter(&["-q"]).contains("doup_core=warn"));

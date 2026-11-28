@@ -3,10 +3,12 @@
 //!
 //! [`WasmPlugins`] loads the real thing: [`PlatformPlugin`]s & [`EcosystemPlugin`]s.
 
+use doup_config::lock::{DoupLockFile, LOCK_FILE_NAME};
 use doup_config::repo::DoupRepoPlugin;
 use doup_plugin_host::ecosystem_plugin::{Dependency, ReleaseNote, Versions};
 use doup_plugin_host::platform_plugin::{PullRequest, PullRequestContent};
-use doup_plugin_host::{EcosystemPlugin, PlatformPlugin, PluginError};
+use doup_plugin_host::wkg::PackageClient;
+use doup_plugin_host::{EcosystemPlugin, ModuleResolver, PlatformPlugin, PluginError};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -74,48 +76,80 @@ pub trait Ecosystem: Send + Sync + 'static {
   ) -> impl Future<Output = Result<(), PluginError>> + Send;
 }
 
+/// Where a repo's plugins are found.
+#[derive(Debug, Clone)]
+pub struct LoadContext {
+  /// Dirs a relative module path is looked for in, after the current dir.
+  pub search_dirs: Vec<PathBuf>,
+
+  /// The repo's lock file, which pins every package plugin.
+  pub lock: Arc<DoupLockFile>,
+
+  /// Where the lock file is (or would be), for errors.
+  pub lock_file: PathBuf,
+}
+
+impl LoadContext {
+  /// A context with an empty lock file, so only module paths can be loaded.
+  pub fn new(search_dirs: Vec<PathBuf>) -> Self {
+    Self { search_dirs, lock: Arc::default(), lock_file: PathBuf::from(LOCK_FILE_NAME) }
+  }
+}
+
 /// Loads the plugins a repo's config asks for.
 pub trait PluginLoader: Send + Sync + 'static {
   type Platform: Platform;
   type Ecosystem: Ecosystem;
 
-  /// Loads `plugin`, looking for a relative module path in `module_search_dirs`.
+  /// Loads `plugin`, finding its module as described by `context`.
   fn load_platform(
     &self,
     plugin: &DoupRepoPlugin,
-    module_search_dirs: Vec<PathBuf>,
+    context: &LoadContext,
   ) -> impl Future<Output = Result<Self::Platform, PluginError>> + Send;
 
-  /// Loads `plugin`, looking for a relative module path in `module_search_dirs`.
+  /// Loads `plugin`, finding its module as described by `context`.
   fn load_ecosystem(
     &self,
     plugin: &DoupRepoPlugin,
-    module_search_dirs: Vec<PathBuf>,
+    context: &LoadContext,
   ) -> impl Future<Output = Result<Self::Ecosystem, PluginError>> + Send;
 }
 
 /// Loads real WASM plugins, see [`PlatformPlugin::load`] & [`EcosystemPlugin::load`].
-#[derive(Debug, Clone, Copy, Default)]
-pub struct WasmPlugins;
+///
+/// Package plugins are downloaded with one shared [`PackageClient`], so a package many repos use is downloaded once.
+#[derive(Debug, Clone, Default)]
+pub struct WasmPlugins {
+  packages: PackageClient,
+}
+
+impl WasmPlugins {
+  /// Loads plugins, downloading packages with `packages`.
+  pub fn new(packages: PackageClient) -> Self {
+    Self { packages }
+  }
+
+  fn resolver(&self, context: &LoadContext) -> ModuleResolver {
+    ModuleResolver::new(self.packages.clone(), context.search_dirs.clone())
+      .with_lock(context.lock.clone(), context.lock_file.clone())
+  }
+}
 
 impl PluginLoader for WasmPlugins {
   type Platform = PlatformPlugin;
   type Ecosystem = EcosystemPlugin;
 
-  async fn load_platform(
-    &self,
-    plugin: &DoupRepoPlugin,
-    module_search_dirs: Vec<PathBuf>,
-  ) -> Result<PlatformPlugin, PluginError> {
-    PlatformPlugin::load(plugin, module_search_dirs).await
+  async fn load_platform(&self, plugin: &DoupRepoPlugin, context: &LoadContext) -> Result<PlatformPlugin, PluginError> {
+    PlatformPlugin::load(plugin, &self.resolver(context)).await
   }
 
   async fn load_ecosystem(
     &self,
     plugin: &DoupRepoPlugin,
-    module_search_dirs: Vec<PathBuf>,
+    context: &LoadContext,
   ) -> Result<EcosystemPlugin, PluginError> {
-    EcosystemPlugin::load(plugin, module_search_dirs).await
+    EcosystemPlugin::load(plugin, &self.resolver(context)).await
   }
 }
 

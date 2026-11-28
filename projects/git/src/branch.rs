@@ -33,7 +33,7 @@ const HASH_BYTES: usize = 4;
 /// use doup_git::UpdateBranch;
 /// use doup_plugin_host::ecosystem_plugin::Dependency;
 ///
-/// let plugin = DoupRepoPlugin { plugin: "./plugins/cargo.wasm".into(), with: None };
+/// let plugin = DoupRepoPlugin { plugin: "./plugins/cargo.wasm".into(), registry: None, with: None };
 /// let dependency =
 ///   Dependency { name: "serde".into(), registry: None, occurrences: vec![], current_version: "1.0.0".into() };
 /// assert_eq!(UpdateBranch::new(&plugin, &dependency, true).to_string(), "doup/cargo/latest/serde-4ef397e7");
@@ -113,7 +113,7 @@ mod tests {
   }
 
   fn plugin(plugin: &str) -> DoupRepoPlugin {
-    DoupRepoPlugin { plugin: plugin.into(), with: None }
+    DoupRepoPlugin { plugin: plugin.into(), registry: None, with: None }
   }
 
   #[test]

@@ -127,8 +127,21 @@ fetch`.
 cargo build --release --target wasm32-wasip3
 ```
 
-The plugin is `target/wasm32-wasip3/release/my_plugin.wasm`. Reference it from `doup.yaml` with `use:` like the plugins
-in this repo do.
+The plugin is `target/wasm32-wasip3/release/my_plugin.wasm`. Reference it from `doup.yaml` with `use:`, eg: `use:
+./target/wasm32-wasip3/release/my_plugin.wasm`, while developing it.
+
+## 5. Publish
+
+Push the component to an OCI registry, eg: `wkg oci push ghcr.io/acme/my-namespace/my-plugin:0.1.0 my_plugin.wasm` (see
+`scripts/wkg-publish-plugins.ts` for how this repo does it), & make the package public. Repos then use it by reference,
+telling doup where it lives with `registry` (unless the user's wkg config already maps the namespace), & run `doup lock`
+to pin it in `doup.lock`:
+
+```yaml
+ecosystems:
+  - use: my-namespace:my-plugin@0.1.0
+    registry: ghcr.io/acme
+```
 
 ## Upgrading
 

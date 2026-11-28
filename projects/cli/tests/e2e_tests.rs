@@ -15,6 +15,31 @@ fn test_cli_help_flag() -> Result<()> {
   Ok(())
 }
 
+#[test]
+fn test_cli_lock_reports_what_it_locked() -> Result<()> {
+  use assert_fs::prelude::*;
+
+  let repo = assert_fs::TempDir::new()?;
+  repo.child(".git").create_dir_all()?;
+  Command::cargo_bin("doup")?
+    .args(["lock", "--dir"])
+    .arg(repo.path())
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("no doup config file found"));
+
+  repo.child("doup.yaml").write_str("platform: { use: ./platform.wasm }\necosystems: [{ use: ./eco.wasm }]\n")?;
+  Command::cargo_bin("doup")?
+    .args(["lock", "--dir"])
+    .arg(repo.path())
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("no package plugins to lock"));
+  repo.child("doup.lock").assert(predicate::path::missing());
+
+  Ok(())
+}
+
 /*
 #[test]
 fn test_cli_missing_argument_fails() -> Result<()> {

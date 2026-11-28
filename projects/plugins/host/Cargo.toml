@@ -6,13 +6,20 @@ description = "Loads and runs doup's WASM plugins using wasmtime."
 
 [dependencies]
 doup-config = { path = "../../config" }
+etcetera = "0.11"
+futures-util = "0.3.34"
 http = "1"
 http-body-util = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 serde_json = "1.0.154"
+sha2 = "0.11"
 tempfile = "3.27.0"
 testcontainers = { version = "0.28.0", default-features = false, features = ["aws-lc-rs"] }
 thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["sync", "fs", "io-util", "rt"] }
+tracing = "0.1.44"
+tracing-indicatif = "0.3.14"
+wasm-pkg-client = { version = "0.16.3", default-features = false }
 wasmtime = "51.0.0"
 wasmtime-wasi = "51.0.0"
 wasmtime-wasi-http = { version = "51.0.0", default-features = false, features = ["p3", "default-send-request"] }

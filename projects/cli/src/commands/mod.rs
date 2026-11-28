@@ -9,6 +9,9 @@ pub use add::add;
 mod remove;
 pub use remove::remove;
 
+mod lock;
+pub use lock::lock;
+
 mod update;
 pub use update::update;
 
@@ -20,6 +23,7 @@ pub enum Commands {
   Init(init::InitArgs),
   Add(add::AddArgs),
   Remove(remove::RemoveArgs),
+  Lock(lock::LockArgs),
   Update(update::UpdateArgs),
   SelfUpdate(self_update::SelfUpdateArgs),
 }

@@ -41,7 +41,7 @@ pub struct Updater<L = WasmPlugins> {
 impl Updater<WasmPlugins> {
   /// Updates `repos` using `git`, with the default [`Concurrency`] & WASM plugins.
   pub fn new(git: Git, repos: Vec<DoupBotRepo>) -> Self {
-    Self { git, repos, concurrency: Concurrency::default(), dry_run: false, plugins: WasmPlugins }
+    Self { git, repos, concurrency: Concurrency::default(), dry_run: false, plugins: WasmPlugins::default() }
   }
 
   /// Updates the repos in `config`, with its git backend & concurrency.
