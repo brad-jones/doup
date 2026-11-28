@@ -177,3 +177,43 @@ tasks:
         sh: gh auth token -u brad-jones
     cmds:
       - ./target/release/doup{{if eq OS "windows"}}.exe{{end}} update {{.CLI_ARGS}}
+
+  wkg:
+    desc: Runs the wkg tool against the config file at the root of this repo.
+    summary: |
+      Typical usage: task wkg -- get namespace:package@version
+
+      see: <https://github.com/bytecodealliance/wasm-pkg-tools>
+      also: <https://component-model.bytecodealliance.org/composing-and-distributing/distributing.html>
+    env:
+      WKG_CONFIG_FILE: "{{.TASKFILE_DIR}}/wasm-pkg.toml"
+    cmds:
+      - wkg {{.CLI_ARGS}}
+
+  wkg:build:
+    desc: Builds the doup plugin WIT package into a wasm file.
+    dir: "{{.TASKFILE_DIR}}/projects/plugins/wit"
+    env:
+      WKG_CONFIG_FILE: "{{.TASKFILE_DIR}}/wasm-pkg.toml"
+    cmds:
+      - wkg build --wit-dir . -o {{.TASKFILE_DIR}}/target/doup-plugin.wasm
+    sources:
+      - ./plugin.wit
+      - ./wkg.lock
+      - ./wkg.toml
+    generates:
+      - "{{.TASKFILE_DIR}}/target/doup-plugin.wasm"
+
+  wkg:publish:
+    desc: Publishes the doup plugin WIT package to ghcr.io/brad-jones/doup/plugin.
+    deps:
+      - wkg:build
+    dir: "{{.TASKFILE_DIR}}/projects/plugins/wit"
+    env:
+      WKG_CONFIG_FILE: "{{.TASKFILE_DIR}}/wasm-pkg.toml"
+      WKG_REGISTRY_GHCR_IO_AUTH_BEARER:
+        sh: printf %s "${GITHUB_TOKEN:-$(gh auth token -u brad-jones)}" | base64 -w0
+    cmds:
+      - wkg publish {{.TASKFILE_DIR}}/target/doup-plugin.wasm
+    sources:
+      - "{{.TASKFILE_DIR}}/target/doup-plugin.wasm"

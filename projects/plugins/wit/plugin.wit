@@ -1,4 +1,4 @@
-package doup:plugin@0.1.0;
+package doup:plugin@0.1.1;
 
 /// Types shared by every plugin world.
 interface types {

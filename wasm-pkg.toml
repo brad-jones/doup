@@ -1,0 +1,5 @@
+default_registry = "ghcr.io"
+
+[namespace_registries]
+wasi = { registry = "wasi", metadata = { preferredProtocol = "oci", "oci" = { registry = "ghcr.io", namespacePrefix = "webassembly/" } } }
+doup = { registry = "doup", metadata = { preferredProtocol = "oci", "oci" = { registry = "ghcr.io", namespacePrefix = "brad-jones/" } } }
