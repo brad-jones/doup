@@ -47,16 +47,6 @@ jobs:
           path: ./target/x86_64-unknown-linux-gnu/release/doup
           retention-days: 1
 
-      - name: 🏗️ Build WASM Plugins
-        run: task build:plugins
-
-      - name: ⬆️ Upload Plugins
-        uses: actions/upload-artifact@v7
-        with:
-          name: plugins
-          path: ./target/wasm32-wasip3/release/*.wasm
-          retention-days: 1
-
   update:
     needs: build
     runs-on: ubuntu-latest
@@ -71,14 +61,6 @@ jobs:
       - run: |
           chmod +x ./doup
           sudo mv ./doup /usr/bin/doup
-
-      - name: ⬇️ Download Plugins
-        uses: actions/download-artifact@v8
-        with:
-          name: plugins
-      - run: |
-          mkdir -p ./target/wasm32-wasip3/release
-          mv ./*.wasm ./target/wasm32-wasip3/release/.
 
       - name: 🔑 Authenticate as Github App
         uses: actions/create-github-app-token@v3
